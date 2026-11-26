@@ -680,7 +680,7 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
   - two backups, each verified by a restore and kept by the owner outside the repository; the second was taken just before the write;
   - acceptance clean ([C1 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-c1--2026-11-26)).
 
-  Undoing 138 needs the owner's separate approval: redeploy `495f7df` first, export any reservation rows, then the restore file and ledger row 138.
+  Undoing 138 needs the owner's separate approval, and since B1 only after B1's restore: redeploy `495f7df` first, export any reservation rows, then the restore file and ledger row 138.
   - **Release approval, owner's words, verbatim excerpt** (full text in the [C1 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-c1--2026-11-26); folder paths left out there, marked […]):
 
     > Owner release approval (Maroine, 2026-11-25): I approve releasing PR #216 (RWR-r5 PR C1 — payments, migration 138_desk_payments.sql) at exact head 05bc70874fcd00865cd4df2338ea3d370d9c0bf3. The independent re-review verdict on that head is READY FOR FINAL REVIEW; Verify run 45662379174 is green on the first attempt.
@@ -699,8 +699,37 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
     - the reviewer's two notes: the action dialog's result card shows the date twice; « payment ends it » is not tested directly on a moved « Encaisser l'acompte » action;
     - the 24-table hardening;
     - a guard for test scripts that reset the shared local stack.
-  - **Next:** B1 (#217), rebased onto C1 as migration 139; then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7. Each needs the owner's separate approval.
+  - **Next (at the time):** B1 (#217), rebased onto C1 as migration 139; then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7. Each needs the owner's separate approval. B1 released 2026-11-26 ([B1 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-b1--2026-11-26)).
   - **Not authorized:** B1, any other migration or data step, the 24-table hardening; each needs a separate approval.
+- **PR B1 release (people, migration 139) — APPROVED and DONE (2026-11-26).** Done:
+  - 139 applied first, 2026-11-26 11:22:30–32 UTC, after a Production dry run `DRYRUN_OK`; ledger 001–139, row 139 MD5 `1f22f6b1782569c9a76e98b9e49d86b9`;
+  - PR #217 squash-merged at approved head `d22a50b` as `15909d6` at 11:22:49 UTC and deployed (GitHub `Production` deployment `8083842940` `success` at 11:24:24 UTC); the old build ran on 139 for about 2 minutes;
+  - one backup, verified by a restore and kept by the owner outside the repository;
+  - acceptance clean after a first probe attempt stopped at setup with nothing persisted ([B1 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-b1--2026-11-26)).
+
+  Undoing 139 needs the owner's separate approval for each step, in this order: redeploy `19615b7`; unmerge any merged student and run `d3_revert` if D3 ever ran; the restore file with plain `psql -f`; ledger row 139; only then C1's restore. Data steps D3 and D5 are shipped and not run; 215 student phones keep their old stored form until edited or D3.
+  - **Release approval, owner's words, verbatim excerpt** (full text in the [B1 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-b1--2026-11-26); folder paths left out there, marked […]):
+
+    > Owner release approval (Maroine, 2026-11-26): I approve releasing PR #217 (RWR-r5 PR B1 — people, migration 139_people_identity.sql) at exact head d22a50b0d2923e0a10c70a48dc0cea8bbf3a3ffe. The independent re-review verdict on that head is READY FOR FINAL REVIEW; Verify run 45802217196 is green on the first attempt.
+    >
+    > Window: now, before reception opens at 15:00.
+    >
+    > […]
+    >
+    > Not authorized: D3, D5 or any data step, any other migration, the hardening. Hand off with the merge SHA, deployed SHA, ledger, acceptance results and recovery notes (B1's restore must run before C1's); documentation is a separate change.
+
+  - **« go », owner's words, verbatim:**
+
+    > Go
+
+  - **Follow-ups (not started):**
+    - the reviewer's notes: the « upgraded to current 138 » label in `scripts/test-crm-h3-upgrade-103-current.sql` (outside docs-only scope) and the out-of-date sentence in the header of `scripts/rollback/139_people_identity_restore.sql`;
+    - revoke `crm_create_manual_lead` now that the B1 build is deployed (deviation 3);
+    - C1's two reviewer notes;
+    - the 24-table hardening;
+    - a guard for test scripts that reset the shared local stack.
+  - **Next:** data steps D3 and D5 (each with its counts), B2 (needs the 2026/2027 programme prices, OD-16), C2, data steps D4, D6 and D7, the 24-table hardening and the local-stack guard. Each needs the owner's separate approval.
+  - **Not authorized:** D3, D5 or any data step, any other migration, the 24-table hardening; each needs a separate approval.
 
 ## Deferred backlog after RCC-r1
 

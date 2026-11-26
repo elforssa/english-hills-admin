@@ -1,6 +1,6 @@
 # Receptionist workflow — one next action, one identity, one rule per form
 
-**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); **PR A2 released on 2026-11-24** (PR #214, merge `0bb8f27`, migration 137 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a2--2026-11-24)): release A (A1, D1, A2) is complete and « exactly one next action » is enforced in the database; `d1_revert` is gone with 137. **PR C1 released on 2026-11-26** (PR #216, merge `a7f63c4`, migration 138 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-c1--2026-11-26)): desk payments. Next: B1 (#217, rebased as 139), then B2, C2 and data steps D3–D7, which are not run. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
+**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); **PR A2 released on 2026-11-24** (PR #214, merge `0bb8f27`, migration 137 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a2--2026-11-24)): release A (A1, D1, A2) is complete and « exactly one next action » is enforced in the database; `d1_revert` is gone with 137. **PR C1 released on 2026-11-26** (PR #216, merge `a7f63c4`, migration 138 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-c1--2026-11-26)): desk payments. **PR B1 released on 2026-11-26** (PR #217, merge `15909d6`, migration 139 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-b1--2026-11-26)): people identity. Next: data steps D3 and D5, B2, C2 and data steps D4, D6 and D7, which are not run. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
 
 - **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q30.
 - **Decision record:** [ADR-019 (accepted)](../decisions/ADR-019-one-next-action-per-prospect.md).
@@ -1327,7 +1327,7 @@ Seen, outside the approved checks: `create_charge_payment` called as `service_ro
 - **The 24 public tables** that still grant `DELETE` and `TRUNCATE` to `anon` and `authenticated`: a separate hardening PR.
 - **A guard for test scripts that reset the shared local stack.** Some suites end with `supabase db reset --local` or read `supabase status` from the current folder, and on 2026-11-25 one wiped the shared default local stack.
 
-**Gates after this release:** C1 released. **Next: B1** (#217), rebased onto 138 as migration 139, with its own review and release approval. Then B2 (needs the 2026/2027 programme prices, OD-16), C2, data steps D3–D7, the 24-table hardening and the local-stack guard; each needs the owner's separate approval.
+**Gates after this release (at the time; B1 released 2026-11-26, [B1 release record](#release-record-pr-b1--2026-11-26)):** C1 released. **Next: B1** (#217), rebased onto 138 as migration 139, with its own review and release approval. Then B2 (needs the 2026/2027 programme prices, OD-16), C2, data steps D3–D7, the 24-table hardening and the local-stack guard; each needs the owner's separate approval.
 
 ### Implementation record: PR B1 (M-B1, migration 139)
 
@@ -1424,12 +1424,158 @@ Seen, outside the approved checks: `create_charge_payment` called as `service_ro
 
 Also: `set_next_action` is C1's body with B1's `merge` cause; the `eap.student_merged` reason is in `EAP_REASON_TEXT` and `EAP_REASONS` (step 1, reselect); `test-membership-actions.mjs` and `test-crm-rcc-a2.mjs` read the hints of 138 and 139 together. Fixture: `crm_merge_prospects` keeps its reviewed outcome, locked, with the md5 of its new body; C1's three payment functions keep their gate `capability:manage_finance_operations`.
 
-**Release notes for B1 (for the release approval; nothing here is authorized).**
+**Release notes for B1 (for the release approval; nothing here is authorized).** Followed on 2026-11-26 ([B1 release record](#release-record-pr-b1--2026-11-26)).
 
 1. Apply 139 (after 138, live since 2026-11-26), then deploy the B1 build: the B1 screens call 139's functions; the deployed C1 build keeps working on 139 (`crm_create_manual_lead` and every C1 call are unchanged; a payment or reservation on a merged file is refused, and no file is merged before the B1 build).
 2. Rollback: deploy the C1 build, then run `139_people_identity_restore.sql` (always before C1's restore, which refuses while 139 is applied). It refuses while a student is merged (`unmerge_student` first) or D3 is unreverted (`d3_revert` first).
 3. D3 and D5 each need their own approval with counts (§10); D3 is rehearsed in `test-phone.sql`.
 
+
+### Release record: PR B1 — 2026-11-26
+
+**MERGED / DEPLOYED / MIGRATION 139 APPLIED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE (2026-11-26).** Migration 139 was applied at 11:22:30–32 UTC, before the application. PR #217 was then squash-merged as `15909d6` and deployed. People identity is live: one phone rule (stored in E.164 on every new or changed student and authorized-adult phone), « Rechercher une personne » (`find_people`) across prospects and students, the duplicate gate before a prospect is created, « Ajouter un enfant » and « C'est la même personne », « Modifier la fiche », the corrected number, prospect and student merges for the direction (« link, don't move »), and Tâches grouped per contact in each bucket. Data steps D3 (phones) and D5 (student merges) are shipped as functions and **not run**.
+
+**Owner's release approval (2026-11-26), verbatim** (the backup folder path is left out, marked […], because this repository is public):
+
+> Owner release approval (Maroine, 2026-11-26): I approve releasing PR #217 (RWR-r5 PR B1 — people, migration 139_people_identity.sql) at exact head d22a50b0d2923e0a10c70a48dc0cea8bbf3a3ffe. The independent re-review verdict on that head is READY FOR FINAL REVIEW; Verify run 45802217196 is green on the first attempt.
+>
+> Window: now, before reception opens at 15:00.
+>
+> Same pattern as C1:
+> 1. Before any write:
+>    - head and base are current (main 19615b7 merges cleanly); the Production ledger is exactly 001–138;
+>    - 139's 15 md5 preconditions match Production's live bodies;
+>    - state the safe order (I expect migration first, then the app) and what today's app does on 139 in between: student and authorized-adult phone writes under the new trigger, the Tâches per-family grouping, the changed crm_merge_contacts signature;
+>    - check how many existing student and authorized-adult phones are malformed, and confirm the trigger only acts on insert or phone change, so nothing existing is blocked;
+>    - take a fresh verified backup into […] (never the repo), with size and SHA-256;
+>    - show me the checklist and wait for my "go".
+> 2. Apply 139 through the guarded wrapper (DRYRUN_OK, then commit, short lock_timeout). Ledger 001–139, row 139 matches the file.
+> 3. Squash-merge #217 at that exact head, and verify Vercel Production READY on the merge commit.
+> 4. Acceptance, rolled back only, codes and counts only:
+>    - find_people works for the receptionist and is refused for teacher, parent and student;
+>    - a phone typed as « 06 … », « +212 … » or with spaces finds the same person;
+>    - the create gate flags a duplicate before creating;
+>    - « Ajouter un enfant » keeps one open action per prospect;
+>    - a student merge is refused with an open balance (people.merge_source_balance) and with a reservation;
+>    - the merge functions are refused for the receptionist;
+>    - D3 and D5 exist and are not executable by any API role;
+>    - one action per active prospect still holds;
+>    - C1's payment refusals still hold, plus eap.student_merged;
+>    - Tâches per family per bucket;
+>    - no new Postgres errors; Meta intake still runs.
+>
+> Not authorized: D3, D5 or any data step, any other migration, the hardening. Hand off with the merge SHA, deployed SHA, ledger, acceptance results and recovery notes (B1's restore must run before C1's); documentation is a separate change.
+
+**Owner's « go » (2026-11-26, after the operator showed the checklist), verbatim:**
+
+> Go
+
+**One correction to the approval's premise:** `crm_merge_contacts` did not exist in Production before 139. Its signature changed only inside PR #217, during its review (the two expected versions). Neither the C1 build nor the B1 screens call it, so the old build had nothing to break.
+
+| Step | When (UTC) | Evidence |
+| --- | --- | --- |
+| Pre-checks (read-only) | 11:09:26–11:10:14 | PR head `d22a50b0d2923e0a10c70a48dc0cea8bbf3a3ffe`, base `a7f63c4`; main `19615b7` (one docs commit ahead) merges cleanly; Verify run 45802217196 green on attempt 1; ledger exactly 001–138, row 138 MD5 `2037fff7208ad000d9c8c78802d2bf6e` with `created_by` set; the 15 bodies 139 re-creates equal to its section-0 MD5s (C1's `set_next_action`, `create_charge_payment`, `crm_enroll_and_collect`, `crm_reserve_without_payment`; `command`, `opportunity_ids`, `normalize_phone`, `student_candidates`, `crm_get_timeline`, `crm_get_work_queue`, `crm_get_workspace_detail`, `crm_search_leads`, `crm_start_enrollment`, `save_receptionist_student`, `search_students_page`); catalogue digest equal to the post-138 pin (no drift since C1); none of 139's functions, tables, columns, triggers or indexes present |
+| Phones and exposure (read-only) | 11:09:26–11:10:14 | students: 253, of which 21 with no phone, 15 already in E.164, 215 readable but not yet in E.164, 1 placeholder, 1 unreadable; authorized adults: 0. No contact with two or more active prospects; no merged prospect or contact. Profiles: no `parent` account exists |
+| Backup | 11:11:34–11:13:50 | roles, schema, data (including `auth`) and the migration ledger, plus a restore script (below); verified by a restore |
+| Local rehearsal | before the « go » | a clean 001–138 chain whose digest equals Production's: the wrapper's dry run and apply, equal to a plain apply of the file (digest and 50 function bodies); the restore file, then 139 applied again; on the backup restored locally, 139 applied with no existing row and no stored phone changed, and the acceptance probe (copy removed afterwards) |
+| In-flight check (read-only) | 11:22:11 | no receipt, charge, financial request or student written in the previous 10 minutes; no lock on the people, CRM or payment tables; no other active session; counts equal to the backup's, so the backup stood |
+| Production dry run | 11:22:17 | `DRYRUN_OK 139 tables=87`; digest and the 50 new or replaced function bodies equal to the rehearsed pins |
+| **139 applied** | **11:22:30–32** | the same wrapper ending in `commit`, `lock_timeout` 3 s, `statement_timeout` 120 s |
+| Proofs (read-only) | 11:22:41 | ledger 001–139, none missing; row 139 MD5 `1f22f6b1782569c9a76e98b9e49d86b9` (one statement, name `people_identity`, `created_by` equal to row 138's; git blob `5ff11842226cc9cfaba9c919440ecf7d73152dd7`); catalogue digest equal to the post-139 pin (functions 584, triggers 185, indexes 298, constraints 803, columns 1179, relations 95, policies 186); receipt counter unchanged; no merged student; both people tables empty |
+| Merge | 11:22:49 | squash `15909d6084cd859556b553d48a0d4254b5ba86fb` at the approved head; its tree equals the approved head merged onto `19615b7`, and its 139 file is the one applied |
+| Deploy | 11:24:24 | GitHub `Production` deployment `8083842940` `success` (Vercel `english-hills-admin-9qbxblqdh…`) on `15909d6` |
+| Acceptance | 11:24:46, 11:25:16 | the first probe stopped at setup and wrote nothing; the second passed (below) |
+| Integrations and logs | 11:25–11:26:30 | counts after the probe; intake run 11:25; Postgres errors (below) |
+
+**Old-build window:** about 2 minutes (11:22:32–11:24:24 UTC). The C1 build ran on 139 and behaved as before, except:
+- **Phone writes.** The new trigger acts only when a student or authorized adult is created or its phone changes. A readable number was stored in E.164 (the old build shows it as stored until the B1 build formats it); an unreadable or placeholder number, or a blank authorized-adult phone, was refused with `22023`, which the old build shows as its generic error. Existing rows were not affected: on the restored backup, the placeholder and the unreadable phone both accepted an update of another column and an unchanged phone written back.
+- **Tâches.** `crm_get_work_queue` returns one row per contact in each bucket. The old build ignores the new `family` key; with no contact holding two active prospects, it showed the same rows.
+- « Ajouter un prospect » in the old build still calls `crm_create_manual_lead`, unchanged by 139.
+
+No student was written during the window.
+
+**The guarded wrapper.** One transaction. **Before 139's body,** it refused to run unless:
+- the ledger held exactly 138 rows, with row 138 as above and its `created_by` set;
+- no function with any of 139's new names existed in any overload, nor its tables, student columns, triggers or indexes, while C1's reservations table and A2's one-action index did;
+- the 15 re-created functions had the MD5s above;
+- the catalogue digest equalled the post-138 pin, the D1 journal held 99 rows, and every active prospect had exactly one open action;
+- no receipt, charge, financial request or student had been written in the previous 2 minutes.
+
+It then ran 139 verbatim and inserted ledger row 139 (`created_by` copied from row 138). **After the body, before commit,** it checked:
+- ledger 001–139, with row 139 equal to the file;
+- `person_match_decisions` and `student_merge_journal`: RLS on, no privilege for `anon`, `authenticated` or `service_role`, both empty; no student merged;
+- the `people_phone_guard` trigger enabled on both tables, `BEFORE INSERT OR UPDATE OF telephone`, and both phone indexes valid;
+- **no stored student or authorized-adult phone changed** (one fingerprint of every row's phone, before and after);
+- `authenticated` executes the eleven new public commands and reads, `anon` none of them; no API role executes D3, D5 or the three `academic_security` merge functions;
+- every existing table grant and every existing function's grants, `SECURITY DEFINER` flag and settings unchanged;
+- the online functions and policies, `anon` execute rights, the cron jobs and the receipt counter unchanged;
+- every definer function with a pinned `search_path`, and no `crm_security` function executable by an API role;
+- one open action per active prospect, and the row counts of the 87 existing app tables unchanged;
+- the digest and the 50 function bodies equal to the pins.
+
+**Acceptance (rolled back; statuses, codes and counts only).** One transaction ending in a sentinel exception, so nothing persisted. It ran as the receptionist, the director, the teacher and the student account, and on prospects, contacts, learners, charges and a reservation it created itself. Production has no parent account, so the probe also created a synthetic one (`auth.users` and its profile, no e-mail) inside the same transaction. No receipt was written.
+
+**The first attempt (11:24:46 UTC) stopped at setup.** Production's `on_auth_user_created` trigger creates a `pending` profile for every new `auth.users` row; the restored backup does not carry that trigger, so the rehearsed probe inserted the profile a second time and hit `profiles_pkey`. The whole transaction rolled back: a read-only check at 11:25:01 found no such user, no such profile and no probe prospect or learner. The probe was changed to turn the trigger's profile into the parent account, tested locally, and run again at 11:25:16.
+
+| Check | Result |
+| --- | --- |
+| `find_people` by role | receptionist answered; teacher, parent and student refused, `42501` |
+| One search, any phone format | the new prospect found by phone typed as « 06 xx xx xx xx », « 06xxxxxxxx », « +2126xxxxxxxx », « +212 6 xx xx xx xx », « 002126xxxxxxxx » and with dashes |
+| « Ajouter un prospect » | contact phone stored in E.164; 1 open action |
+| Create gate | the same number again, typed with spaces: `PT409` `people.possible_duplicate`; no prospect created |
+| « Ajouter un enfant » | same contact, one contact for the number; 1 open action on each prospect |
+| Tâches | « today »: 1 row for the contact, with the other learner in `family` |
+| Merge commands as the receptionist | `merge_students`, `unmerge_student`, `student_merge_preview`, `crm_merge_prospects`, `crm_merge_contacts`: each `42501` |
+| Student merge with an open balance (director) | preview and merge refused: `22023` `people.merge_source_balance` |
+| « Réserver sans paiement » (new learner) | 1 reservation; the new learner's phone in E.164; 1 open action |
+| Student merge with a reservation, no balance (director) | preview and merge refused: `22023` `people.merge_source_balance` |
+| Prospect merge of the reserving prospect (director) | refused `22023` `people.merge_source_appointment`: its « Encaisser l'acompte » action is checked first, before `people.merge_source_reservation` (that refusal is tested locally in `test-people-merge.sql` §4c) |
+| C1's payment refusals | paying the reserved charge: `eap.reservation_collect_on_prospect`; a second tuition charge at « Encaisser »: `eap.unlinked_commitment_exists` |
+| A student merge with nothing owed (director) | done; linked, 1 journal row; the merged file hidden from `find_people` |
+| « Encaisser » on the merged file | `22023` `eap.student_merged` |
+| D3, D5 and the merge cores | all present; none executable by `anon`, `authenticated` or `service_role` |
+| One action per active prospect | 0 exceptions at commit time |
+| Receipts | none written; counter unchanged |
+
+- **After the probe (11:25:27 UTC, read-only):** receipts, charges, learners, prospects, contacts, open actions, reservations, person-match decisions, merge journal, D1 journal and the receipt counter all equal to their values before it; no probe row left.
+- **Meta intake:** the 11:25 UTC run, the first on the B1 build, succeeded and `/api/cron/crm-intake` answered HTTP 200; all 348 intake jobs `done`.
+- **Postgres:** no error between 11:20 and 11:26:30 UTC other than the release's own: the dry run's and the probe's sentinels, and the first probe's `profiles_pkey`.
+
+**Backup** (verified by restoring it into an empty private local database: 124 tables, 15,584 rows, every data table equal to Production row for row; the only differences are the platform's own migration bookkeeping tables in `auth` and `storage`. The local copy was removed). **It holds personal data and is kept by the owner, outside this repository**; it is identified here by size and checksum only:
+
+| Part | Backup (2026-11-26 11:11:34–11:13:50 UTC) |
+| --- | --- |
+| roles | 297 bytes, `25873cec56a2cc6514e204f420231777f85c03da818caa7090cdcdfa89776ecd` |
+| schema | 1,493,369 bytes, `5b83307f752267b5dc69ed0f6d16c61a8e98f533631977ed0337c19e6522340b` |
+| data (including `auth`) | 12,165,948 bytes, `80679605718a3d8528d874a9d8e2cd68e121b8d8f82f45614d765b906278aa8e` |
+| migration ledger | 3,049,826 bytes, `6fc75c8e8022e744014b1c10b2c7f9358fd16ba0aad31964966e278d7e0fe4b2` |
+| restore script | 1,039 bytes, `f5a3efa2273059f45a72169a6844c8c3c50933f5bce64bc43d8a8d137a5968e2` |
+
+**Recovery, in this order; each step needs the owner's separate approval** (rehearsed on a private stack):
+1. **Redeploy `19615b7` first** (GitHub deployment `8080442579`; the same application code as C1's `a7f63c4`). The B1 build calls `find_people`, `crm_create_prospect`, `crm_update_prospect` and the merge commands, which the restore drops.
+2. **If any student was merged,** run `unmerge_student` for each; **if D3 ever ran,** run `crm_security.d3_revert()`. The restore refuses otherwise.
+3. **Run `scripts/rollback/139_people_identity_restore.sql` with plain `psql -f`**, not `psql -1`: the file opens and commits its own transaction. Rehearsed: functions, triggers and policies return exactly to 138. It keeps `person_match_decisions`, `student_merge_journal`, the two student merge columns with their checks and index, and every row; 139 can be applied again afterwards (rehearsed).
+4. **Delete ledger row 139.**
+5. **Only then, and only if C1 must go too, C1's restore** (`scripts/rollback/138_desk_payments_restore.sql` as on `main`, which refuses while `find_people` exists), following the [C1 record](#release-record-pr-c1--2026-11-26)'s steps; its first step then redeploys a pre-C1 build.
+- **Release kit:** the wrappers, probes, generator and their outputs are kept by the owner outside this repository.
+
+**Not verified:**
+- the B1 screens in a signed-in browser (search, the gate, « Ajouter un enfant », « Modifier la fiche », the corrected number, the merges, the national phone display);
+- that the live domain serves the new build (GitHub deployment status only);
+- a new Meta lead through intake on 139;
+- Vercel runtime errors (no connector access to the team).
+
+**Phones not changed by this release:** 215 student phones stay in their old stored form until someone edits them or data step D3 runs; the placeholder and the unreadable one stay as stored. D3 needs its own approval with counts.
+
+**Known follow-ups (not started; each needs its own approval):**
+- **Reviewer's note:** `scripts/test-crm-h3-upgrade-103-current.sql` checks that the ledger reaches 139 but its label still says « upgraded to current 138 ». It is a test script, so it is outside this docs-only change.
+- **Reviewer's note:** the header of `scripts/rollback/139_people_identity_restore.sql` is out of date. It says « A student merged in B1 shows again in the lists », but the restore refuses while any student is merged. Nearby wording also lags the code: the refusal is described as « a D3 or D5 run journalled and not reverted » (the code checks for any merged student), and ledger row 139 is said to be removed « by the operator wrapper » (the operator deletes it).
+- **Deviation 3:** revoke `crm_create_manual_lead` now that the B1 build is deployed.
+- C1's two reviewer notes (the result card shows the date twice; « payment ends it » not tested directly on a moved « Encaisser l'acompte » action).
+- **The 24 public tables** that still grant `DELETE` and `TRUNCATE` to `anon` and `authenticated`.
+- **A guard for test scripts that reset the shared local stack.**
+
+**Gates after this release:** B1 released. **Next:** data steps D3 (phones) and D5 (student merges), each with the owner's approval of its counts; B2 (needs the 2026/2027 programme prices, OD-16); C2; data steps D4, D6 and D7; the 24-table hardening; the local-stack guard. Each needs the owner's separate approval.
 
 ## IMPLEMENTATION CONTRACT
 
@@ -1444,7 +1590,8 @@ Also: `set_next_action` is C1's body with B1's `merge` cause; the `eap.student_m
 - **D1:** done — run 2026-11-23 after its four gates were met ([D1 record](#release-record-data-step-d1--2026-11-23)). `d1_revert` was available until M-A2; it is gone since 137 (2026-11-24).
 - **A2:** done — released 2026-11-24 ([release record](#release-record-pr-a2--2026-11-24)); the D1 functions and `d1_revert` are gone with 137.
 - **C1:** done — released 2026-11-26 ([release record](#release-record-pr-c1--2026-11-26)), migration 138.
-- **For B1 (next, rebased onto C1 as migration 139):** its own review and release approval.
+- **B1:** done — released 2026-11-26 ([release record](#release-record-pr-b1--2026-11-26)), migration 139; D3 and D5 shipped, not run.
+- **For D3 and D5 (next):** each its own approval with counts.
 - **For B2:** the 2026/2027 programme prices (OD-16).
 
 **Object manifest (provisional names; migration numbers are claimed at merge):**
