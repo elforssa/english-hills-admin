@@ -1,6 +1,6 @@
 # Receptionist workflow — one next action, one identity, one rule per form
 
-**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); **PR A2 released on 2026-11-24** (PR #214, merge `0bb8f27`, migration 137 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a2--2026-11-24)): release A (A1, D1, A2) is complete and « exactly one next action » is enforced in the database; `d1_revert` is gone with 137. **PR C1 released on 2026-11-26** (PR #216, merge `a7f63c4`, migration 138 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-c1--2026-11-26)): desk payments. **PR B1 released on 2026-11-26** (PR #217, merge `15909d6`, migration 139 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-b1--2026-11-26)): people identity. Next: data steps D3 and D5, B2, C2 and data steps D4, D6 and D7, which are not run. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
+**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); **PR A2 released on 2026-11-24** (PR #214, merge `0bb8f27`, migration 137 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a2--2026-11-24)): release A (A1, D1, A2) is complete and « exactly one next action » is enforced in the database; `d1_revert` is gone with 137. **PR C1 released on 2026-11-26** (PR #216, merge `a7f63c4`, migration 138 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-c1--2026-11-26)): desk payments. **PR B1 released on 2026-11-26** (PR #217, merge `15909d6`, migration 139 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-b1--2026-11-26)): people identity. **Hotfix PR #220** (merge `b730234`, 2026-11-26) repaired the director's « Annuler ce paiement » ([record](#release-record-hotfix-pr-220--2026-11-26)). **Data step D3 run on 2026-11-26** (applied 12:35:16–12:36:18 UTC, 229 changes; [D3 record](#release-record-data-step-d3--2026-11-26)); **data step D5 run on 2026-11-26** (2 pairs approved by the owner, applied 13:14:35–13:15:36 UTC; [D5 record](#release-record-data-step-d5--2026-11-26)). Next: B2 (with D6's functions, migration 140; no prices, OD-16 replaced), then C2 (with D7) and D4 ([gates](#owner-decisions-follow-ups-and-gates--2026-11-26)). Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
 
 - **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q30.
 - **Decision record:** [ADR-019 (accepted)](../decisions/ADR-019-one-next-action-per-prospect.md).
@@ -565,7 +565,7 @@ One branch and one PR per row unless noted; each PR is Tier 3 with full CI and a
 | **D3 / D4 / D5** (operator) | phones; programme and origin mapping; approved student merges | release record | per §10 | rehearsed locally | B1 / B2 | medium |
 | **PR C1 — payments** | §6.1 | `src/components/finance/PaymentPanel.jsx`; `CrmEnrollmentDialog.jsx`, `ReceiptForm.jsx`, receipts pages; `NNN_desk_payments.sql` (`get_open_balances`, the no-second-charge guard, the OD-2 option) | invariants 12, 13; day scripts 2, 9 | `test-payment-panel.mjs`, `test-payment-screens-browser.mjs`, `test-receipt-idempotency-local.mjs`, finance regression suites | A; OD-2 | **high** (finance) |
 | **PR C2 — academics, students, small things** | §6.2–6.5, item 25 leftovers, mobile acceptance | `NNN_desk_academics.sql`; placement pages and modal, attendance page and `attendanceSession.mjs`, students pages, `Sidebar.jsx`, `roleAccess.mjs` (OD-9), online page button | invariant 5 (tests, attendance); NF-16 closed | `test-placement-rules.sql`, `test-attendance-rules.sql`, `test-student-rules.sql`, navigation and middleware suites, `test-mobile-reception-browser.mjs` (375 px) | B2; OD-9 | medium |
-| **D6 / D7** (operator) | test-data clean-up; class days | release record | per §10 | rehearsed | C2 (D7); D6 any time after OD-13 | low |
+| **D6 / D7** (operator) | test-data clean-up; class days | release record | per §10 | rehearsed | C2 (D7); D6 any time after OD-13. *Owner decision 2026-11-26: D6's functions ship inside PR B2 (migration 140); D7 goes with C2* | low |
 
 ### Day scripts (Playwright, `scripts/test-reception-day-scripts-browser.mjs`)
 
@@ -650,7 +650,7 @@ All twenty were answered by the owner on 2026-11-21; the answers and their effec
 | OD-13 | Test data | **A:** delete only records with no financial, CRM or attendance history; close (CRM) or archive (students) the rest; voided receipts stay. **B:** delete everything named (impossible for receipts and CRM history without breaking the immutability rules). | A | D6 |
 | OD-14 | 3-hour rule | **A:** keep the server minimum; « Tentative réelle (hors délai) » records the attempt, counts it in the 5, and doesn't move the cadence earlier. **B:** no override. | A | A1 |
 | OD-15 | Receipt and PDF branding text (« Language Center », « Learn Today, Lead Tomorrow ») | Keep (brand) or translate | Keep (brand), translate everything else | C1 |
-| OD-16 | Programme prices | Provide the 2026/2027 price per programme for the catalogue (director-editable afterwards) | — | B2 (defaults only) |
+| OD-16 | Programme prices | Provide the 2026/2027 price per programme for the catalogue (director-editable afterwards). **Replaced 2026-11-26:** B2 ships with no prices; the director fills them in the catalogue later; amounts are typed by hand until then ([decision](#owner-decisions-follow-ups-and-gates--2026-11-26)) | — | B2 (defaults only) |
 | OD-17 | After five failed calls (PRODUCT_RULES: « five failures stop automatic sequence scheduling; never automatically Lost ») | **A:** the next action becomes « En attente » **with no relance date**: nothing is scheduled automatically, the prospect is never overdue, and it appears in « En attente » for a decision (call again, close). Keeps the rule. **B:** « En attente » with a relance date (OD-5): an automatic reminder, which amends the rule. | A | A1 (and D1 rule c) |
 | OD-18 | Can a call or message replace an appointment or an enrolment action? (PRODUCT_RULES and RCC-A1 keep operational tasks when a follow-up is created; with one action both can't be kept) | **A:** yes, after the form shows « Remplace : Rendez-vous 26/11 15:00 (avec test) » and the user confirms; the appointment and its test are cancelled. Amends the rule. **B:** no: an appointment or enrolment action can only be rescheduled, cancelled or given an outcome; « Changer » for a call or message is offered only after that. Keeps the spirit of the rule, one more step for the receptionist. | B for enrolment actions, A for appointments | A1 |
 | OD-19 | Merge order with PR #204 | **A:** #204 merges first; A1 rebases after it, numbers its migrations after 135 and gets a fresh CI run and review of the rebased head. **B:** A1 may merge first; #204 then renumbers its migrations above A1's and needs a fresh exact-SHA review. | A | A1 merge |
@@ -689,7 +689,7 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 - the weekday hours and closed dates (OD-3): **given 2026-11-21** — « same time as before, no need for holidays »: the current published `weekly_hours` unchanged, `opening_hours` NULL, `date_exceptions` `[]`; values read by R0 Q01 (recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md));
 - the default owner's account (OD-6): **D1 must not run without it**; still to come at the A1 release (2026-11-23); **given 2026-11-23** (set by the owner in Settings at 11:07 UTC, a receptionist account), before D1;
 - a confirmed Production backup or PITR: **D1 must not run without it** (added at the A1 release, 2026-11-23, because A1 itself was released without one); **met 2026-11-23**: a full backup taken and verified by a restore before D1 ([D1 record](#release-record-data-step-d1--2026-11-23));
-- the 2026/2027 programme prices (OD-16): before release B2.
+- the 2026/2027 programme prices (OD-16): before release B2. *Replaced 2026-11-26: B2 ships with no prices ([decision](#owner-decisions-follow-ups-and-gates--2026-11-26)).*
 
 **Reviewer's notes:** the four non-blocking notes of the independent re-review of RWR-r5 at `824252a`, copied here as review notes (they are not part of the owner's words). They are follow-ups for the A1 implementation and do not change the approved design; notes a and c are applied to the text above.
 - **a.** Rule (a) step 1 can still cancel an active prospect's past planned test: a future appointment without a test next to a past appointment with a planned test keeps the future one, and the past appointment's test is cancelled. The test is counted and sampled in `d1_plan`. Applied: the upgrade fixture holds this case (§9), and the revert note no longer says such a test « belonged to a closed prospect » (§10).
@@ -1575,7 +1575,215 @@ It then ran 139 verbatim and inserted ledger row 139 (`created_by` copied from r
 - **The 24 public tables** that still grant `DELETE` and `TRUNCATE` to `anon` and `authenticated`.
 - **A guard for test scripts that reset the shared local stack.**
 
-**Gates after this release:** B1 released. **Next:** data steps D3 (phones) and D5 (student merges), each with the owner's approval of its counts; B2 (needs the 2026/2027 programme prices, OD-16); C2; data steps D4, D6 and D7; the 24-table hardening; the local-stack guard. Each needs the owner's separate approval.
+**Gates after this release (at the time; D3 and D5 run 2026-11-26, [D3 record](#release-record-data-step-d3--2026-11-26), [D5 record](#release-record-data-step-d5--2026-11-26)):** B1 released. **Next:** data steps D3 (phones) and D5 (student merges), each with the owner's approval of its counts; B2 (needs the 2026/2027 programme prices, OD-16, since replaced); C2; data steps D4, D6 and D7; the 24-table hardening; the local-stack guard. Each needs the owner's separate approval.
+
+### Release record: hotfix PR #220 — 2026-11-26
+
+**MERGED / DEPLOYED / VERIFIED BY USE (2026-11-26).** The director's « Annuler ce paiement » on `/receipts/[id]/edit` did nothing on Production from the C1 deployment (2026-11-26 07:59:00 UTC) until this fix was deployed (12:49:51 UTC). No migration; the ledger stays 001–139.
+
+- **Cause:** C1 (#216) added a double-submit lock to the page and chained `.finally()` on `getBrowserClient().rpc(...)`. The Supabase query builder is thenable but has no `.finally()`, so the click threw before any request: the button stayed on « Annulation… », no `void_financial_receipt` request was sent and no receipt changed.
+- **Fix:** the lock is released with `try`/`finally` around the awaited call; same RPC, payload, idempotency key and error handling. `scripts/test-receipt-client-regressions.mjs` now refuses `.rpc(...).finally()` on the edit and delete pages; it fails on the old page and passes on the fix.
+- **Review and merge:** independent review READY on head `df2a0534a20cbf67646da788d5a68ff0fd9c14e3`; Verify run `45816575291` green on attempt 1. Merged with the owner's explicit « merge #220 » as squash `b730234629a04bb6e6ba15ff6340b278605159d1` at 12:48:30 UTC.
+- **Deploy:** GitHub `Production` deployment `8085664333`, `success` at 12:49:51 UTC (Vercel `english-hills-admin-nqf9kca2v…`) on `b730234`.
+- **Use on Production:** the director then voided the three test receipts EH-2026-00459, EH-2026-00460 and EH-2026-00461 through the app, between 12:50:27 and 12:51:19 UTC, with the reason « Test (audit CRM 21/11) ». A read-only check confirmed each is voided by the director account with that reason, and the receipt counter is unchanged (EH 470): numbering has no gap. These are the receipts D6 keeps, voided (§10).
+- **Not verified:** a browser test that clicks « Annuler ce paiement » (follow-up below).
+
+### Release record: data step D3 — 2026-11-26
+
+**D3 RUN AND VERIFIED (2026-11-26).** `crm_security.d3_apply` committed at **12:35:16–12:36:18 UTC** (journal `run_at` 12:35:18 UTC) with exactly the counts the owner approved: **229 changes** (students 216, contacts 13). The read-only post-checks are clean. No migration, merge or deployment.
+
+**Preparation approval, owner's words (2026-11-26), verbatim:**
+
+> Owner approval (Maroine, 2026-11-26): prepare data step D3 (phones) of plan RWR-r5 §10, using the D3 functions shipped in migration 139. Tier 3 Production operation, same pattern as D1.
+>
+> Part 1, now, read-only only:
+> - confirm the ledger is 001–139 and D3 has never run;
+> - run crm_security.d3_plan() read-only and show me the counts per category (already E.164, missing « + », missing leading 0, separators, placeholder → NULL, unnormalisable), with up to 5 sample ids per category (ids only, no numbers or names). Compare them with R0 Q11 (181 students: 83 standard, 34 without « + », 29 without leading 0, 28 malformed) and explain any difference;
+> - list the unnormalisable rows by id and type only, for manual correction later;
+> - prepare the apply checklist: a verified backup, the guarded wrapper with exact expected counts, the post-checks, and d3_revert;
+> - then STOP and wait for my approval of the exact counts.
+>
+> Part 2, only after I approve the counts AND say "go", outside reception hours:
+> - take a fresh verified backup;
+> - run d3_apply with the approved counts;
+> - run the post-checks: no phone changed outside the plan, search still finds every person, one action per active prospect still holds;
+> - report.
+>
+> Not authorized: D5 or any other data step, any migration. Documentation of D3 is a separate change.
+
+**Counts approval, verbatim (12:02 UTC)** — the answer to: approve these exact counts, including the recovery companion for 12 contact fields, the 2 e-mail case changes and +216 activity-log rows:
+
+> Approve counts
+
+**First « go », verbatim (12:03 UTC):**
+
+> Go
+
+**The batching change.** At 12:11 UTC, before anything was written, the owner sent a batched approval to prepare D3, D6 (test data) and D7 (group class days) together, with one backup, one approval and one window. The operator stopped the D3 run and found that **D6 and D7 have no shipped functions** (only D3 and D5 exist in 139) and that `groups.class_days`, which D7 fills, does not exist yet (it comes with C2). The owner then decided, verbatim (12:14 UTC):
+
+> Owner decision (Maroine, 2026-11-26): run D3 alone today with the counts I approved at 12:02 (229 changes). go — now, in the 12:30–15:00 window, before reception opens. Re-run the write check first; if anything changed since the 12:04 backup, take a new verified backup before applying. Then the post-checks and report. D6's functions will ship inside PR B2 (migration 140); D7 goes with C2. Don't build anything yourself.
+
+**Approved counts** (`d3_plan()` on Production, read-only, 11:50–12:00 UTC):
+
+| Rows | E.164 already | National form | No « + » | No leading 0 | Separators | Placeholder | Unreadable |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Students (232 with a phone, 21 without) | 15 | 119 | 47 | 45 | 4 | 1 | 1 |
+| Contacts (`phone_e164`, `whatsapp_e164`) | 377 | 6 | 6 | — | — | 1 | 10 |
+
+R0 Q11 (2026-11-21) counted 181 students; Part 1 counted the 253 students of 2026-11-26 in finer categories. **Changes: 229** = students 216 (215 to E.164 and 1 placeholder emptied; 2 of them archived) and contacts 13 (12 empty E.164 columns filled from the raw column, 1 placeholder emptied).
+
+| Step | When (UTC) | Evidence |
+| --- | --- | --- |
+| Read-only pre-check | 11:58 | ledger 001–139; journal holds D1's 99 rows only; D3 and phone function bodies equal to the pin; no merged student; no authorized adult; 570 people findable by phone, 0 missing |
+| First backup | 12:04:02–12:06:22 | verified by a restore; superseded (below) |
+| Write check | 12:30:55 | CRM commands at 12:10 and 12:28, after the first backup (students and contacts untouched), so a new backup was taken, as the owner required |
+| Backup used | 12:31:03–12:32:52 | verified by restoring it into an empty private database: 126 tables and 15,659 rows equal (platform bookkeeping only differs); the wrapper's dry run passed on the copy; copy removed |
+| Write check | 12:34:05 | nothing written since the backup; no student, contact, receipt or charge written in 10 minutes; no lock; counts equal to the approved ones |
+| Production dry run | 12:34:12–12:35:12 | `DRYRUN_OK`: 229 changes, the expected counts after, search 570/0 |
+| **D3 applied** | **12:35:16–12:36:18** | the same wrapper ending in `commit`, `lock_timeout` 3 s, `statement_timeout` 300 s, run as the director |
+| Read-only post-check | 12:36:52 | below |
+| Postgres logs | 12:30–12:42 | only the dry run's and the post-check's sentinels; no error |
+
+**The guarded wrapper** refused to run unless the ledger was exactly 001–139 with row 139 as released, D3 had never run, the journal held 99 rows, the function bodies matched the pin, the counts equalled the approved ones exactly, the set of empty contact columns and the set of e-mails the student trigger could lower-case were the ones shown, every person was findable by phone, and no student or contact had been written in the previous 2 minutes. After `d3_apply`, before commit, it checked that no phone changed outside the plan, every planned phone held its proposed value, every other student and contact column and every unplanned row was unchanged byte for byte, the receipt counter was unchanged and only the journal and the activity log grew.
+
+**Post-checks (read-only, statuses and counts only):**
+
+| Check | Result |
+| --- | --- |
+| Ledger | 001–139, unchanged |
+| Journal | step `d3`: students 216, contacts 13, every row run by the director; D1's 99 rows unchanged |
+| `d3_plan()` after | students E.164 230, unreadable 1; contacts E.164 389, placeholder 1 (the raw column keeps it, by design), unreadable 10: equal to the expected counts |
+| Search | 570 people findable by phone, 0 missing (the same as before) |
+| One action per active prospect | 0 exceptions |
+| Finance | receipt counter EH 470, receipts 361 and charges 338 unchanged |
+| Activity log | +216 rows (3,095 → 3,311), phones redacted |
+| Phone guard | the trigger enabled on both tables |
+| Side effect | the students' e-mail trigger lower-cased the e-mail columns of 2 students (case only), as shown before the approval |
+
+**Left for manual correction: 11 unreadable numbers** (1 student, 10 contacts). D3 leaves them as stored; reception corrects them by hand.
+
+**Rehearsal** (before the approval, on the pre-139 backup restored locally with 139 applied; same counts as Production): the dry run and the apply (229 changes, every fingerprint held); a second run refused (`D3_PRE_ALREADY_RUN`); wrong counts refused by the wrapper and by `d3_apply` itself; `d3_revert` restored 229 rows. Students' phones came back exactly; 12 contact fields that were empty before stayed filled, so a companion script empties them, after which the contacts came back exactly. The copy was removed.
+
+**Recovery (each step needs the owner's separate approval):**
+1. `crm_security.d3_revert()` as the director: restores every journalled phone from its raw value.
+2. The companion script kept in the owner's release kit: empties the 12 contact fields that were empty before D3 (`d3_revert` re-fills them from the raw column).
+3. The 2 lower-cased e-mails come back only from the backup.
+- D3 must be reverted before 139's restore can run.
+
+**Backup used** (verified as above; it holds personal data and is kept by the owner outside this repository, identified by size and checksum only):
+
+| Part | Backup (2026-11-26 12:31:03–12:32:52 UTC) |
+| --- | --- |
+| roles | 297 bytes, `25873cec56a2cc6514e204f420231777f85c03da818caa7090cdcdfa89776ecd` |
+| schema | 1,572,127 bytes, `569f6f166e666443794819ab5eb63919a51b2c4d89df403f0bcc8b207bde20b8` |
+| data (including `auth`) | 12,222,977 bytes, `2bdf6b43a6954d243221073dcb6701a172887a474fb323133c840a9e57071528` |
+| migration ledger | 3,288,739 bytes, `bd8abe9a37aa36aff8b0c07ea13c1079b0995d2be97d9431241d9542cba57b4e` |
+| restore script | 1,038 bytes, `8dc847fa801a4d055744f8ff9c3c1fba5df2683ecfd64681c51792b58dcaf7e0` |
+
+The superseded first backup (12:04:02–12:06:22 UTC, data 12,195,723 bytes, `e57ca8356c3d4590d276b59d16eae6b596ce4c880e1f0fc0d951860cea53ca54`) is also kept by the owner.
+
+**Not verified:** a new Meta lead through intake after D3; the phones as shown on the desk screens in a signed-in browser.
+
+### Release record: data step D5 — 2026-11-26
+
+**D5 RUN AND VERIFIED (2026-11-26).** `crm_security.d5_apply` merged **2 pairs approved by the owner**, committed at **13:14:35–13:15:36 UTC** (merge time 13:14:37 UTC). Nothing moved between files (no portal link, authorized adult or prospect was attached to the merged files). The read-only post-checks are clean. No migration, merge or deployment. Names, ids and phone numbers stay out of this repository: the pairs were shown to the owner in the chat only.
+
+**Preparation approval, owner's words (2026-11-26), verbatim:**
+
+> Owner approval (Maroine, 2026-11-26): prepare data step D5 (student merges) of plan RWR-r5 §10, using the D5 functions shipped in 139. Tier 3, same pattern as D3.
+>
+> Part 1, read-only:
+> - now that phones are clean (D3), list the candidate duplicate learner pairs (Q28 logic and the B1 match rules: same E.164 phone, same name, same email, same parent);
+> - show me each pair HERE in the chat, not in the repo: both names, masked phone (last 4 digits), date of birth, enrollments, receipts and open balance for each, and which file you'd keep and why;
+> - mark any pair that the merge would refuse (open balance or reservation on the file being merged away), with what would unblock it;
+> - then STOP. I'll reply with the pairs I approve.
+>
+> Part 2, only after I list the approved pairs and say "go", outside reception hours: fresh verified backup, d5_plan(pairs) dry run, merge_students per pair in one journalled transaction, post-checks (each merged file hidden from search, payments refused on it, kept file shows the history, one action per active prospect), report, with unmerge_student available for each pair.
+>
+> Not authorized: any other data step or migration, or docs yet.
+
+**Pairs approval, verbatim (12:58 UTC)** — 2 pairs approved by the owner, from the list shown in the chat:
+
+> Approve pairs 1 and 2
+
+**« go », verbatim (13:05 UTC):**
+
+> Go
+
+**Part 1 (read-only, counts only).** 25 candidate pairs were examined (the Q28 name rule, the B1 match rules, and a check for the same letters or one name inside the other; e-mails shared by more than four students, which are placeholders, were left out). In each pair the file kept is the one with the live enrollment, as `student_merge_check` requires:
+- **2 mergeable duplicates**, proposed and approved;
+- **1 duplicate refused** (`people.merge_both_live`: both files have a live enrollment), pending until the desk ends the enrollment on the file to merge away;
+- 8 sibling pairs (both live, refused), 10 pairs among the test records (both with portal access, refused; they belong to D6) and 2 pairs judged not to be the same person: not proposed.
+
+| Step | When (UTC) | Evidence |
+| --- | --- | --- |
+| Read-only dry plan | 12:58 | `d5_plan(pairs)` for the 2 approved pairs: no refusal, nothing to move |
+| Rehearsal | 12:58–13:04 | below |
+| Read-only pre-check | 13:04, again 13:05:46 | `PRECHECK_OK`: 570 people findable by phone, 0 missing |
+| Backup | 13:06:02–13:12:00 | roles and schema first; the first data dump lost its connection (SSL EOF) and was taken again at 13:10:53–13:12:00; verified by restoring it into an empty private database: 126 tables and 16,170 rows equal (platform bookkeeping only differs); copy removed |
+| Write check | 13:13:23 | nothing written since the data dump started; counts equal to the backup's |
+| Production dry run | 13:14:00–13:14:32 | `DRYRUN_OK`: 2 merges, nothing moved, every post-check below |
+| **D5 applied** | **13:14:35–13:15:36** | the same wrapper ending in `commit`, `lock_timeout` 3 s, run as the director |
+| Read-only post-check | 13:15:51, 13:16 | below |
+| Postgres logs | 13:05–13:20 | only the pre-check's and dry run's sentinels; no error |
+
+**The guarded wrapper** refused to run unless the ledger was exactly 001–139, D5 had never run, the journals held their expected rows (step `d1` 99, `d3` 229; merge journal empty), the merge, D5, search and payment function bodies matched the pin, no student was merged, the four files had not been written in the previous 10 minutes, `d5_plan(pairs)` (names left out) equalled the approved pin exactly, and each file to merge away was findable by name in both desk searches and by phone. It ran `d5_apply(pairs, d5_plan(pairs))` as the director, then checked everything below before commit.
+
+**Post-checks (statuses and counts only):**
+
+| Check | Result |
+| --- | --- |
+| Merges | exactly 2 files merged, each into its approved kept file; no other student merged |
+| Journals | step `d5`: 2 rows, run by the director; student merge journal: 2 open rows; D1 and D3 rows unchanged |
+| `d5_plan(pairs)` after | `people.merge_already` for both |
+| Hidden from search (as the receptionist) | neither merged file found by name (`find_people`, `search_desk_students`) or by phone; both kept files found; 568 people findable by phone, 0 missing (570 less the 2 merged files) |
+| Payments refused | `create_charge_payment` on each merged file: `22023` `eap.student_merged` (tested in a rolled-back sub-transaction; on a file not merged, the same call fails on validation instead) |
+| Kept file shows the history | each kept file's merge set holds both files, and its enrollments, receipts and attendance count both files' rows |
+| One action per active prospect | 0 exceptions |
+| Nothing else changed | every other student byte for byte; the merged files only in their merge columns; the kept files unchanged; portal links, authorized adults, prospects, contacts, actions, enrollments, charges, receipts, attendance and reservations unchanged; receipt counter EH 470; receipts 361, charges 338 |
+| Table counts | only the two journals (+2 each) and the activity log (+2) grew |
+
+**Rehearsal** (on the D3 backup restored locally, D3 applied, so the journals matched Production): the function bodies equal Production's; the dry run passed with the same results; a wrong plan pin refused (`D5_PRE_PLAN`); `d5_apply` with a wrong expected plan refused by itself; the apply committed; a second run refused (`D5_PRE_ALREADY_RUN`); `unmerge_student` for each pair as the director returned the students table exactly (every column but `updated_at`) and both files were findable again. The copy was removed.
+
+**Undo (each needs the owner's separate approval):** `unmerge_student(source)` as the director, one pair at a time (rehearsed exact). After an unmerge the D5 journal rows stay, so the same wrapper refuses to run again; merging again needs a new approval. Any merged student must be unmerged before 139's restore can run.
+
+**What the merge does not do:** it copies no field between files. The merged file keeps its own phone, birth date and notes, and its enrollments, receipts and attendance stay on it, read through the kept file's merge set.
+
+**Desk follow-ups after D5 (counts only):** 1 kept file needs the phone held by its merged file copied onto it; 1 kept file has a validated enrollment with no charge; 1 further pair waits until its enrollment is ended.
+
+**Backup** (verified as above; kept by the owner outside this repository):
+
+| Part | Backup (2026-11-26 13:06:02–13:12:00 UTC) |
+| --- | --- |
+| roles | 297 bytes, `25873cec56a2cc6514e204f420231777f85c03da818caa7090cdcdfa89776ecd` |
+| schema | 1,572,127 bytes, `569f6f166e666443794819ab5eb63919a51b2c4d89df403f0bcc8b207bde20b8` |
+| data (including `auth`) | 12,714,968 bytes, `cc37b5645f0060ee5e2daa2c2fe5421eb0f7801aefdbf42a31b0739aa98f28c9` |
+| migration ledger | 3,288,739 bytes, `74733bef98f2e653285c9ce3f4361f7b1e9acdeb4d0269f70f7087965974f9d4` |
+| restore script | 1,038 bytes, `8dc847fa801a4d055744f8ff9c3c1fba5df2683ecfd64681c51792b58dcaf7e0` |
+
+**Not verified:** the merged and kept files in a signed-in browser (the redirect from a merged file to its kept file, « Annuler la fusion »).
+
+### Owner decisions, follow-ups and gates — 2026-11-26
+
+**Owner decisions (2026-11-26):**
+- **OD-16 replaced:** B2 ships with no programme prices. The director fills the prices in the catalogue later; until then amounts are typed by hand. B2 no longer waits for the prices.
+- **D6 and D7:** D6's functions ship inside PR B2 (migration 140); D7 goes with C2, which adds `groups.class_days`.
+- **Batched records:** from now on, release and data-step records are batched in one documentation PR instead of one docs PR each. This record covers #220, D3 and D5.
+
+**Follow-ups (not started; each needs its own approval):**
+- a browser test that clicks « Annuler ce paiement » (the regression check of #220 reads the page's code only);
+- the « upgraded to current 138 » label in `scripts/test-crm-h3-upgrade-103-current.sql` (the ledger check reaches 139);
+- the out-of-date sentence in the header of `scripts/rollback/139_people_identity_restore.sql` (it says a merged student shows again in the lists, but the restore refuses while any student is merged);
+- the date shown twice on the action result card (C1 reviewer's note);
+- the payment-after-move test case (« payment ends it » on a moved « Encaisser l'acompte » action; C1 reviewer's note);
+- the 24 public tables that still grant `DELETE` and `TRUNCATE` to `anon` and `authenticated`;
+- a guard for test scripts that reset the shared local stack;
+- `test-crm-phase3-concurrency.py` and `test-crm-phase7-concurrency.py`, not wired in CI, still call the old wrappers;
+- `crm_get_today` fails on legacy non-CRM tests with malformed times (`invalid input syntax for type time`);
+- revoke `crm_create_manual_lead` now that the B1 build is deployed (deviation 3);
+- desk work: the 11 unreadable phones left by D3 and the 3 desk follow-ups after D5 (above).
+
+**Gates:** A1, D1, A2, C1, B1, D3 and D5 are done. **Next:** B2 (catalogues, with D6's functions, migration 140; no prices), then C2 (with D7) and D4. Each needs the owner's separate approval.
 
 ## IMPLEMENTATION CONTRACT
 
@@ -1590,9 +1798,11 @@ It then ran 139 verbatim and inserted ledger row 139 (`created_by` copied from r
 - **D1:** done — run 2026-11-23 after its four gates were met ([D1 record](#release-record-data-step-d1--2026-11-23)). `d1_revert` was available until M-A2; it is gone since 137 (2026-11-24).
 - **A2:** done — released 2026-11-24 ([release record](#release-record-pr-a2--2026-11-24)); the D1 functions and `d1_revert` are gone with 137.
 - **C1:** done — released 2026-11-26 ([release record](#release-record-pr-c1--2026-11-26)), migration 138.
-- **B1:** done — released 2026-11-26 ([release record](#release-record-pr-b1--2026-11-26)), migration 139; D3 and D5 shipped, not run.
-- **For D3 and D5 (next):** each its own approval with counts.
-- **For B2:** the 2026/2027 programme prices (OD-16).
+- **B1:** done — released 2026-11-26 ([release record](#release-record-pr-b1--2026-11-26)), migration 139; hotfix #220 deployed 2026-11-26 ([record](#release-record-hotfix-pr-220--2026-11-26)).
+- **D3:** done — run 2026-11-26 ([D3 record](#release-record-data-step-d3--2026-11-26)).
+- **D5:** done — run 2026-11-26, 2 pairs ([D5 record](#release-record-data-step-d5--2026-11-26)); 1 further pair waits until its enrollment is ended.
+- **For B2 (next, with D6's functions, migration 140):** its own review and release approval; no prices needed (OD-16 replaced 2026-11-26).
+- **For C2 (with D7) and D4:** each its own approval.
 
 **Object manifest (provisional names; migration numbers are claimed at merge):**
 - **Migrations:** `NNN_crm_one_next_action.sql`, `NNN_crm_one_next_action_enforce.sql`, `NNN_people_identity.sql`, `NNN_catalogues.sql`, `NNN_desk_payments.sql`, `NNN_desk_academics.sql` (C1 and C2 may share one).

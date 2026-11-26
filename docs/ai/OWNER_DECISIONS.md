@@ -578,7 +578,7 @@ Plan: [online room reliability](../architecture/plans/online-room-reliability.md
 Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), revision **RWR-r5 approved at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`** (Tier 3; PR #205; [ADR-019](../architecture/decisions/ADR-019-one-next-action-per-prospect.md) accepted, architecture only; evidence: [audit of 2026-11-21](../architecture/evidence/receptionist-workflow-audit-2026-11-21.md)). RWR-r1 to RWR-r4 were each independently reviewed CHANGES REQUIRED on 2026-11-21; the owner records the re-review of RWR-r5 as READY FOR FINAL REVIEW with four non-blocking notes.
 
 - **Answers:** OD-1 A (exactly one next action per active prospect); OD-2 A (« Réserver sans paiement » holds no seat; ADR-015 kept); **OD-3 B (one set of hours for calling and the desk)**; OD-4 visit 60 minutes, level test 45 minutes; **OD-5 5 days** (default « relancer le »; the brief said 7); OD-6 A (a default owner chosen by the direction); OD-7 A (director only voids receipts); OD-8 A (student merge links, never moves history); OD-9 A (keep RPW-r2); OD-10 A; OD-11 A (qualification implied); OD-12 « Sans inscription »; OD-13 A; OD-14 A; OD-15 keep the brand text, translate everything else; OD-17 A (« En attente » with no relance date after five failed calls); OD-18 B for enrolment actions, A for appointments; OD-19 A (#204 merges first); OD-20 B (« Pas de réponse » saves immediately, no « Annuler »).
-- **Owner inputs still to come (gates):** ~~the weekday hours and closed dates before A1 starts~~ (given 2026-11-21, see below); ~~the default owner's account before D1 (D1 must not run without it); **D1 also needs a confirmed Production backup or PITR, a fresh `d1_plan()` dry run whose per-rule and cancelled-test counts the owner approves, and a run outside reception hours** (gates recorded 2026-11-23 at the A1 release)~~ (all four met and D1 run on 2026-11-23, see below); the 2026/2027 programme prices before B2 (OD-16).
+- **Owner inputs still to come (gates):** ~~the weekday hours and closed dates before A1 starts~~ (given 2026-11-21, see below); ~~the default owner's account before D1 (D1 must not run without it); **D1 also needs a confirmed Production backup or PITR, a fresh `d1_plan()` dry run whose per-rule and cancelled-test counts the owner approves, and a run outside reception hours** (gates recorded 2026-11-23 at the A1 release)~~ (all four met and D1 run on 2026-11-23, see below); ~~the 2026/2027 programme prices before B2 (OD-16)~~ (replaced 2026-11-26: B2 ships with no prices, see below).
 - **OD-3 hours given (2026-11-21), owner's words, verbatim:**
 
   > same time as before, no need for holidays
@@ -728,8 +728,48 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
     - C1's two reviewer notes;
     - the 24-table hardening;
     - a guard for test scripts that reset the shared local stack.
-  - **Next:** data steps D3 and D5 (each with its counts), B2 (needs the 2026/2027 programme prices, OD-16), C2, data steps D4, D6 and D7, the 24-table hardening and the local-stack guard. Each needs the owner's separate approval.
+  - **Next (at the time):** data steps D3 and D5 (each with its counts), B2 (needs the 2026/2027 programme prices, OD-16), C2, data steps D4, D6 and D7, the 24-table hardening and the local-stack guard. Each needs the owner's separate approval. D3 and D5 ran on 2026-11-26 and OD-16 was replaced (below).
   - **Not authorized:** D3, D5 or any data step, any other migration, the 24-table hardening; each needs a separate approval.
+- **Batched record of 2026-11-26 (hotfix #220, data steps D3 and D5) — APPROVED and DONE.** Full records in the plan: [hotfix #220](../architecture/plans/receptionist-workflow.md#release-record-hotfix-pr-220--2026-11-26), [D3](../architecture/plans/receptionist-workflow.md#release-record-data-step-d3--2026-11-26), [D5](../architecture/plans/receptionist-workflow.md#release-record-data-step-d5--2026-11-26).
+  - **Hotfix PR #220 (receipt void button):** C1 had broken the director's « Annuler ce paiement » from 07:59 UTC (`.finally()` on the Supabase `rpc` builder). Fixed with `try`/`finally` and a regression check; independent review READY; merged on the owner's explicit « merge #220 » as `b730234` (12:48:30 UTC); GitHub `Production` deployment `8085664333` `success` (12:49:51 UTC). The director then voided the test receipts EH-2026-00459, 00460 and 00461 through the app with the reason « Test (audit CRM 21/11) »; numbering unchanged (counter EH 470).
+  - **D3 (phones) — counts approved, verbatim (12:02 UTC):**
+
+    > Approve counts
+
+    **« go », verbatim (12:03 UTC):**
+
+    > Go
+
+    The batched D3+D6+D7 approval that followed (12:11 UTC) stopped that run before any write; **the owner's decision, verbatim (12:14 UTC):**
+
+    > Owner decision (Maroine, 2026-11-26): run D3 alone today with the counts I approved at 12:02 (229 changes). go — now, in the 12:30–15:00 window, before reception opens. Re-run the write check first; if anything changed since the 12:04 backup, take a new verified backup before applying. Then the post-checks and report. D6's functions will ship inside PR B2 (migration 140); D7 goes with C2. Don't build anything yourself.
+
+    Done: a new verified backup (CRM commands had run after the 12:04 one); dry run `DRYRUN_OK`; **applied 12:35:16–12:36:18 UTC, 229 changes** (students 216, contacts 13); post-checks clean. 11 unreadable numbers left for manual correction. Undoing D3 needs the owner's approval for each step: `d3_revert()`, then the companion script for 12 contact fields; the 2 lower-cased e-mails only from the backup.
+  - **D5 (student merges) — pairs approved, verbatim (12:58 UTC; 2 pairs approved by the owner, from the list shown in the chat, no names or ids recorded here):**
+
+    > Approve pairs 1 and 2
+
+    **« go », verbatim (13:05 UTC):**
+
+    > Go
+
+    Done: a fresh verified backup; dry run `DRYRUN_OK`; **applied 13:14:35–13:15:36 UTC**; post-checks clean (merged files hidden from search, payments refused on them, kept files show both histories, one action per active prospect). Undo: `unmerge_student` per pair, with the owner's approval. 1 further pair waits until its enrollment is ended.
+- **OD-16 replaced (2026-11-26):** B2 ships with no programme prices. The director fills them in the catalogue later; amounts are typed by hand until then. The 2026/2027 prices are no longer a gate for B2.
+- **D6 and D7 placement (2026-11-26):** D6's functions ship inside PR B2 (migration 140); D7 goes with C2, which adds `groups.class_days`.
+- **Batched records (2026-11-26):** from now on, release and data-step records are batched in one documentation PR instead of one docs PR each.
+- **Follow-ups (not started; each needs its own approval):**
+  - a browser test that clicks « Annuler ce paiement »;
+  - the « upgraded to current 138 » label in `scripts/test-crm-h3-upgrade-103-current.sql`;
+  - the out-of-date sentence in the header of `scripts/rollback/139_people_identity_restore.sql`;
+  - the date shown twice on the action result card;
+  - the payment-after-move test case;
+  - the 24-table hardening;
+  - the local-stack reset guard;
+  - the unwired `test-crm-phase3-concurrency.py` and `test-crm-phase7-concurrency.py`;
+  - `crm_get_today` on malformed legacy times;
+  - revoke `crm_create_manual_lead` (deviation 3);
+  - desk work: the 11 unreadable phones left by D3 and the 3 desk follow-ups after D5 (counts only).
+- **Status:** A1, D1, A2, C1, B1, D3 and D5 done. **Next:** B2 (with D6's functions, migration 140), then C2 (with D7) and D4. Each needs the owner's separate approval. The plan stays ACTIVE.
 
 ## Deferred backlog after RCC-r1
 
