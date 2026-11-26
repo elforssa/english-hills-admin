@@ -458,8 +458,9 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -v phone_cases="$(cat scripts/fixtures/phone-cases.json)" -f scripts/test-phone.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-people-duplicates.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-people-merge.sql
-          # RWR-r5 PR B2 (140): catalogues, origins, close reasons, conversion, D4 functions (not run).
+          # RWR-r5 PR B2 (140): catalogues, origins, close reasons, conversion, D4 and D6 functions (not run).
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-catalogues.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-catalogues-d6.sql
           node scripts/test-crm-next-action-enforced-suites.mjs
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-phase11.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b.sql

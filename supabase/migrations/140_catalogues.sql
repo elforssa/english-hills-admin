@@ -32,6 +32,10 @@
 --    catalogue_save_programme (director);
 --  * data step D4 (programme and origin mapping): d4_rows, d4_plan, d4_apply,
 --    d4_revert — functions only, NOT run, granted to no API role.
+--  * data step D6 (test data; owner decision 2026-11-26): d6_references, d6_rows,
+--    d6_plan, d6_apply, d6_revert — functions only, NOT run, granted to no API role —
+--    and report_exclusions (no API access), which crm_get_marketing_cohort now reads
+--    to leave out the test prospects D6 marks (empty until D6 runs).
 --
 -- Unchanged: set_next_action and the one-action rule; the lifecycle barrier; event
 -- types; first-touch immutability (no submission is written); every other function,
@@ -54,7 +58,8 @@ begin
       'public.get_referral_breakdown()', 'cf7ab151740ea681072b134b563bd926',
       'public.crm_get_workspace_detail(uuid)', '7f7202688d663931576e35fd479e75fb',
       'public.save_receptionist_student(uuid,timestamp with time zone,jsonb)', '827fba795a8836b3771358a7b4192b02',
-      'public.search_students_page(text,text,text,text,text,boolean,text,text,integer,integer,text,text)', '3d25c65ed8a52df3c962f339452cfc97')) loop
+      'public.search_students_page(text,text,text,text,text,boolean,text,text,integer,integer,text,text)', '3d25c65ed8a52df3c962f339452cfc97',
+      'public.crm_get_marketing_cohort(date,date,date,uuid,text,text,text,text,text,integer,integer,text)', '6fda5eec4d2d3e30b7abd5f25b394131')) loop
     if to_regprocedure(f.key) is null
        or (select md5(prosrc) from pg_proc where oid = to_regprocedure(f.key)) is distinct from f.value then
       raise exception 'Migration 140: % differs from the body 139 left live; rebuild 140 on the live definition', f.key
@@ -1343,6 +1348,116 @@ end;
 $function$
 ;
 
+-- crm_get_marketing_cohort: test prospects D6 marked are left out (section 10).
+CREATE OR REPLACE FUNCTION public.crm_get_marketing_cohort(p_from date, p_to date, p_cutoff_date date DEFAULT NULL::date, p_connection uuid DEFAULT NULL::uuid, p_level text DEFAULT 'campaign'::text, p_campaign text DEFAULT NULL::text, p_adset text DEFAULT NULL::text, p_ad text DEFAULT NULL::text, p_channel text DEFAULT NULL::text, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0, p_session_type text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$ declare cfg jsonb;tz text:='Africa/Casablanca';currency text;cutoff timestamptz;complete boolean:=false;last_sync timestamptz;warning boolean;suppressed text;result jsonb;begin
+ perform crm_security.require_reader(true);
+ if p_from is null or p_to is null or not isfinite(p_from) or not isfinite(p_to) or p_to<p_from or p_to-p_from>365 or p_limit is null or p_limit not between 1 and 100 or p_offset is null or p_offset<0
+ or p_level is null or p_level not in ('campaign','adset','ad','source','program') or (p_channel is not null and p_channel not in ('meta_instant_form','website','manual'))
+ or (p_session_type is not null and p_session_type not in ('Yearly','Adults','Summer Camp','Communication Junior','Communication Adult','One-to-One','Mise à niveau','Other','none')) then raise exception 'Invalid cohort request' using errcode='22023';end if;
+ suppressed:=case when p_session_type is not null then 'program_filter' when p_level='program' then 'program_level' end;
+ if p_connection is not null then
+  select insights_settings into cfg from public.crm_integration_connections where id=p_connection and provider='meta' and insights_settings ? 'account_id';
+  if not found then raise exception 'Unknown reporting account' using errcode='22023';end if;
+  tz:=cfg->>'timezone';currency:=cfg->>'currency';
+ end if;
+ cutoff:=case when p_cutoff_date is null then clock_timestamp() else least(clock_timestamp(),((p_cutoff_date+1)::timestamp at time zone tz)-interval '1 microsecond') end;
+ if not isfinite(cutoff) or cutoff<(p_from::timestamp at time zone tz) then raise exception 'Cutoff precedes cohort' using errcode='22023';end if;
+ if p_connection is not null then
+  select not exists(select 1 from generate_series(p_from::timestamp,p_to::timestamp,interval '1 day')day where not exists(select 1 from public.crm_meta_sync_runs r where r.connection_id=p_connection and r.status='completed' and r.query_version='ad-daily-v1' and day::date between r.date_from and r.date_to)) into complete;
+  select max(completed_at) into last_sync from public.crm_meta_sync_runs where connection_id=p_connection and status='completed' and daterange(date_from,date_to,'[]') && daterange(p_from,p_to,'[]');
+ end if;
+ select exists(select 1 from public.crm_meta_sync_runs r where r.connection_id=p_connection and r.status<>'completed' and daterange(r.date_from,r.date_to,'[]') && daterange(p_from,p_to,'[]') and (r.status in ('pending','running') or exists(select 1 from generate_series(greatest(r.date_from,p_from)::timestamp,least(r.date_to,p_to)::timestamp,interval '1 day')day where not exists(select 1 from public.crm_meta_sync_runs newer where newer.connection_id=r.connection_id and newer.status='completed' and newer.completed_at>r.created_at and day::date between newer.date_from and newer.date_to)))) into warning;
+ with cohort as (
+  select l.id,l.first_submission_id,l.conversion_activity_id,l.conversion_review_required,l.session_type,s.channel,s.source_label,a.campaign_id,a.adset_id,a.ad_id,
+   a.campaign_name_snapshot,a.adset_name_snapshot,a.ad_name_snapshot,m.connection_id,
+   case when s.channel='meta_instant_form' and a.provider='meta' and m.connection_id=p_connection then
+     case p_level when 'campaign' then a.campaign_id when 'adset' then a.adset_id when 'ad' then a.ad_id when 'source' then case when a.campaign_id is not null then 'meta' end when 'program' then case when a.campaign_id is not null then 'meta' end end end as advertising_key,
+   coalesce(s.channel='meta_instant_form' and crm_security.attribution_enrichment_eligible(a,s.channel,m.connection_id),false) as pending
+  from public.crm_leads l join public.crm_submissions s on s.id=l.first_submission_id
+  left join public.crm_submission_attribution a on a.submission_id=s.id left join public.crm_form_mappings m on m.id=s.form_mapping_id
+  where l.merged_into_lead_id is null
+   -- 140 (D6, owner decision 2026-11-26): test prospects D6 marked are left out of reports.
+   and not exists(select 1 from public.report_exclusions x where x.entity='crm_leads' and x.entity_id=l.id)
+   and s.occurred_at>=p_from::timestamp at time zone tz and s.occurred_at<(p_to+1)::timestamp at time zone tz and s.occurred_at<=cutoff
+   and (p_channel is null or s.channel=p_channel)
+   and (p_session_type is null or (p_session_type='none' and l.session_type is null) or l.session_type=p_session_type)
+   and (s.channel<>'meta_instant_form' or p_connection is null or m.connection_id=p_connection or m.connection_id is null)
+   and (p_campaign is null or (s.channel='meta_instant_form' and a.provider='meta' and m.connection_id=p_connection and a.campaign_id=p_campaign))
+   and (p_adset is null or (s.channel='meta_instant_form' and a.provider='meta' and m.connection_id=p_connection and a.adset_id=p_adset))
+   and (p_ad is null or (s.channel='meta_instant_form' and a.provider='meta' and m.connection_id=p_connection and a.ad_id=p_ad))
+ ), flagged as (
+  select c.*,
+   case when advertising_key is not null then 'meta:'||advertising_key when pending then 'pending:'||channel else 'unknown:'||channel end as attribution_bucket,
+   case p_level when 'campaign' then campaign_name_snapshot when 'adset' then adset_name_snapshot when 'ad' then ad_name_snapshot end as historical_name,
+   exists(select 1 from public.crm_activities a where a.lead_id=c.id and a.event_type in ('contact_attempted','conversation_recorded','whatsapp_sent','whatsapp_conversation') and a.occurred_at<=cutoff)::int as contacted,
+   exists(select 1 from public.crm_activities a where a.lead_id=c.id and a.event_type in ('conversation_recorded','whatsapp_conversation') and a.occurred_at<=cutoff)::int as reached,
+   exists(select 1 from public.crm_activities a where a.lead_id=c.id and a.event_type='lead_engaged' and a.occurred_at<=cutoff)::int as engaged,
+   exists(select 1 from public.crm_activities a where a.lead_id=c.id and a.event_type='lead_qualified' and a.occurred_at<=cutoff)::int as qualified,
+   exists(select 1 from public.crm_activities a where a.id=c.conversion_activity_id and a.lead_id=c.id and a.event_type='lead_converted' and a.occurred_at<=cutoff)::int as converted,
+   (select count(distinct a.placement_test_id) from public.crm_activities a where a.lead_id=c.id and a.event_type='placement_test_booked' and a.occurred_at<=cutoff) as tests_booked,
+   (select count(distinct a.placement_test_id) from public.crm_activities a where a.lead_id=c.id and a.event_type='placement_test_attended' and a.occurred_at<=cutoff) as tests_attended,
+   (select count(distinct a.placement_test_id) from public.crm_activities a where a.lead_id=c.id and a.event_type='placement_result_entered' and a.occurred_at<=cutoff) as results,
+   (select coalesce(sum(r.amount_delta),0) from public.crm_revenue_entries r where r.lead_id=c.id and r.attribution_submission_id=c.first_submission_id and r.effective_at<=cutoff) as revenue
+  from cohort c
+ ), per_lead as (
+  select f.*,(f.converted=1 and f.revenue>0)::int as converted_paid,(f.tests_booked>0)::int as booked_leads,(f.tests_attended>0)::int as attended_leads,
+   case when p_level='program' then 'program:'||coalesce(f.session_type,'none') else f.attribution_bucket end as bucket,
+   case when p_level='program' then f.session_type else f.advertising_key end as row_key
+  from flagged f
+ ), crm as (
+  select bucket,max(row_key) as object_key,max(channel) as channel,count(*) as leads,sum(contacted) as contacted,sum(reached) as reached,sum(engaged) as engaged,sum(qualified) as qualified,sum(converted) as converted,sum(converted_paid) as converted_paid,
+   sum(tests_booked) as tests_booked,sum(booked_leads) as booked_leads,sum(attended_leads) as attended_leads,sum(tests_attended) as tests_attended,sum(results) as results,sum(revenue) as revenue,
+   count(*) filter(where conversion_review_required) as review_required,array_agg(distinct historical_name) filter(where historical_name is not null) as historical_names
+  from per_lead group by bucket
+ ), spend as (
+  select 'meta:'||case p_level when 'campaign' then d.campaign_id when 'adset' then d.adset_id when 'ad' then d.ad_id when 'source' then 'meta' end as bucket,
+   max(case p_level when 'campaign' then d.campaign_id when 'adset' then d.adset_id when 'ad' then d.ad_id when 'source' then 'meta' end) as object_key,
+   sum(d.spend) as spend,sum(d.impressions) as impressions,sum(d.clicks) as clicks,sum(d.link_clicks) as link_clicks
+  from public.crm_meta_daily_insights d join public.crm_meta_sync_runs r on r.id=d.sync_run_id and r.status='completed'
+  where suppressed is null and d.connection_id=p_connection and d.insight_date between p_from and p_to and d.query_version='ad-daily-v1' and d.level='ad' and d.breakdown_key=''
+   and (p_campaign is null or d.campaign_id=p_campaign) and (p_adset is null or d.adset_id=p_adset) and (p_ad is null or d.ad_id=p_ad)
+   and (p_channel is null or p_channel='meta_instant_form') group by 1
+ ), combined as (
+  select coalesce(c.bucket,s.bucket) as bucket,coalesce(c.object_key,s.object_key) as object_key,
+   case when coalesce(c.bucket,s.bucket) like 'program:%' then 'program' when coalesce(c.bucket,s.bucket) like 'meta:%' then 'trusted_meta' else 'unattributed' end as attribution_kind,
+   case when coalesce(c.bucket,s.bucket) like 'program:%' then null else coalesce(c.channel,'meta_instant_form') end as channel,coalesce(c.leads,0) as leads,coalesce(c.contacted,0) as contacted,coalesce(c.reached,0) as reached,
+   coalesce(c.engaged,0) as engaged,coalesce(c.qualified,0) as qualified,coalesce(c.converted,0) as converted,coalesce(c.converted_paid,0) as converted_paid,
+   coalesce(c.tests_booked,0) as tests_booked,coalesce(c.tests_attended,0) as tests_attended,coalesce(c.booked_leads,0) as booked_leads,coalesce(c.attended_leads,0) as attended_leads,
+   coalesce(c.results,0) as results,coalesce(c.revenue,0) as revenue,coalesce(c.review_required,0) as review_required,c.historical_names,
+   case when coalesce(c.bucket,s.bucket) like 'meta:%' and complete and suppressed is null then coalesce(s.spend,0) end as spend,s.impressions,s.clicks,s.link_clicks
+  from crm c full join spend s using(bucket)
+ ), named as (
+  select x.*,case when x.attribution_kind='program' then coalesce(x.object_key,'Sans programme') else coalesce(o.current_name,case when p_level='source' and x.attribution_kind='trusted_meta' then 'Meta Instant Form' end,case when x.attribution_kind='trusted_meta' then x.historical_names[1] end,case when x.attribution_kind='trusted_meta' then case p_level when 'campaign' then 'Campagne ' when 'adset' then 'Ensemble ' else 'Annonce ' end||x.object_key end,case x.channel when 'website' then 'Site web · attribution observée' when 'manual' then 'Saisie manuelle / téléphone / recommandation' else case when x.bucket like 'pending:%' then 'Meta · attribution en attente' else 'Meta · attribution inconnue' end end) end as name,
+   case when x.attribution_kind='trusted_meta' then o.objective end as objective,
+   case when x.attribution_kind='trusted_meta' then x.spend/nullif(x.leads,0) end as cpl,
+   case when x.attribution_kind='trusted_meta' then x.spend/nullif(x.qualified,0) end as cpql,
+   case when x.attribution_kind='trusted_meta' then x.spend/nullif(x.converted,0) end as cac,
+   case when x.attribution_kind='trusted_meta' and currency='MAD' then x.revenue/nullif(x.spend,0) end as roas
+  from combined x left join public.crm_meta_objects o on x.attribution_kind='trusted_meta' and o.connection_id=p_connection and o.object_type=p_level and o.external_id=x.object_key
+ ), totals as (
+  select count(*) as leads,coalesce(sum(contacted),0) as contacted,coalesce(sum(reached),0) as reached,coalesce(sum(engaged),0) as engaged,coalesce(sum(qualified),0) as qualified,coalesce(sum(converted),0) as converted,coalesce(sum(converted_paid),0) as converted_paid,
+   coalesce(sum(tests_booked),0) as tests_booked,coalesce(sum(tests_attended),0) as tests_attended,coalesce(sum(booked_leads),0) as booked_leads,coalesce(sum(attended_leads),0) as attended_leads,
+   coalesce(sum(results),0) as results,coalesce(sum(revenue),0) as revenue,
+   count(*) filter(where attribution_bucket not like 'meta:%') as unattributed_leads,
+   count(*) filter(where attribution_bucket like 'pending:%') as pending_leads,
+   count(*) filter(where attribution_bucket like 'meta:%') as attributed_leads,coalesce(sum(contacted) filter(where attribution_bucket like 'meta:%'),0) as attributed_contacted,
+   coalesce(sum(qualified) filter(where attribution_bucket like 'meta:%'),0) as attributed_qualified,
+   coalesce(sum(converted) filter(where attribution_bucket like 'meta:%'),0) as attributed_converted,coalesce(sum(revenue) filter(where attribution_bucket like 'meta:%'),0) as attributed_revenue,
+   case when complete and suppressed is null and (p_channel is null or p_channel='meta_instant_form') then (select coalesce(sum(n.spend),0) from named n) end as spend
+  from per_lead
+ ) select jsonb_build_object('mode','acquisition_cohort','acquisition_from',p_from,'acquisition_to',p_to,'outcome_cutoff',cutoff,'timezone',tz,'spend_currency',currency,'revenue_currency','MAD','currency_mismatch',currency is not null and currency<>'MAD',
+  'spend_complete',complete,'spend_suppressed_reason',suppressed,'session_type',p_session_type,'last_synced_at',last_sync,'sync_warning',warning,'live_sync_enabled',coalesce(cfg->>'mode'='live' and coalesce((cfg->>'enabled')::boolean,false),false),'reach',null,
+  'summary',(select to_jsonb(t)||jsonb_build_object('cpl',spend/nullif(attributed_leads,0),'cpql',spend/nullif(attributed_qualified,0),'cac',spend/nullif(attributed_converted,0),'roas',case when currency='MAD' then attributed_revenue/nullif(spend,0) end) from totals t),
+  'total',(select count(*) from named),'rows',coalesce((select jsonb_agg(to_jsonb(page) order by page.spend desc nulls last,page.name,page.bucket) from (select bucket,object_key,attribution_kind,channel,name,objective,historical_names,spend,leads,contacted,reached,engaged,qualified,tests_booked,tests_attended,booked_leads,attended_leads,results,converted,converted_paid,review_required,revenue,cpl,cpql,cac,roas,impressions,clicks,link_clicks from named order by spend desc nulls last,name,bucket limit p_limit offset p_offset)page),'[]')) into result;
+ return result;
+end $function$
+;
+
 -- Finance breakdown: the origin list. A learner file not yet mapped by D4 reads its
 -- old answer through the same mapping as crm_security.referral_origin.
 CREATE OR REPLACE FUNCTION public.get_referral_breakdown()
@@ -1570,3 +1685,281 @@ revoke all on function public.get_catalogue(), public.catalogue_set_price(text,t
   public.catalogue_save_programme(text,bigint,jsonb) from public, anon;
 grant execute on function public.get_catalogue(), public.catalogue_set_price(text,text,numeric,text,uuid),
   public.catalogue_save_programme(text,bigint,jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 10. Data step D6 (test data) — shipped, NOT run (owner decision 2026-11-26: D6's
+--     functions ship in migration 140). Plan §10 D6 row and OD-13 A. Operator only,
+--     with the owner's « approve D6 », run as the director (like D1, D3 and D5), on the
+--     ids the operator supplies (Q24 and the owner's):
+--     {"students":[uuid…],"contacts":[uuid…],"leads":[uuid…],"groups":[uuid…]}.
+--     Classes:
+--      (a) a row nothing references (no foreign key from any table points to it):
+--          deleted, its whole row kept in the journal (the operator exports it
+--          privately first);
+--      (b) prospects: closed NOT_QUALIFIED « invalid_spam » with the note « Données de
+--          test (D6) » through the CRM close command; prospects already converted,
+--          closed or merged are reported « already_closed » and not re-closed;
+--          contacts with history are kept; every one is left out of reports;
+--      (c) learner files with history (receipts among them): archived (deleted_at)
+--          through the archive path, which ends their live enrollments; a test group
+--          with history is closed through « Clôturer le cours », never deleted.
+--     Receipts are never written: voided receipts EH-2026-00459 to 00461 stay
+--     (gap-free numbering). A listed file holding a receipt that is not voided, a
+--     group member who is not listed, an online group or an id that does not exist
+--     stops the run.
+-- ---------------------------------------------------------------------------
+create table if not exists public.report_exclusions (
+  entity text not null check (entity in ('students','crm_contacts','crm_leads','groups')),
+  entity_id uuid not null,
+  step text not null check (step ~ '^[a-z][a-z0-9_]*$'),
+  excluded_at timestamptz not null default now(),
+  primary key (entity, entity_id)
+);
+alter table public.report_exclusions enable row level security;
+revoke all on table public.report_exclusions from public, anon, authenticated, service_role;
+
+-- Every table.column whose foreign key points to this row and holds it.
+create or replace function crm_security.d6_references(tbl regclass, rid uuid)
+returns text[] language plpgsql stable
+set search_path = pg_catalog, pg_temp as $$
+declare c record; hit boolean; out text[] := '{}';
+begin
+  for c in select con.conrelid::regclass::text rel, a.attname::text col
+      from pg_constraint con join pg_attribute a on a.attrelid = con.conrelid and a.attnum = con.conkey[1]
+      where con.contype = 'f' and con.confrelid = tbl and cardinality(con.conkey) = 1
+      order by 1, 2 loop
+    execute format('select exists (select 1 from %s where %I = $1)', c.rel, c.col) into hit using rid;
+    if hit then out := out || (c.rel || '.' || c.col); end if;
+  end loop;
+  return out;
+end $$;
+
+create or replace function crm_security.d6_rows(ids jsonb)
+returns table(entity text, entity_id uuid, action text, detail jsonb)
+language plpgsql stable
+set search_path = pg_catalog, pg_temp as $$
+declare k text; v jsonb; rid uuid; s public.students; c public.crm_contacts; l public.crm_leads; g public.groups; refs text[];
+  listed uuid[];
+begin
+  if jsonb_typeof(ids) is distinct from 'object' or ids - array['students','contacts','leads','groups'] <> '{}'::jsonb then
+    raise exception 'Ids {"students":[…],"contacts":[…],"leads":[…],"groups":[…]} required' using errcode = '22023', hint = 'd6.ids'; end if;
+  foreach k in array array['students','contacts','leads','groups'] loop
+    if ids ? k and (jsonb_typeof(ids->k) <> 'array' or jsonb_array_length(ids->k) > 200) then
+      raise exception 'Ids % must be an array of at most 200 ids', k using errcode = '22023', hint = 'd6.ids'; end if;
+    for v in select x from jsonb_array_elements(coalesce(ids->k, '[]'::jsonb)) x loop
+      if jsonb_typeof(v) <> 'string' or (v #>> '{}') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+        raise exception 'Invalid id in %', k using errcode = '22023', hint = 'd6.ids'; end if;
+    end loop;
+    if (select count(*) from jsonb_array_elements_text(coalesce(ids->k, '[]'::jsonb)))
+       <> (select count(distinct lower(x)) from jsonb_array_elements_text(coalesce(ids->k, '[]'::jsonb)) x) then
+      raise exception 'Duplicate id in %', k using errcode = '22023', hint = 'd6.ids'; end if;
+  end loop;
+  listed := array(select x::uuid from jsonb_array_elements_text(coalesce(ids->'students', '[]'::jsonb)) x);
+
+  for rid in select x::uuid from jsonb_array_elements_text(coalesce(ids->'students', '[]'::jsonb)) x order by 1 loop
+    entity := 'students'; entity_id := rid;
+    select * into s from public.students st where st.id = rid;
+    if not found then action := 'missing'; detail := '{}'::jsonb; return next; continue; end if;
+    refs := crm_security.d6_references('public.students'::regclass, rid);
+    action := case when s.deleted_at is not null then 'already_archived' when cardinality(refs) = 0 then 'delete' else 'archive' end;
+    detail := jsonb_build_object('references', to_jsonb(refs),
+      'placeholder_phone', coalesce(public.phone_is_placeholder(public.phone_e164(s.telephone)), false),
+      'receipts', (select coalesce(jsonb_agg(jsonb_build_object('number', r.receipt_number, 'voided', r.voided_at is not null) order by r.receipt_number), '[]'::jsonb)
+                   from public.receipts r where r.student_id = rid),
+      'live_enrollments', (select coalesce(jsonb_agg(e.id order by e.id), '[]'::jsonb) from public.enrollments e
+                   where e.student_id = rid and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')));
+    return next;
+  end loop;
+
+  for rid in select x::uuid from jsonb_array_elements_text(coalesce(ids->'leads', '[]'::jsonb)) x order by 1 loop
+    entity := 'crm_leads'; entity_id := rid;
+    select * into l from public.crm_leads cl where cl.id = rid;
+    if not found then action := 'missing'; detail := '{}'::jsonb; return next; continue; end if;
+    action := case when l.merged_into_lead_id is not null or l.status in ('CONVERTED','LOST','NOT_QUALIFIED') then 'already_closed' else 'close' end;
+    detail := jsonb_build_object('status', l.status, 'closure_reason', l.closure_reason, 'merged', l.merged_into_lead_id is not null);
+    return next;
+  end loop;
+
+  for rid in select x::uuid from jsonb_array_elements_text(coalesce(ids->'contacts', '[]'::jsonb)) x order by 1 loop
+    entity := 'crm_contacts'; entity_id := rid;
+    select * into c from public.crm_contacts cc where cc.id = rid;
+    if not found then action := 'missing'; detail := '{}'::jsonb; return next; continue; end if;
+    refs := crm_security.d6_references('public.crm_contacts'::regclass, rid);
+    action := case when cardinality(refs) = 0 then 'delete' else 'keep' end;
+    detail := jsonb_build_object('references', to_jsonb(refs));
+    return next;
+  end loop;
+
+  for rid in select x::uuid from jsonb_array_elements_text(coalesce(ids->'groups', '[]'::jsonb)) x order by 1 loop
+    entity := 'groups'; entity_id := rid;
+    select * into g from public.groups gr where gr.id = rid;
+    if not found then action := 'missing'; detail := '{}'::jsonb; return next; continue; end if;
+    refs := crm_security.d6_references('public.groups'::regclass, rid);
+    action := case when g.closed_at is not null then 'already_closed' when cardinality(refs) = 0 then 'delete' else 'close' end;
+    detail := jsonb_build_object('references', to_jsonb(refs),
+      'online', online_security.is_online_type(g.session_type),
+      'live_members', (select coalesce(jsonb_agg(e.student_id order by e.student_id), '[]'::jsonb) from public.enrollments e
+                   where e.group_id = rid and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')),
+      'unlisted_members', (select coalesce(jsonb_agg(distinct e.student_id), '[]'::jsonb) from public.enrollments e
+                   where e.group_id = rid and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')
+                     and not (e.student_id = any(listed))));
+    return next;
+  end loop;
+end $$;
+
+-- The dry run: counts per entity and action (what « approve D6 » names), the rows by
+-- id with what D6 would do, the receipts it keeps, and what stops the run.
+create or replace function crm_security.d6_plan(ids jsonb)
+returns jsonb language sql stable
+set search_path = pg_catalog, pg_temp as $$
+  with r as (select * from crm_security.d6_rows(ids)),
+  rc as (select x->>'number' num, (x->>'voided')::boolean voided from r cross join lateral jsonb_array_elements(r.detail->'receipts') x where r.entity = 'students')
+  select jsonb_build_object(
+    'counts', (select coalesce(jsonb_object_agg(entity, acts), '{}'::jsonb) from (
+        select entity, jsonb_object_agg(action, n) acts from (select entity, action, count(*) n from r group by 1, 2) a group by entity) b)
+      || jsonb_build_object('receipts', jsonb_build_object('voided', (select count(*) from rc where voided), 'live', (select count(*) from rc where not voided))),
+    'rows', (select coalesce(jsonb_agg(jsonb_build_object('entity', entity, 'entity_id', entity_id, 'action', action, 'detail', detail) order by entity, entity_id), '[]'::jsonb) from r),
+    'receipts_kept', (select coalesce(jsonb_agg(jsonb_build_object('number', num, 'voided', voided) order by num), '[]'::jsonb) from rc),
+    'blockers', (select coalesce(jsonb_agg(jsonb_build_object('entity', entity, 'id', entity_id, 'blocker', b) order by entity, entity_id, b), '[]'::jsonb) from (
+        select entity, entity_id, 'missing' b from r where action = 'missing'
+        union all select entity, entity_id, 'live_receipt' from r where entity = 'students' and action in ('archive','delete')
+          and exists (select 1 from jsonb_array_elements(detail->'receipts') x where not (x->>'voided')::boolean)
+        union all select entity, entity_id, 'online_group' from r where entity = 'groups' and action in ('close','delete') and (detail->>'online')::boolean
+        union all select entity, entity_id, 'member_not_listed' from r where entity = 'groups' and action in ('close','delete')
+          and jsonb_array_length(detail->'unlisted_members') > 0) bl))
+$$;
+
+create or replace function crm_security.d6_apply(ids jsonb, expected jsonb)
+returns jsonb language plpgsql
+set search_path = pg_catalog, pg_temp as $$
+declare plan jsonb; r record; l public.crm_leads; row_json jsonb; at timestamptz; done jsonb := '{}'::jsonb;
+  note constant text := 'Données de test (D6)';
+begin
+  if coalesce(public.get_my_role(), '') <> 'director' then
+    raise exception 'D6 runs as the director' using errcode = '42501', hint = 'd6.run_as_director'; end if;
+  lock table public.students, public.crm_contacts, public.crm_leads, public.groups in share row exclusive mode;
+  if exists (select 1 from public.crm_data_step_journal where step = 'd6_revert') then
+    raise exception 'D6 was reverted; a new run needs its own migration' using errcode = '22023', hint = 'd6.applied'; end if;
+  if exists (select 1 from public.crm_data_step_journal where step = 'd6') then
+    raise exception 'D6 was already applied' using errcode = '22023', hint = 'd6.applied'; end if;
+  plan := crm_security.d6_plan(ids);
+  if jsonb_array_length(plan->'blockers') > 0 then
+    raise exception 'D6 cannot run: %', plan->'blockers' using errcode = '22023', hint = 'd6.blocked'; end if;
+  if expected is null or plan->'counts' is distinct from expected then
+    raise exception 'D6 counts differ from the approved dry run: %', plan->'counts' using errcode = '22023', hint = 'd6.counts'; end if;
+
+  -- (b) Prospects: the CRM close command, so history, actions and versions follow the rules.
+  for r in select * from jsonb_to_recordset(plan->'rows') x(entity text, entity_id uuid, action text, detail jsonb) where x.entity = 'crm_leads' and x.action = 'close' order by x.entity_id loop
+    select * into l from public.crm_leads where id = r.entity_id;
+    insert into public.crm_data_step_journal(step, entity, entity_id, before, after, run_by)
+    values ('d6', 'crm_leads', l.id, jsonb_build_object('action', 'close', 'status', l.status, 'version', l.version), null, auth.uid());
+    perform crm_security.command('close_not_qualified', gen_random_uuid(), jsonb_build_object('lead_id', l.id,
+      'expected_version', l.version, 'reason', 'invalid_spam', 'note', note));
+    update public.crm_data_step_journal j set after = (select jsonb_build_object('status', x.status, 'closure_reason', x.closure_reason, 'closed_at', x.closed_at)
+      from public.crm_leads x where x.id = l.id) where j.step = 'd6' and j.entity = 'crm_leads' and j.entity_id = l.id;
+  end loop;
+
+  -- (c) Learner files with history: archived (their live enrollments end).
+  for r in select * from jsonb_to_recordset(plan->'rows') x(entity text, entity_id uuid, action text, detail jsonb) where x.entity = 'students' and x.action = 'archive' order by x.entity_id loop
+    insert into public.crm_data_step_journal(step, entity, entity_id, before, after, run_by)
+    select 'd6', 'students', s.id, jsonb_build_object('action', 'archive', 'deleted_at', s.deleted_at, 'status', s.status,
+      'groupe_id', s.groupe_id, 'live_enrollments', r.detail->'live_enrollments'), null, auth.uid()
+    from public.students s where s.id = r.entity_id;
+    perform public.soft_delete_student(r.entity_id);
+    update public.crm_data_step_journal j set after = (select jsonb_build_object('deleted_at', s.deleted_at, 'status', s.status) from public.students s where s.id = r.entity_id)
+    where j.step = 'd6' and j.entity = 'students' and j.entity_id = r.entity_id;
+  end loop;
+
+  -- (c) Test groups with history: « Clôturer le cours » once their listed members are archived.
+  for r in select * from jsonb_to_recordset(plan->'rows') x(entity text, entity_id uuid, action text, detail jsonb) where x.entity = 'groups' and x.action = 'close' order by x.entity_id loop
+    insert into public.crm_data_step_journal(step, entity, entity_id, before, after, run_by)
+    values ('d6', 'groups', r.entity_id, jsonb_build_object('action', 'close', 'closed_at', null), null, auth.uid());
+    perform public.close_course(r.entity_id, 0, note, '{}'::uuid[], '{}'::uuid[]);
+    update public.crm_data_step_journal j set after = (select jsonb_build_object('closed_at', g.closed_at) from public.groups g where g.id = r.entity_id)
+    where j.step = 'd6' and j.entity = 'groups' and j.entity_id = r.entity_id;
+  end loop;
+
+  -- (a) Rows nothing references: the whole row is journalled, then deleted.
+  for r in select * from jsonb_to_recordset(plan->'rows') x(entity text, entity_id uuid, action text, detail jsonb) where x.action = 'delete'
+      order by case x.entity when 'students' then 1 when 'crm_contacts' then 2 else 3 end, x.entity_id loop
+    execute format('select to_jsonb(t) from public.%I t where t.id = $1', r.entity) into row_json using r.entity_id;
+    insert into public.crm_data_step_journal(step, entity, entity_id, before, after, run_by)
+    values ('d6', r.entity, r.entity_id, jsonb_build_object('action', 'delete', 'row', row_json), jsonb_build_object('deleted', true), auth.uid());
+    execute format('delete from public.%I where id = $1', r.entity) using r.entity_id;
+  end loop;
+
+  -- Out of reports: every kept test row.
+  insert into public.report_exclusions(entity, entity_id, step)
+  select x.entity, x.entity_id, 'd6' from jsonb_to_recordset(plan->'rows') x(entity text, entity_id uuid, action text, detail jsonb)
+  where x.action in ('archive','already_archived','close','already_closed','keep')
+  on conflict (entity, entity_id) do nothing;
+
+  select jsonb_object_agg(entity, n) into done from (
+    select entity, count(*) n from public.crm_data_step_journal where step = 'd6' group by entity) a;
+  return jsonb_build_object('written', coalesce(done, '{}'::jsonb), 'excluded', (select count(*) from public.report_exclusions where step = 'd6'), 'plan', plan);
+end $$;
+
+-- Puts back what D6 wrote that has not changed since: deleted rows are re-inserted
+-- from the journal, archived files restored (their enrollments stay ended, as with
+-- « Restaurer »), closed groups reopened, report exclusions removed. Prospects D6
+-- closed are listed, not reopened: reopening needs a next action staff choose.
+create or replace function crm_security.d6_revert()
+returns jsonb language plpgsql
+set search_path = pg_catalog, pg_temp as $$
+declare j record; cur timestamptz; n jsonb := '{}'::jsonb; reopen jsonb := '[]'::jsonb; ended jsonb := '[]'::jsonb;
+  skipped jsonb := '[]'::jsonb;
+begin
+  if coalesce(public.get_my_role(), '') <> 'director' then
+    raise exception 'D6 runs as the director' using errcode = '42501', hint = 'd6.run_as_director'; end if;
+  lock table public.students, public.crm_contacts, public.crm_leads, public.groups in share row exclusive mode;
+  if not exists (select 1 from public.crm_data_step_journal where step = 'd6') then
+    raise exception 'D6 was not applied' using errcode = '22023'; end if;
+  if exists (select 1 from public.crm_data_step_journal where step = 'd6_revert') then
+    raise exception 'D6 was already reverted' using errcode = '22023'; end if;
+
+  -- Deleted rows first (groups, then contacts, then learner files), each as it was.
+  for j in select * from public.crm_data_step_journal where step = 'd6' and before->>'action' = 'delete'
+      order by case entity when 'groups' then 1 when 'crm_contacts' then 2 else 3 end, entity_id loop
+    if j.entity = 'students' then
+      -- The phone guard would refuse a placeholder the file had before D6 (as in d3_revert).
+      alter table public.students disable trigger people_phone_guard;
+      insert into public.students select * from jsonb_populate_record(null::public.students, j.before->'row');
+      alter table public.students enable trigger people_phone_guard;
+    else
+      execute format('insert into public.%I select * from jsonb_populate_record(null::public.%I, $1)', j.entity, j.entity) using j.before->'row';
+    end if;
+    insert into public.crm_data_step_journal(step, entity, entity_id, before, after, run_by)
+    values ('d6_revert', j.entity, j.entity_id, j.after, jsonb_build_object('restored', 'row'), auth.uid());
+    n := jsonb_set(n, array[j.entity || '_deleted'], to_jsonb(coalesce((n->>(j.entity || '_deleted'))::integer, 0) + 1));
+  end loop;
+
+  for j in select * from public.crm_data_step_journal where step = 'd6' and entity = 'groups' and before->>'action' = 'close' order by entity_id loop
+    select closed_at into cur from public.groups where id = j.entity_id;
+    if cur is distinct from (j.after->>'closed_at')::timestamptz then skipped := skipped || jsonb_build_object('entity', j.entity, 'id', j.entity_id); continue; end if;
+    perform public.reopen_course(j.entity_id, cur);
+    insert into public.crm_data_step_journal(step, entity, entity_id, before, after, run_by)
+    values ('d6_revert', 'groups', j.entity_id, j.after, jsonb_build_object('closed_at', null), auth.uid());
+    n := jsonb_set(n, '{groups_closed}', to_jsonb(coalesce((n->>'groups_closed')::integer, 0) + 1));
+  end loop;
+
+  for j in select * from public.crm_data_step_journal where step = 'd6' and entity = 'students' and before->>'action' = 'archive' order by entity_id loop
+    select deleted_at into cur from public.students where id = j.entity_id;
+    if cur is distinct from (j.after->>'deleted_at')::timestamptz then skipped := skipped || jsonb_build_object('entity', j.entity, 'id', j.entity_id); continue; end if;
+    perform public.restore_student(j.entity_id);
+    insert into public.crm_data_step_journal(step, entity, entity_id, before, after, run_by)
+    values ('d6_revert', 'students', j.entity_id, j.after, jsonb_build_object('deleted_at', null), auth.uid());
+    ended := ended || coalesce(j.before->'live_enrollments', '[]'::jsonb);
+    n := jsonb_set(n, '{students_archived}', to_jsonb(coalesce((n->>'students_archived')::integer, 0) + 1));
+  end loop;
+
+  for j in select * from public.crm_data_step_journal where step = 'd6' and entity = 'crm_leads' order by entity_id loop
+    reopen := reopen || to_jsonb(j.entity_id);
+  end loop;
+
+  delete from public.report_exclusions where step = 'd6';
+  return jsonb_build_object('restored', n, 'reopen_by_hand', reopen, 'enrollments_still_ended', ended, 'skipped', skipped);
+end $$;
+
+revoke all on function crm_security.d6_references(regclass,uuid), crm_security.d6_rows(jsonb), crm_security.d6_plan(jsonb),
+  crm_security.d6_apply(jsonb,jsonb), crm_security.d6_revert()
+  from public, anon, authenticated;

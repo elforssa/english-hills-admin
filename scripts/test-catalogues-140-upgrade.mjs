@@ -83,13 +83,19 @@ assert.equal(sql(`select (select count(*) from public.programmes)||'|'||(select 
 assert.equal(sql(`select string_agg(conname||':'||convalidated,',' order by conname) from pg_constraint where conrelid='public.crm_leads'::regclass and conname in ('crm_leads_session_type_fkey','crm_leads_session_type_check','crm_leads_closure')`),
   'crm_leads_closure:true,crm_leads_session_type_fkey:true', 'FK replaces the 8-value check; both checks valid on the existing rows');
 const after = catalog();
-assert.deepEqual(diff(before.policies, after.policies).filter(k => !/programmes|programme_levels|programme_prices|acquisition_sources|crm_close_reasons/.test(k)), [], 'no existing policy changed');
+assert.deepEqual(diff(before.policies, after.policies).filter(k => !/programmes|programme_levels|programme_prices|acquisition_sources|crm_close_reasons|report_exclusions/.test(k)), [], 'no existing policy changed');
 assert.deepEqual(diff(before.triggers, after.triggers), [], 'no trigger changed');
 assert.equal(sql(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='crm_security' and p.proname ~ '^d4_'
   and (has_function_privilege('authenticated',p.oid,'execute') or has_function_privilege('anon',p.oid,'execute') or has_function_privilege('service_role',p.oid,'execute'))`), '0', 'D4 not granted');
 assert.equal(sql(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='crm_security' and p.proname ~ '^d4_'`), '4', 'D4 present');
 assert.equal(sql(`select count(*) from public.crm_data_step_journal where step in ('d4','d4_revert')`), '0', 'D4 not run');
-console.log('PASS 139 → 140: no row written, catalogues seeded without prices, checks valid, D4 present but not run or granted');
+// D6 (owner decision 2026-11-26): shipped in 140, not run, granted to no API role; report_exclusions empty, no API access.
+assert.equal(sql(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='crm_security' and p.proname ~ '^d6_'
+  and (has_function_privilege('authenticated',p.oid,'execute') or has_function_privilege('anon',p.oid,'execute') or has_function_privilege('service_role',p.oid,'execute'))`), '0', 'D6 not granted');
+assert.equal(sql(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='crm_security' and p.proname ~ '^d6_'`), '5', 'D6 present');
+assert.equal(sql(`select (select count(*) from public.crm_data_step_journal where step in ('d6','d6_revert'))||'|'||(select count(*) from public.report_exclusions)`), '0|0', 'D6 not run');
+assert.equal(sql(`select has_table_privilege('authenticated','public.report_exclusions','select') or has_table_privilege('service_role','public.report_exclusions','select')`), 'f', 'report_exclusions: no API access');
+console.log('PASS 139 → 140: no row written, catalogues seeded without prices, checks valid, D4 and D6 present but not run or granted');
 
 // 3. Under 140: values the 139 checks refuse; then the restore.
 sql(as(staff(3), `select public.crm_log_exchange(gen_random_uuid(),jsonb_build_object('lead_id','${wrong}','expected_version',${version(wrong)},'channel','phone','result','wrong_number','next',jsonb_build_object('close',jsonb_build_object('reason','wrong_number'))))`));
@@ -101,8 +107,8 @@ sql(readFileSync(RESTORE, 'utf8'));
 const restored = catalog();
 assert.deepEqual(diff(before.functions, restored.functions), [], 'functions are the 139 ones');
 assert.deepEqual(diff(before.triggers, restored.triggers), [], 'triggers are the 139 ones');
-assert.deepEqual(diff(before.policies, restored.policies).filter(k => !/programmes|programme_levels|programme_prices|acquisition_sources|crm_close_reasons/.test(k)), [], 'policies are the 139 ones');
-const additive = /programmes|programme_levels|programme_prices|acquisition_sources|crm_close_reasons|origin_code|referrer_|crm_leads_one_referrer/;
+assert.deepEqual(diff(before.policies, restored.policies).filter(k => !/programmes|programme_levels|programme_prices|acquisition_sources|crm_close_reasons|report_exclusions/.test(k)), [], 'policies are the 139 ones');
+const additive = /programmes|programme_levels|programme_prices|acquisition_sources|crm_close_reasons|report_exclusions|origin_code|referrer_|crm_leads_one_referrer/;
 const notValid = ['crm_leads.crm_leads_closure', 'crm_leads.crm_leads_session_type_check'];
 for (const part of ['tables', 'columns', 'indexes']) {
   assert.deepEqual(diff(before[part], restored[part]).filter(k => !additive.test(k)), [], `${part}: only the additive tables and columns stay`);
