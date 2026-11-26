@@ -672,8 +672,35 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
 
     > Go
 
-  - **Next:** B1 and C1 (they can run in parallel), then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7; each needs the owner's separate approval.
+  - **Next (at the time):** B1 and C1 (they can run in parallel), then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7; each needs the owner's separate approval. C1 released 2026-11-26 ([C1 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-c1--2026-11-26)).
   - **Not authorized:** any other migration or data step, hours or follow-up policy changes, the hardening of the 24 public tables that grant `DELETE` and `TRUNCATE` to `anon` and `authenticated` (a separate PR, not started).
+- **PR C1 release (desk payments, migration 138) — APPROVED and DONE (2026-11-26).** Done:
+  - 138 applied first, 2026-11-26 07:56:49–57 UTC, after a Production dry run `DRYRUN_OK`; ledger 001–138, row 138 MD5 `2037fff7208ad000d9c8c78802d2bf6e`;
+  - PR #216 squash-merged at approved head `05bc708` as `a7f63c4` at 07:57:23 UTC and deployed (GitHub `Production` deployment `8079623554` `success` at 07:59:00 UTC); the old build ran on 138 for about 2 minutes;
+  - two backups, each verified by a restore and kept by the owner outside the repository; the second was taken just before the write;
+  - acceptance clean ([C1 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-c1--2026-11-26)).
+
+  Undoing 138 needs the owner's separate approval: redeploy `495f7df` first, export any reservation rows, then the restore file and ledger row 138.
+  - **Release approval, owner's words, verbatim excerpt** (full text in the [C1 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-c1--2026-11-26); folder paths left out there, marked […]):
+
+    > Owner release approval (Maroine, 2026-11-25): I approve releasing PR #216 (RWR-r5 PR C1 — payments, migration 138_desk_payments.sql) at exact head 05bc70874fcd00865cd4df2338ea3d370d9c0bf3. The independent re-review verdict on that head is READY FOR FINAL REVIEW; Verify run 45662379174 is green on the first attempt.
+    >
+    > Window: now
+    >
+    > […]
+    >
+    > Not authorized: B1 (#217), any other migration or data step, the 24-table hardening. Hand off with the merge SHA, deployed SHA, ledger, acceptance results and recovery notes (kit outside the repo); documentation is a separate change.
+
+  - **« go », owner's words, verbatim:**
+
+    > Go
+
+  - **Follow-ups (not started):**
+    - the reviewer's two notes: the action dialog's result card shows the date twice; « payment ends it » is not tested directly on a moved « Encaisser l'acompte » action;
+    - the 24-table hardening;
+    - a guard for test scripts that reset the shared local stack.
+  - **Next:** B1 (#217), rebased onto C1 as migration 139; then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7. Each needs the owner's separate approval.
+  - **Not authorized:** B1, any other migration or data step, the 24-table hardening; each needs a separate approval.
 
 ## Deferred backlog after RCC-r1
 

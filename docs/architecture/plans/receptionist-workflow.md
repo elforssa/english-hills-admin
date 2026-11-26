@@ -1,6 +1,6 @@
 # Receptionist workflow — one next action, one identity, one rule per form
 
-**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); **PR A2 released on 2026-11-24** (PR #214, merge `0bb8f27`, migration 137 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a2--2026-11-24)): release A (A1, D1, A2) is complete and « exactly one next action » is enforced in the database; `d1_revert` is gone with 137. Next: B1 and C1 (in parallel), then B2, C2 and data steps D3–D7, which are not run. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
+**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); **PR A2 released on 2026-11-24** (PR #214, merge `0bb8f27`, migration 137 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a2--2026-11-24)): release A (A1, D1, A2) is complete and « exactly one next action » is enforced in the database; `d1_revert` is gone with 137. **PR C1 released on 2026-11-26** (PR #216, merge `a7f63c4`, migration 138 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-c1--2026-11-26)): desk payments. Next: B1 (#217, rebased as 139), then B2, C2 and data steps D3–D7, which are not run. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
 
 - **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q30.
 - **Decision record:** [ADR-019 (accepted)](../decisions/ADR-019-one-next-action-per-prospect.md).
@@ -1106,7 +1106,7 @@ Rule (a) detail from the read-only plan: no cancelled action carried a test, and
 - The reviewer's three nits above.
 - Pre-existing, not caused by A2: `crm_get_today` fails with `invalid input syntax for type time` on legacy non-CRM tests with malformed times.
 
-**Gates after this release:** release A (A1, D1, A2) complete. **Next: B1 and C1**, which can run in parallel; then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7, each with the owner's separate approval.
+**Gates after this release (at the time):** release A (A1, D1, A2) complete. **Next: B1 and C1** (C1 released 2026-11-26, [release record](#release-record-pr-c1--2026-11-26)), which can run in parallel; then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7, each with the owner's separate approval.
 
 ### Implementation record: PR C1 (payments, migration 138)
 
@@ -1118,7 +1118,7 @@ Rule (a) detail from the read-only plan: no cancelled action carried a test, and
 >
 > Not authorized: Production, data steps, merge, release.
 
-Migration 138: C1 merges first and PR B1 rebases onto it as 139 (owner, 2026-11-25). Implemented, not merged, not applied anywhere but private local stacks.
+Migration 138: C1 merges first and PR B1 rebases onto it as 139 (owner, 2026-11-25). Implemented, not merged, not applied anywhere but private local stacks (at the time; released 2026-11-26, [release record](#release-record-pr-c1--2026-11-26)).
 
 **What `138_desk_payments.sql` does.**
 
@@ -1206,7 +1206,128 @@ Implemented in 138 through `set_next_action` (above). `test-desk-payments.sql` m
 - `test-payment-screens-browser.mjs`: « Avec solde » waits for the filtered rows before counting (Verify at `fec11c2` counted during the reload on the runner).
 - Upgrade-lane ceilings to 138; `receptionist-function-classification.json` regenerated (three new functions, gate `manage_finance_operations`).
 
-**Release notes (for a later approval).** Apply 138 first, then deploy the application within minutes (the C1 build calls the new functions; the previous build keeps working on 138 except that « Encaisser » refuses a new tuition charge without a chosen enrollment next to an unlinked commitment, and every path refuses a payment on a commitment reserved for an open prospect). Rollback: deploy the previous build, then run the restore file.
+**Release notes (for a later approval; followed on 2026-11-26, [release record](#release-record-pr-c1--2026-11-26)).** Apply 138 first, then deploy the application within minutes (the C1 build calls the new functions; the previous build keeps working on 138 except that « Encaisser » refuses a new tuition charge without a chosen enrollment next to an unlinked commitment, and every path refuses a payment on a commitment reserved for an open prospect). Rollback: deploy the previous build, then run the restore file.
+
+### Release record: PR C1 — 2026-11-26
+
+**MERGED / DEPLOYED / MIGRATION 138 APPLIED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE (2026-11-26).** Migration 138 was applied at 07:56:49–57 UTC, before the application. PR #216 was then squash-merged as `a7f63c4` and deployed. Desk payments are live: one open-balances read for both payment screens, « Encaisser sur cet engagement », no second tuition charge without « Nouvelle session », « Réserver sans paiement » with its « Encaisser l'acompte » action, and the payment guards on every path. B1 (#217) is next and rebases as 139.
+
+**Owner's release approval (2026-11-25), verbatim** (the release-kit and backup folder paths are left out, marked […], because this repository is public):
+
+> You are the release operator (AGENTS.md, docs/ai/templates/PRODUCTION_ROLLOUT.md). Tier 3 Production operation, finance = high risk. You did not write this code.
+>
+> First, learn how the previous releases were done, and follow the same pattern:
+> - read CURRENT_STATE.md and the release records in docs/architecture/plans/receptionist-workflow.md for A1 (migration 136), D1 and A2 (migration 137);
+> - read the READMEs and scripts in […] (2026-11-23-migration-136, 2026-11-23-pre-d1, 2026-11-24-migration-137): how Production was reached, the guarded wrapper (preconditions, DRYRUN_OK rehearsal, then commit), the acceptance probes and the backup method;
+> - tell me in a few lines how you'll reach Production and apply, before doing anything.
+>
+> Owner release approval (Maroine, 2026-11-25): I approve releasing PR #216 (RWR-r5 PR C1 — payments, migration 138_desk_payments.sql) at exact head 05bc70874fcd00865cd4df2338ea3d370d9c0bf3. The independent re-review verdict on that head is READY FOR FINAL REVIEW; Verify run 45662379174 is green on the first attempt.
+>
+> Window: now
+>
+> 1. Before any write:
+>    - head, base and main are current; the Production ledger is exactly 001–137;
+>    - 138's md5 preconditions (127's create_charge_payment and crm_enroll_and_collect, 136's action_label, 137's set_next_action) match Production's live bodies;
+>    - work out and state the safe order (I expect migration first, then the app), and what an old open tab can do in between;
+>    - take a verified backup first, as before D1: into […], never the repo, with size and SHA-256 per file;
+>    - right before applying, check there's no payment in progress (receipts in the last few minutes);
+>    - show me the checklist and wait for my "go".
+> 2. Apply 138 through the guarded wrapper (DRYRUN_OK, then commit, short lock_timeout). Ledger 001–138, row 138 matches the file.
+> 3. Squash-merge #216 at that exact head, and verify Vercel Production READY on the merge commit.
+> 4. Acceptance, using only rolled-back probes, counts and codes only, leaving no test receipt:
+>    - get_open_balances works for the receptionist;
+>    - enrol-and-collect gives one receipt with gap-free numbering, an enrollment at payment and the prospect converted;
+>    - « Réserver sans paiement » leaves one « Encaisser l'acompte » action, and its charge can't be paid directly (eap.reservation_collect_on_prospect, also as service_role);
+>    - a second tuition charge without « Nouvelle session » is refused;
+>    - an ordinary service_role receipt still works;
+>    - numbering continues without a gap;
+>    - void stays director-only;
+>    - no new Postgres errors; Meta intake still runs.
+>
+> Not authorized: B1 (#217), any other migration or data step, the 24-table hardening. Hand off with the merge SHA, deployed SHA, ledger, acceptance results and recovery notes (kit outside the repo); documentation is a separate change.
+
+**Owner's « go » (2026-11-26, after the operator showed the checklist), verbatim:**
+
+> Go
+
+| Step | When (UTC) | Evidence |
+| --- | --- | --- |
+| Pre-checks (read-only) | 2026-11-25 17:57:55 | PR head `05bc70874fcd00865cd4df2338ea3d370d9c0bf3`, base `495f7df` = `main`, mergeable; Verify run 45662379174 green on attempt 1; ledger exactly 001–137, row 137 MD5 `ae431dc7b1d61525cafb75e39d8c5f73`; 138's four MD5 preconditions equal to Production's live bodies: `crm_enroll_and_collect` `84babfb6…` and `create_charge_payment` `2263c8d7…` (127), `action_label` `fae61b36…` (136), `set_next_action` `0b48aedd…` (137); catalogue digest equal to the post-137 pin (no drift); none of 138's objects present |
+| Backup 1 | 2026-11-25 17:58–18:00 | roles, schema, data (including `auth`) and the migration ledger, plus a restore script (below); verified by a restore |
+| Local rehearsal | 2026-11-25, before the « go » | a clean 001–137 chain whose digest equals Production's: the wrapper's dry run and apply, a post-138 digest equal to a plain apply of the file, the restore file plus deleting ledger row 138 back to the post-137 digest, then 138 applied again; the acceptance probe on the verified backup restored locally with 138 (copy removed afterwards) |
+| Payment check (read-only) | 2026-11-26 07:53:12 | no receipt, charge or financial request in the previous 10 minutes, no lock on the payment tables, no other active session; two receipts had been written at 18:12 UTC after backup 1 |
+| Backup 2 | 07:53–07:56 | a fresh backup, taken so that those two receipts are in it; verified by a restore (below) |
+| Production dry run | 07:56:45 | `DRYRUN_OK 138 tables=86`; digest and the nine new or replaced function bodies equal to the rehearsed pins |
+| **138 applied** | **07:56:49–57** | the same wrapper ending in `commit`, `lock_timeout` 3 s, `statement_timeout` 120 s |
+| Proofs (read-only) | 07:57:13 | ledger 001–138, none missing; row 138 MD5 `2037fff7208ad000d9c8c78802d2bf6e` (one statement, name `desk_payments`, `created_by` equal to row 137's; git blob `e81103ee32f35b34f42fe1a2b3881e93aa731775`); catalogue digest equal to the post-138 pin (functions 549, triggers 183, indexes 290, constraints 788, columns 1158, relations 93, policies 186); receipt counter unchanged; 0 reservations |
+| Merge | 07:57:23 | squash `a7f63c4ea16b6ec51a7eb0c56a504707bd807327` at the approved head; its tree equals the approved head merged onto `495f7df` |
+| Deploy | 07:59:00 | GitHub `Production` deployment `8079623554` `success` (Vercel `english-hills-admin-oqppmh8m5…`) on `a7f63c4`; the live domain answers |
+| Acceptance | 07:59:20 | rolled-back probe (below) |
+| Integrations and logs | 07:59–08:01 | counts after the probe; intake run 08:00; Postgres errors (below) |
+
+**Old-build window:** about 2 minutes (07:56:57–07:59:00 UTC), with no logged error. During it, the previous build ran on 138 and behaved as before except for two new refusals. « Encaisser » refused a new tuition charge without a chosen enrollment next to a live unlinked commitment of the same learner, programme and year; read-only at 2026-11-25 18:08 UTC, no learner was in that case. The old build cannot create reservations, so the reserved-commitment guard could not fire from it.
+
+**The guarded wrapper.** One transaction. **Before 138's body,** it refused to run unless:
+- the ledger held exactly 137 rows, with row 137 as above and its `created_by` set;
+- none of 138's objects existed, and the one-action index of 137 did;
+- the four replaced functions had the MD5s above;
+- the catalogue digest equalled the post-137 pin, and the D1 journal held 99 rows;
+- no receipt, charge or financial request had been written in the previous 2 minutes.
+
+It then ran 138 verbatim and inserted ledger row 138 (`created_by` copied from row 137). **After the body, before commit,** it checked:
+- ledger 001–138, with row 138 equal to the file;
+- `crm_charge_reservations` with RLS on, no grant to `anon`, `authenticated` or `service_role`, its append-only trigger, and empty;
+- `receipts_reserved_commitment_guard` enabled, with its function `SECURITY DEFINER`, its `search_path` pinned and not executable by any API role;
+- `authenticated` executes the three new public functions, `crm_enroll_and_collect` and `create_charge_payment`, while `service_role` executes neither `crm_reserve_without_payment` nor `crm_enroll_and_collect`;
+- every existing table grant and every existing function's grants, `SECURITY DEFINER` flag and settings unchanged, the four replaced functions included;
+- the online functions and policies, `anon` execute rights and the cron jobs unchanged;
+- no `crm_security` function executable by an API role;
+- the receipt counter and the row counts of all 86 app tables unchanged;
+- the digest and the nine function bodies equal to the pins.
+
+**Acceptance (07:59:20 UTC).** One transaction, ending in a sentinel exception, so nothing persisted. It ran as the receptionist (and, for the void, the director) on prospects, learners, charges and receipts it created itself inside the transaction, with no e-mail, so no receipt e-mail was queued. Receipt numbers come from the transactional counter table (migration 122), so no number was used up. Statuses, codes and counts only:
+- **`get_open_balances`** answered the receptionist (1 row for a learner with an open balance); `find_duplicate_receipts` answered `[]`.
+- **« Inscrire et encaisser »** on a qualified prospect gave 1 charge and 1 receipt, numbered next after the counter. The charge was linked to a `Confirmed` enrollment, and the prospect was `CONVERTED` and linked, with 0 open actions.
+- **« Réserver sans paiement »** with a new learner left 1 open action, labelled « Encaisser l'acompte » with its due date. It also gave 1 reservation row, a charge with no enrollment and no receipt, no enrollment for the learner, and the prospect still `QUALIFIED`.
+- **Paying that charge directly** was refused with `22023` `eap.reservation_collect_on_prospect`, at « Encaisser » as the receptionist and as a `service_role` receipt write.
+- **A second tuition charge without « Nouvelle session »** was refused with `22023` `eap.unlinked_commitment_exists`, from the wizard (`crm_enroll_and_collect`) and from « Encaisser » (`create_charge_payment`).
+- **An ordinary `service_role` receipt** on an unreserved charge was written, numbered next after the first: numbering without a gap, same series and year.
+- **Void:** refused for the receptionist (`42501`), done for the director.
+- **After the probe (07:59:48 UTC, read-only):** receipts, charges, enrollments, learners, prospects, open actions, financial requests, reservations (0) and the receipt counter all equal to their values before it.
+- **Meta intake:** the 08:00 UTC run, the first after 138, succeeded and `/api/cron/crm-intake` answered HTTP 200 (insights too); all 348 intake jobs `done`.
+- **Postgres:** no error between 07:30 and 08:01 UTC other than the release's own: the dry run's and the probe's sentinels, and a read-only check of the operator's that named a wrong column.
+
+**Backups** (each verified by restoring it into an empty private local database: every data table equal to Production row for row; the only differences are the platform's own migration bookkeeping tables in `auth` and `storage`. The local copies were removed). **They hold personal data and are kept by the owner, outside this repository**; they are identified here by size and checksum only:
+
+| Part | Backup 1 (2026-11-25 17:58–18:00 UTC; 123 tables, 15,280 rows) | Backup 2 (2026-11-26 07:53–07:56 UTC; 123 tables, 15,545 rows) |
+| --- | --- | --- |
+| roles | 297 bytes, `25873cec56a2cc6514e204f420231777f85c03da818caa7090cdcdfa89776ecd` | same file |
+| schema | 1,465,947 bytes, `0423a5e7188f0495e750b627c008bf1a728d542c4264a7eec6c62cfc6bdc913a` | same file |
+| data (including `auth`) | 11,963,254 bytes, `c1663d7abc1aacc42d59605f6a509f77e3f42ff640592cdef86ff3ef988b3d8e` | 12,138,900 bytes, `9f3e6be82b020e4084a11c86f88f3919b2679d20b358285d76e0ff855b3bc93a` |
+| migration ledger | 2,972,452 bytes, `f94ec3e047c03db744db7a5c4217463be0ee7dfdb7c0f0cd6fc7a3fd99ca6650` | 2,972,452 bytes, `4d40a1ee44493357a9df8615c21b847f8c561c0b34b6509bec2573775c8ee030` |
+| restore script | 1,039 bytes, `3f1a8e0fc083370535aeb7387f8d2131c3d11fcdebebcb2438a85a59f77e1562` | same file |
+
+**Recovery** (each step needs the owner's separate approval; rehearsed on a private stack):
+1. **Redeploy the previous build `495f7df` first.** The C1 build calls `get_open_balances`, `find_duplicate_receipts` and `crm_reserve_without_payment`, which the restore drops.
+2. **If `crm_charge_reservations` has rows,** export them to a private file outside the repository and set `eh.restore_138_drop_reservations = 'exported'` in the same session; the restore refuses otherwise.
+3. **Run `scripts/rollback/138_desk_payments_restore.sql`, then delete ledger row 138.** Rehearsed: this returns exactly to the post-137 catalogue, and 138 applies again afterwards. The restore puts back the 127 bodies of `crm_enroll_and_collect` and `create_charge_payment`, the 136 `action_label` and the 137 `set_next_action`, each checked by MD5. Charges created by reservations stay as ordinary open commitments, and « Encaisser l'acompte » actions stay open as ordinary enrolment actions.
+- **Restoring a backup** follows the [D1 record](#release-record-data-step-d1--2026-11-23)'s caveats (the `NOT VALID` legacy e-mail checks; a superuser); this time no stand-ins for platform tables were needed.
+- **Release kit:** the wrappers, probes, generator and their outputs are kept by the owner outside this repository.
+
+**Not verified:**
+- the payment screens and the wizard in a signed-in browser;
+- a new Meta lead through intake on 138 (the last one arrived at 07:50 UTC, before the apply);
+- Vercel runtime errors (no connector access to the team).
+
+Seen, outside the approved checks: `create_charge_payment` called as `service_role` answers `42501`. This is the existing staff-only rule, unchanged by 138.
+
+**Known follow-ups (not started; each needs its own approval):**
+- **Reviewer's note:** the action dialog's result card shows the date twice (the « Encaisser l'acompte » label includes it, and the scheduled line repeats it).
+- **Reviewer's note:** « payment ends it » is not tested directly on a moved « Encaisser l'acompte » action. The test pays the unmoved action; conversion closes any open action whatever its key.
+- **The 24 public tables** that still grant `DELETE` and `TRUNCATE` to `anon` and `authenticated`: a separate hardening PR.
+- **A guard for test scripts that reset the shared local stack.** Some suites end with `supabase db reset --local` or read `supabase status` from the current folder, and on 2026-11-25 one wiped the shared default local stack.
+
+**Gates after this release:** C1 released. **Next: B1** (#217), rebased onto 138 as migration 139, with its own review and release approval. Then B2 (needs the 2026/2027 programme prices, OD-16), C2, data steps D3–D7, the 24-table hardening and the local-stack guard; each needs the owner's separate approval.
 
 ## IMPLEMENTATION CONTRACT
 
@@ -1220,7 +1341,8 @@ Implemented in 138 through `set_next_action` (above). `test-desk-payments.sql` m
 - **A1:** done — released 2026-11-23 ([release record](#release-record-pr-a1--2026-11-23)).
 - **D1:** done — run 2026-11-23 after its four gates were met ([D1 record](#release-record-data-step-d1--2026-11-23)). `d1_revert` was available until M-A2; it is gone since 137 (2026-11-24).
 - **A2:** done — released 2026-11-24 ([release record](#release-record-pr-a2--2026-11-24)); the D1 functions and `d1_revert` are gone with 137.
-- **For B1 and C1 (next, may run in parallel):** each needs its own implementation approval, review and release approval.
+- **C1:** done — released 2026-11-26 ([release record](#release-record-pr-c1--2026-11-26)), migration 138.
+- **For B1 (next, rebased onto C1 as migration 139):** its own review and release approval.
 - **For B2:** the 2026/2027 programme prices (OD-16).
 
 **Object manifest (provisional names; migration numbers are claimed at merge):**

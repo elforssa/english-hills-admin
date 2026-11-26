@@ -88,9 +88,9 @@ From Batch E release E-2 ([plan PCR-r2](../architecture/plans/payment-correction
 - **Existing waiting rows** are handled by a separately approved, counted and journalled data step after the migration (owner decision 5): paid ones become Confirmed (Validated with a group), which converts their linked prospects permanently; unpaid ones are ended with « Pré-inscription abandonnée … » or « Essai terminé … »; their learner files follow the unchanged derived rule (Inactive when nothing else is live, Q4 = A); non-converted prospects linked to an ended row are detached so they can be enrolled again (Q6 = A). A row this step ended can never be reopened (Q11 = A); reopening a real ended enrollment stays director/admin and is listed in « Contrôles ».
 - **Unchanged:** receipt numbering, discounts, payment dates, voids, idempotency, append-only financial and CRM history, one live enrollment per programme and year, capacity, the group school-year check, membership from enrollments and every role's other capabilities.
 
-### Desk payments (RWR-r5 PR C1, migration 138) — implemented, not released
+### Desk payments (RWR-r5 PR C1, migration 138) — released 2026-11-26
 
-[Plan RWR-r5](../architecture/plans/receptionist-workflow.md) §6.1, owner approval 2026-11-25 (OD-2 = A, OD-7 = A). Implemented on its PR; not merged, not applied, not deployed. Rules once released:
+[Plan RWR-r5](../architecture/plans/receptionist-workflow.md) §6.1, owner approval 2026-11-25 (OD-2 = A, OD-7 = A). Released 2026-11-26: PR #216 merged as `a7f63c4` and deployed, migration 138 applied ([release record](../architecture/plans/receptionist-workflow.md#release-record-pr-c1--2026-11-26)). Rules:
 
 - **One read of open balances.** « Encaisser » and « Inscrire et encaisser » read `get_open_balances(student)`: every live charge of the learner with a balance (price − discount − live payments, from `charge_balances`), oldest first. Both screens show the same amounts (invariant 12).
 - **« Encaisser » opens on the oldest open balance**, otherwise on « Nouvelle inscription ». A charge reserved for an open prospect is shown but not collectable there (« Ouvrir le prospect »), so its payment converts the prospect.
