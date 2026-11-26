@@ -1101,11 +1101,20 @@ select pg_temp.fails(format($$select public.save_receptionist_student(%L, null, 
 -- moves to an online programme through enrolment, whose 070 sync carries programme and level.
 select pg_temp.fails(format($$select public.save_receptionist_student(%L, %L, '{"session_type":"Online One-to-One"}')$$,
   pg_temp.id(209), (select updated_at from public.students where id = pg_temp.id(209))), '22023');
-select public.save_receptionist_group(pg_temp.id(320), null, '{"name":"Reception Solo","session_type":"Online One-to-One","niveau":"C1"}');
+-- RWR-r5 C2 (141, OD-9 A, NF-16): reception no longer creates online groups (course setup
+-- is management-only); the direction creates them (here the owner) and reception places
+-- learners in them. online.teacher_on_course stays covered above (lines 136-140).
+select pg_temp.fails(format($$select public.save_receptionist_group(%L, null, '{"name":"Reception Solo","session_type":"Online One-to-One","niveau":"C1"}')$$,
+  pg_temp.id(320)), '42501', 'group.online_management_only');
 select pg_temp.fails(format($$select public.save_receptionist_group(%L, null, '{"name":"Reception T","session_type":"Online","niveau":"B1","teacher_id":"%s"}')$$,
-  pg_temp.id(321), pg_temp.id(101)), '23514', 'online.teacher_on_course');
-select public.save_receptionist_group(pg_temp.id(322), null, '{"name":"Reception Group","session_type":"Online","niveau":"B1"}');
-select pg_temp.ok((select teacher_id is null and session_type = 'Online' from public.groups where id = pg_temp.id(322)), 'receptionist creates an online group without a teacher');
+  pg_temp.id(321), pg_temp.id(101)), '42501', 'group.online_management_only');
+select pg_temp.fails(format($$select public.save_receptionist_group(%L, null, '{"name":"Reception Group","session_type":"Online","niveau":"B1"}')$$,
+  pg_temp.id(322)), '42501', 'group.online_management_only');
+select pg_temp.owner();
+insert into public.groups(id, name, session_type, niveau) values
+  (pg_temp.id(320), 'Reception Solo', 'Online One-to-One', 'C1'), (pg_temp.id(322), 'Reception Group', 'Online', 'B1');
+select pg_temp.ok((select teacher_id is null and session_type = 'Online' from public.groups where id = pg_temp.id(322)), 'the direction creates an online group without a teacher');
+select pg_temp.act(3);
 -- EAP (127): no Submitted or Trial enrolment from reception; the enrolment is born at
 -- the payment (Confirmed) and then placed.
 select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, %L, 'Submitted', 'B1', current_date, null, 'Online', '2026/2027')$$,

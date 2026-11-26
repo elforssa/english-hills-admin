@@ -12,10 +12,12 @@
 //      indexes (one on online_join_events) are added, plus the one monthly purge job; that
 //      nothing else in the catalog moved and no existing row changed;
 //   4. proves that the old row is still read, the old application calls keep their
-//      signatures, then runs the rollback-only SQL acceptance on the upgraded state.
+//      signatures, then runs the rollback-only SQL acceptance on the upgraded state. The
+//      acceptance suite is the current one, so any later migration file (131 onward) is
+//      applied first, after the 130 proofs (RWR-r5 C2: 141 changes the online-group rules).
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 const port = process.env.OL_UPGRADE_PORT || '54322';
 const psql = (args, input) => execFileSync('psql', ['-X', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', ...args],
@@ -48,9 +50,12 @@ const catalog = () => JSON.parse(sql(`select jsonb_build_object(
  'privileges',(select jsonb_agg(jsonb_build_array(table_schema,table_name,grantee,privilege_type) order by table_schema,table_name,grantee,privilege_type) from information_schema.role_table_grants where table_schema='public'),
  'jobs',(select jsonb_agg(jsonb_build_array(jobname,schedule,command,active) order by jobname) from cron.job))::text`));
 const tables = sql("select tablename from pg_tables where schemaname='public' order by tablename").split('\n');
+// RWR-r5 C2 (141): a later migration applied for the acceptance adds groups.class_days, NULL on
+// existing rows; it is left out of the groups hash and checked empty on the old group.
 const data = () => Object.fromEntries(tables.map(table => {
   assert(/^[a-z_0-9]+$/.test(table));
-  return [table, sql(`select count(*)||':'||md5(coalesce(string_agg(to_jsonb(t)::text,'' order by to_jsonb(t)::text),'')) from public.${table} t`)];
+  const row = table === 'groups' ? `(to_jsonb(t) - 'class_days')` : 'to_jsonb(t)';
+  return [table, sql(`select count(*)||':'||md5(coalesce(string_agg(${row}::text,'' order by ${row}::text),'')) from public.${table} t`)];
 }));
 
 // 1. State on 129: one active course, one lesson, one pass and one join event.
@@ -133,9 +138,14 @@ assert.ok(['online_record_join_event(uuid,text,timestamp with time zone,text)', 
 const oldAt = sql(`select at from public.online_join_events where token_id = '${id(4)}'`);
 const replay = JSON.parse(sql(`begin; set local role service_role; select public.online_record_join_event('${id(5)}', 'joined', '${oldAt}')::text; rollback;`).split('\n').find(line => line.startsWith('{')));
 assert.equal(replay.recorded, false, 'the old event is still the unique row: a replay writes nothing');
+// The current acceptance suite needs every later migration: apply them after the proofs.
+for (const file of readdirSync('supabase/migrations').filter(name => /^\d{3}_.*\.sql$/.test(name) && Number(name.slice(0, 3)) > 130).sort()) {
+  sql(readFileSync(`supabase/migrations/${file}`, 'utf8'));
+}
 const acceptance = psql(['-q', '-f', 'scripts/test-online-learning.sql']);
 assert.match(acceptance, /PASS online learning SQL acceptance/);
 assert.deepEqual(data(), beforeData, 'the acceptance left no row');
+assert.equal(sql(`select (class_days is null)::text from public.groups where id='${id(2)}'`), 'true', 'the old group has no class days');
 sql(`delete from public.online_join_events where token_id='${id(4)}'; delete from public.online_join_tokens where id='${id(4)}'; delete from public.online_lessons where id='${id(3)}';
   delete from public.online_courses where group_id='${id(2)}'; delete from public.groups where id='${id(2)}'; delete from public.teachers where id='${id(1)}';`);
 console.log(`PASS stateful 129→130 (online session evidence): two bodies differ by exactly their intended lines with posture and grants intact, five public functions and one private helper added with their exact grants, two tables with row security and no API grant, three indexes, the monthly purge job, ${tables.length} table hashes unchanged, the old event kept and replay-safe, acceptance green on the upgraded state`);

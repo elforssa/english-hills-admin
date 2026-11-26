@@ -1,5 +1,6 @@
 'use client';
 import { useAuth } from '@/context/AuthContext';
+import { ageCategoryLabel } from '@/lib/ui/presentation.mjs';
 
 import { ReceptionistAccount } from '@/components/students/ReceptionistOperations';
 import CentreHoursCard from '@/components/crm/CentreHoursCard';
@@ -322,7 +323,7 @@ function InviteUserForm({ currentUser }) {
                         onChange={e => setSelected(prev => e.target.checked ? [...prev, m.student_id] : prev.filter(id => id !== m.student_id))} />
                       <span>
                         <span className="font-medium">{m.full_name}</span>
-                        <span className="block text-xs text-muted-foreground">{m.age_category || '—'} · {m.groups.length ? m.groups.join(', ') : 'sans groupe'}{m.linked ? ' · déjà relié' : ''}</span>
+                        <span className="block text-xs text-muted-foreground">{ageCategoryLabel(m.age_category)} · {m.groups.length ? m.groups.join(', ') : 'sans groupe'}{m.linked ? ' · déjà relié' : ''}</span>
                       </span>
                     </label>
                     {needsConfirmation && selected.includes(m.student_id) && (

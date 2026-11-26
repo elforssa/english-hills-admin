@@ -416,6 +416,12 @@ jobs:
           supabase db reset --local --version 139 --no-seed
           node scripts/test-catalogues-140-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: Desk academics 140 to 141 upgrade, restore and re-apply (RWR-r5 PR C2)
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 140 --no-seed
+          node scripts/test-desk-academics-141-upgrade.mjs
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Receptionist capability list parity, function classification, policy manifest and online pin (RPW-r2)
@@ -461,6 +467,10 @@ jobs:
           # RWR-r5 PR B2 (140): catalogues, origins, close reasons, conversion, D4 and D6 functions (not run).
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-catalogues.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-catalogues-d6.sql
+          # RWR-r5 PR C2 (141): level tests, attendance dates and class days (D7 not run), learner files.
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-placement-rules.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -v class_days_cases="$(cat scripts/fixtures/class-days-cases.json)" -f scripts/test-attendance-rules.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-student-rules.sql
           node scripts/test-crm-next-action-enforced-suites.mjs
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-phase11.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b.sql
@@ -623,7 +633,7 @@ jobs:
       - name: Lead intake director panel browser suite
         if: matrix.shard == 'browser-crm'
         run: npm run test:crm-intake-admin-browser
-      - name: Reception forms, day scripts, payment screens, people search and French labels (RWR-r5 PRs A1, B1, B2 and C1, §4.9 T7, §5.1–5.2, §5.4, invariants 12 and 15, §8)
+      - name: Reception forms, day scripts, payment screens, people search, French labels, desk academics and mobile reception (RWR-r5 PRs A1, B1, B2, C1 and C2, §4.9 T7, §5.1–5.2, §5.4, §6.2–6.5, invariants 12 and 15, §8)
         if: matrix.shard == 'browser-crm'
         run: npm run test:reception-browser
   required:

@@ -164,7 +164,7 @@ end $$;
 select 'PASS lead/payload/program/status/choice/name reasons, winning-error order and access denial without hint';
 
 -- Birth date: Casablanca civil date for enrollment initiation, any session TimeZone.
-do $$ declare zone text:=current_setting('TimeZone'); today date:=(now() at time zone public.centre_utc_offset())::date; l uuid; r jsonb; s uuid; begin
+do $$ declare zone text:=current_setting('TimeZone'); today date:=(now() at time zone public.centre_utc_offset())::date; l uuid; r jsonb; s uuid; h text; begin
  l:=pg_temp.lead();
  foreach zone in array array['Pacific/Kiritimati','Pacific/Pago_Pago','UTC'] loop
   perform set_config('TimeZone',zone,true);
@@ -174,12 +174,21 @@ do $$ declare zone text:=current_setting('TimeZone'); today date:=(now() at time
  perform pg_temp.rejects(pg_temp.new_data(l,'{"birth_date":"2020-02-30"}'),'22023','Invalid enrollment fields or incompatible group','birth_date_invalid');
  perform pg_temp.rejects(pg_temp.new_data(l,'{"birth_date":"infinity"}'),'22023','Invalid new learner','birth_date_invalid');
  perform pg_temp.rejects(pg_temp.new_data(l,'{"birth_date":"-infinity"}'),'22023','Invalid new learner','birth_date_invalid');
+ -- RWR-r5 §6.4 (migration 141): a birth date is at least one year ago (trigger on every
+ -- learner file), so the latest accepted date is one year before the Casablanca date.
+ begin
+  perform pg_temp.start(pg_temp.new_data(l,jsonb_build_object('birth_date',today)));
+  raise exception 'FAIL birth date today: unexpected success';
+ exception when others then
+  get stacked diagnostics h=pg_exception_hint;
+  if sqlstate<>'22023' or h is distinct from 'student.birth_date_too_recent' then raise; end if;
+ end;
  perform set_config('TimeZone','Pacific/Pago_Pago',true);
- r:=pg_temp.start(pg_temp.new_data(l,jsonb_build_object('birth_date',today)));
- perform pg_temp.ok((select date_naissance=today from public.students where id=(r->'enrollment'->>'student_id')::uuid),'Casablanca today accepted');
+ r:=pg_temp.start(pg_temp.new_data(l,jsonb_build_object('birth_date',(today-interval '1 year')::date)));
+ perform pg_temp.ok((select date_naissance=(today-interval '1 year')::date from public.students where id=(r->'enrollment'->>'student_id')::uuid),'Casablanca date a year ago accepted');
  perform set_config('TimeZone','Pacific/Kiritimati',true);
- l:=pg_temp.lead();r:=pg_temp.start(pg_temp.new_data(l,jsonb_build_object('birth_date',today)));
- perform pg_temp.ok(r->'enrollment'->>'status'='Confirmed','Casablanca today accepted ahead of Casablanca');
+ l:=pg_temp.lead();r:=pg_temp.start(pg_temp.new_data(l,jsonb_build_object('birth_date',(today-interval '1 year')::date)));
+ perform pg_temp.ok(r->'enrollment'->>'status'='Confirmed','Casablanca date a year ago accepted ahead of Casablanca');
  perform set_config('TimeZone','UTC',true);
  l:=pg_temp.lead();r:=pg_temp.start(pg_temp.new_data(l,'{"birth_date":"2015-04-02"}'));
  perform pg_temp.ok((select date_naissance='2015-04-02' from public.students where id=(r->'enrollment'->>'student_id')::uuid),'valid past date accepted');
@@ -188,7 +197,7 @@ do $$ declare zone text:=current_setting('TimeZone'); today date:=(now() at time
  r:=pg_temp.start(pg_temp.existing_data(l,s,jsonb_build_object('birth_date',today+30)));
  perform pg_temp.ok((select date_naissance='2015-03-01' from public.students where id=s) and r->'enrollment'->>'student_id'=s::text,'existing-learner path unaffected');
 end $$;
-select 'PASS birth date: Casablanca today accepted, tomorrow rejected in every session TimeZone, malformed/infinite invalid, existing path unaffected';
+select 'PASS birth date: a year before the Casablanca date accepted, today too recent, tomorrow rejected in every session TimeZone, malformed/infinite invalid, existing path unaffected';
 
 -- Manual lead creation keeps its own current_date rule (B2 scope).
 do $$ declare st text; msg text; begin

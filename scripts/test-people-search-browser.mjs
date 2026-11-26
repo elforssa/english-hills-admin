@@ -2,7 +2,7 @@
 // on the local stack. One synthetic prospect and one synthetic student share no number; each
 // is searched with six formats of its own number (generated per run: no phone-like literal in
 // the repository). Boxes: « Rechercher une personne » (header), the CRM prospect search, the
-// students list, the Annuaire and the Nouveau reçu picker. (The Admissions picker calls the
+// students list, the Annuaire (now the list's cards view, C2) and the Nouveau reçu picker. (The Admissions picker calls the
 // receipt picker's RPC, search_desk_students, from 6 digits; scripts/test-phone.sql covers it.)
 // Also: the « Ajouter un prospect » duplicate gate (nothing is created before an answer) and
 // the student form's gate. Synthetic staff, prospects and students are removed in finally.
@@ -75,10 +75,12 @@ try {
       await page.getByLabel('Rechercher un apprenant', { exact: true }).fill(value);
       return page.locator('main');
     }, [['student', student, 'Recherche apprenant synthétique']]],
-    ['Annuaire', async value => {
-      await page.goto(`${app}/students-directory`);
-      await page.getByLabel("Rechercher dans l'annuaire", { exact: true }).fill(value);
-      return page.locator('main');
+    // RWR-r5 C2 (§6.4): the Annuaire is the list's cards view; its old address redirects there.
+    ['Annuaire (cards view)', async value => {
+      await page.goto(`${app}/students-directory?status=Prospect`);
+      await page.waitForURL(url => url.pathname === '/students' && url.searchParams.get('view') === 'cards' && url.searchParams.get('status') === 'Prospect');
+      await page.getByLabel('Rechercher un apprenant', { exact: true }).fill(value);
+      return page.getByTestId('students-cards');
     }, [['student', student, 'Recherche apprenant synthétique']]],
     ['Nouveau reçu picker', async value => {
       await page.goto(`${app}/receipts/new`);

@@ -226,6 +226,8 @@ do $$ declare l uuid; d jsonb; r jsonb; e uuid; s uuid; p uuid; state text; fn r
  execute 'reset role';
  -- Placement result is optional; when present it remains linked and unchanged.
  p:=(public.crm_book_placement_test(gen_random_uuid(),pg_temp.booking(l))->'placement'->>'id')::uuid;
+ -- RWR-r5 C2 (141, invariant 5): a result needs the start time to have passed; the test moves to yesterday.
+ set local session_replication_role=replica; update placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p; set local session_replication_role=origin;
  update placement_tests set status='Résultat saisi',niveau_recommande='Child 2' where id=p;
  perform pg_temp.ok(public.crm_get_enrollment_context(l)->>'recommended_level'='Child 2','trusted placement result available for prefill');
  r:=pg_temp.legacy_link(l);e:=(r->'enrollment'->>'id')::uuid;s:=(r->'enrollment'->>'student_id')::uuid;

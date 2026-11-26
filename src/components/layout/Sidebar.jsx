@@ -36,7 +36,6 @@ const NAV = [
   {
     label: 'Apprenants', icon: Users, roles: OPERATIONS,
     children: [
-      { href: '/students-directory', label: 'Annuaire', roles: OPERATIONS },
       { href: '/students', label: 'Liste des apprenants', roles: OPERATIONS },
       { href: '/students/new', label: 'Ajouter un apprenant', roles: OPERATIONS },
       { href: '/dismissal', label: 'Sortie des jeunes', roles: OPERATIONS },

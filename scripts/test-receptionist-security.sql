@@ -89,10 +89,19 @@ do $$ begin
  update public.enrollments set status='Rejected' where id='77000000-0000-0000-0000-000000000030';
  if found then raise exception 'Direct enrollment write allowed'; end if;
 end $$;
+-- RWR-r5 C2 (141, §6.2): staff write level tests only through the commands
+-- (book_student_placement_test, update_placement_test_result; a prospect's through the
+-- CRM): the receptionist's direct insert and update are refused, as deletion already was.
+select pg_temp.denied($q$insert into public.placement_tests(id,student_name,date_test,status) values
+ ('77000000-0000-0000-0000-000000000041','Prospect without student',current_date,'Planifié')$q$);
+reset role;
 insert into public.placement_tests(id,student_name,date_test,status) values
  ('77000000-0000-0000-0000-000000000040','Prospect without student',current_date,'Planifié');
-update public.placement_tests set status='Passé' where id='77000000-0000-0000-0000-000000000040';
+set local role authenticated;
 do $$ begin
+ if not exists(select 1 from public.placement_tests where id='77000000-0000-0000-0000-000000000040') then raise exception 'Placement read missing'; end if;
+ update public.placement_tests set notes='direct write' where id='77000000-0000-0000-0000-000000000040';
+ if found then raise exception 'Direct placement update allowed'; end if;
  delete from public.placement_tests where id='77000000-0000-0000-0000-000000000040';
  if found then raise exception 'Placement deletion allowed'; end if;
 end $$;

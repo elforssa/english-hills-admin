@@ -33,7 +33,11 @@ const codes = [...new Set([
   ...Object.entries(PROGRAMME_LABELS), ...Object.entries(DOSSIER_LABELS), ...Object.entries(ENROLLMENT_LABELS),
   ...Object.entries(AGE_CATEGORY_LABELS), ...Object.entries(STATUS), ...Object.entries(CLOSE_REASON_LABELS),
   ...Object.entries(ORIGIN_LABELS).filter(([code]) => code.includes('_'))
-].filter(([code, label]) => code !== label).map(([code]) => code))];
+].filter(([code, label]) => code !== label).map(([code]) => code))]
+  // RWR-r5 C2 (OD-12): the learner-file status Prospect reads « Sans inscription », but
+  // « Prospect » is also the French word for a CRM lead (« Ajouter un prospect »). It is
+  // checked where the learner status is shown (below), not as a word on every screen.
+  .filter(code => code !== 'Prospect');
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const pattern = new RegExp(`(?<![\\p{L}\\d_-])(${codes.sort((a, b) => b.length - a.length).map(escape).join('|')})(?![\\p{L}\\d_-])`, 'gu');
 
@@ -79,6 +83,9 @@ try {
   sql(`${as(director.id)}select public.create_charge_payment(${q(JSON.stringify({ student_id: learner, session_type: 'Yearly', school_year: '2026/2027', level: 'Child 2', gross_amount: 3000, discount_amount: 0, payment_amount: 1000, payment_method: 'Espèces', idempotency_key: randomUUID() }))}::jsonb);commit;`);
   const receipt = sql(`select id from public.receipts where student_id=${q(learner)}`);
   assert.equal(sql(`select status from public.students where id=${q(learner)}`), 'Enrolled', 'fixture: an enrolled learner');
+  // A learner file without an enrolment (stored Prospect): shown « Sans inscription ».
+  const unenrolled = sql(`insert into public.students(full_name,status,session_type) values(${q('Élève sans inscription ' + run.slice(-8))},'Prospect','Yearly') returning id`).split('\n').pop();
+  students.push(unenrolled);
   group = randomUUID();
   sql(`insert into public.groups(id,name,session_type,niveau,annee,date_debut,date_fin) values(${q(group)},${q('Groupe libellés ' + run.slice(-8))},'Adults','Beginning 1','2026-2027','2026-09-01','2027-06-30')`);
   // Prospects: « Summer Camp » with an origin, and « Adults » closed « Mauvais numéro ».
@@ -98,7 +105,17 @@ try {
   await scan('director', '/dashboard');
   await scan('director', '/students?status=all_shown', see('Élève libellés'));
   await scan('director', `/students/${learner}`, see('Programme annuel'));
-  await scan('director', '/students-directory', see('Élève libellés'));
+  // C2 (§6.4): the former Annuaire is the list's cards view.
+  await scan('director', '/students?view=cards&status=all_shown', see('Élève libellés'));
+  for (const view of ['table', 'cards']) {
+    await page.goto(`${app}/students?status=Prospect&view=${view}`);
+    const row = page.getByText('Élève sans inscription ' + run.slice(-8)).locator('visible=true').first();
+    await row.waitFor();
+    await (view === 'cards' ? page.getByTestId('students-cards') : page.locator('table')).getByText('Sans inscription', { exact: true }).locator('visible=true').first().waitFor();
+  }
+  await page.goto(`${app}/students/${unenrolled}`);
+  await page.getByText('Sans inscription', { exact: true }).locator('visible=true').first().waitFor();
+  console.log('PASS OD-12: a learner file without an enrolment reads « Sans inscription » (list, cards, file)');
   await scan('director', '/groups', see('Groupe libellés'));
   await scan('director', `/groups/${group}`, see('Groupe libellés'));
   await scan('director', '/finance');

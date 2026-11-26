@@ -3,11 +3,13 @@
 --  * No API role (anon, authenticated) holds a table or column write on any crm_* table:
 --    CRM rows change only through the security-definer commands.
 --  * placement_tests is the known exception (123:284-289 teacher insert and update
---    policies, and the receptionist policies): column INSERT and UPDATE under RLS for
---    authenticated, and table DELETE (the Admissions « Tests de niveau » page deletes a
---    student's own test, RLS: admin and director). Since 137, anon holds nothing on it and
---    authenticated has no TRUNCATE (owner decision 2026-11-23). Students, enrollments and
---    attendance writes belong to PRs B1 and C2.
+--    policies): column INSERT and UPDATE under RLS for authenticated, and table DELETE
+--    (RLS: admin and director; the page deletes through delete_placement_test). Since
+--    141 (PR C2) staff write tests only through the commands: the receptionist insert and
+--    update policies and the admin/director « all » policy are gone. Since 137, anon holds
+--    nothing on it and authenticated has no TRUNCATE (owner decision 2026-11-23).
+--    Attendance keeps its row policies (save_attendance is security invoker); its date
+--    rules sit in the integrity trigger, which every writer meets (141).
 --  * After M-A2 (migration 137) the twelve old command wrappers are executable by no API
 --    role and refused (42501) when called as `authenticated`; their replacements and the
 --    commands the screens still use keep their grant; the D1 data-step functions are gone.
@@ -43,16 +45,18 @@ select pg_temp.ok(
 select pg_temp.ok((select relrowsecurity from pg_class where oid = 'public.placement_tests'::regclass), 'placement_tests: RLS on');
 select pg_temp.ok((select array_agg(polname::text order by polname) from pg_policy
                    where polrelid = 'public.placement_tests'::regclass and polcmd in ('a', 'w', '*'))
-  = array['crm_placement_operational_only', 'placement admin all', 'placement teacher insert', 'placement teacher update',
-          'receptionist_placement_insert', 'receptionist_placement_update'],
-  'placement_tests: the write policies are exactly the known ones');
+  = array['crm_placement_operational_only', 'placement teacher insert', 'placement teacher update'],
+  'placement_tests: the write policies are exactly the known ones (141: teachers only, staff use the commands)');
+select pg_temp.ok((select array_agg(polname::text order by polname) from pg_policy
+                   where polrelid = 'public.placement_tests'::regclass and polcmd = 'd') = array['placement admin delete'],
+  'placement_tests: one delete policy');
 select pg_temp.ok(has_table_privilege('authenticated', 'public.placement_tests', 'DELETE')
   and not has_table_privilege('authenticated', 'public.placement_tests', 'TRUNCATE'),
-  'placement_tests: authenticated keeps DELETE (Admissions page, RLS admin and director), no TRUNCATE');
+  'placement_tests: authenticated keeps DELETE (RLS admin and director), no TRUNCATE');
 select pg_temp.ok(not has_table_privilege('anon', 'public.placement_tests', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
   and not has_any_column_privilege('anon', 'public.placement_tests', 'SELECT,INSERT,UPDATE,REFERENCES'),
   'placement_tests: anon holds no table or column privilege');
-select pg_temp.ok((select pg_get_expr(polqual, polrelid) from pg_policy where polrelid = 'public.placement_tests'::regclass and polname = 'placement admin all')
+select pg_temp.ok((select pg_get_expr(polqual, polrelid) from pg_policy where polrelid = 'public.placement_tests'::regclass and polname = 'placement admin delete')
   like '%admin%director%', 'placement_tests: delete limited by RLS to admin and director');
 
 -- 3. The old wrappers: no API grant, refused for authenticated.

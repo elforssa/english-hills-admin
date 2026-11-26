@@ -240,12 +240,13 @@ assert.match(queriesSource, /queryKey: \['Group', 'closed-online'\]/);
 const pickers = {
   'src/components/students/EnrollmentModal.jsx': [/isClosedCourse\(group, closedOnline\)/, /useClosedOnlineGroupIds\(\)/, /courseEndedSuffix\(g\)/],
   'src/components/students/StudentForm.jsx': [/isClosedCourse\(group, closedOnline\)/, /useClosedOnlineGroupIds\(\)/, /courseEndedSuffix\(g\)/],
-  'src/components/placement/LegacyPlacementEditor.jsx': [/\.is\('closed_at', ?null\)/, /useClosedOnlineGroupIds\(\)/],
+  // RWR-r5 C2 (§6.2): a learner's test, and its group choice, moved from LegacyPlacementEditor to StudentTestDialog.
+  'src/components/placement/StudentTestDialog.jsx': [/closed_at\.is\.null/, /useClosedOnlineGroupIds\(\)/, /isClosedCourse\(g, closedOnline\)/],
   'src/app/(admin)/attendance/page.jsx': [/isClosedCourse\(g, closedOnline\)/],
   'src/app/(admin)/timetable/page.jsx': [/isClosedCourse\(g, closedOnline\)/],
   'src/app/(admin)/teacher-portal/page.jsx': [/isClosedCourse\(g, closedOnline\)/],
   'src/app/(admin)/assessments/page.jsx': [/isClosedCourse\(g, closedOnline\)/],
-  'src/app/(admin)/placement-tests/page.jsx': [/isClosedCourse\(g, closedOnline\)/],
+  // (The level-test list no longer offers groups: the choice is in StudentTestDialog, above.)
   'src/app/(admin)/communications/page.jsx': [/openCourses\(groups, closedOnline\)/],
   'src/components/crm/CrmEnrollmentDialog.jsx': [/courseEndedSuffix\(g\)/],
   'src/components/receipts/ReceiptForm.jsx': [/courseEndedSuffix\(group\)/],

@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import { CheckCircle, XCircle, Clock, AlertCircle, Download } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { getBrowserClient } from '@/lib/supabase';
-import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
+import { createAttendanceSessionManager, NOT_RECORDED } from '@/lib/attendanceSession.mjs';
+import { classDaysText, meetsOn } from '@/lib/academic/classDays.mjs';
 import PersonLink from '@/components/PersonLink';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 import { useAuth } from '@/context/AuthContext';
@@ -19,6 +20,15 @@ import { isClosedCourse } from '@/lib/academic/courseClose.mjs';
 import { useClosedOnlineGroupIds } from '@/lib/queries';
 
 const todayInCasablanca = () => centreDate();
+
+// RWR-r5 §6.3 (141): the server's refusals, in French.
+const ATTENDANCE_MESSAGES = {
+  'attendance.future_date': 'Une séance à venir ne se saisit pas encore.',
+  'attendance.not_class_day': 'Ce groupe n’a pas cours ce jour-là.',
+  'attendance.closed_date': 'Le centre est fermé ce jour-là. Seule la direction peut enregistrer une séance exceptionnelle.',
+  'attendance.override_director': 'Seule la direction peut enregistrer une séance un jour de fermeture.',
+};
+const attendanceMessage = (error) => ATTENDANCE_MESSAGES[error?.hint] || (error?.code === '23514' ? 'Cet apprenant n’est plus dans ce groupe. Rechargez la séance.' : error?.code === '42501' ? 'Vous n’avez pas accès à cette séance.' : 'Enregistrement impossible. Réessayez.');
 
 const STATUS_CONFIG = {
   'Présent': { color: 'bg-green-100 text-green-700', icon: CheckCircle },
@@ -36,14 +46,19 @@ export default function Attendance() {
   const [selectedGroup, setSelectedGroup] = useState('');
   const [sessionDate, setSessionDate] = useState(todayInCasablanca);
   const [showHistory, setShowHistory] = useState(false);
+  // §6.3: the groups that meet on the chosen date, unless « Tous les groupes ».
+  const [allGroups, setAllGroups] = useState(false);
+  const [override, setOverride] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const sessionManager = useRef(null);
   if (!sessionManager.current) {
     sessionManager.current = createAttendanceSessionManager({
       loadSession: (group, date) => entities.Attendance.filter({ group_id: group, session_date: date }),
       loadHistory: (group) => entities.Attendance.filterAll({ group_id: group }, '-session_date'),
-      saveRow: async (studentId, group, date, status) => {
+      saveRow: async (studentId, group, date, status, options = {}) => {
         const { error } = await getBrowserClient().rpc('save_attendance', {
           p_student: studentId, p_group: group, p_date: date, p_status: status,
+          ...(options.overrideClosed ? { p_override_closed: true } : {}),
         });
         if (error) throw error;
       },
@@ -76,7 +91,7 @@ export default function Attendance() {
   }, [role]);
 
   useEffect(() => sessionManager.current.subscribe(setSessionState), []);
-  useEffect(() => { sessionManager.current.select(selectedGroup, sessionDate); }, [selectedGroup, sessionDate]);
+  useEffect(() => { setSaveError(null); setOverride(false); sessionManager.current.select(selectedGroup, sessionDate); }, [selectedGroup, sessionDate]);
 
   const selectedKey = selectedGroup ? `${selectedGroup}|${sessionDate}` : '';
   const selectionMatches = sessionState.key === selectedKey;
@@ -95,15 +110,27 @@ export default function Attendance() {
   };
 
   const handleSave = async () => {
-    const result = await sessionManager.current.save(selectedGroup, sessionDate, groupStudents);
+    setSaveError(null);
+    const result = await sessionManager.current.save(selectedGroup, sessionDate, groupStudents, { overrideClosed: override });
+    if (result.empty) { toast.info('Aucune présence à enregistrer : marquez au moins un apprenant.'); return; }
     if (result.skipped) return;
     invalidateAfterLearnerSave(queryClientInstance);
     const label = `${groupName(result.group)} — ${result.date}`;
+    if (result.errors?.length) setSaveError(result.errors[0].error);
     if (result.failed === 0 && !result.refreshFailed) toast.success(`Présences enregistrées : ${label}`);
     else if (result.failed < result.total && !result.refreshFailed)
       toast.error(`Enregistrement partiel (${label}) : ${result.failed} apprenant(s) non sauvegardés.`);
+    else if (!result.refreshFailed) toast.error(`Présences non enregistrées (${label}).`);
     else toast.error(`Présences non confirmées (${label}). Rechargez la séance avant une nouvelle saisie.`);
   };
+  const markAllPresent = () => sessionManager.current.markUnmarked(selectedGroup, sessionDate, groupStudents, 'Présent');
+  const counts = Object.fromEntries([...Object.keys(STATUS_CONFIG), NOT_RECORDED].map(k => [k, 0]));
+  for (const s of groupStudents) counts[statuses[s.id] || NOT_RECORDED] += 1;
+  const pendingCount = sessionReady ? sessionManager.current.pending(groupStudents).length : 0;
+  const selected = groups.find(g => g.id === selectedGroup);
+  const noClassThatDay = !!selected && !meetsOn(selected, sessionDate);
+  const openGroups = groups.filter(g => !isClosedCourse(g, closedOnline));
+  const dayGroups = allGroups ? openGroups : openGroups.filter(g => meetsOn(g, sessionDate) || g.id === selectedGroup);
 
   const groupName = (gid) => groups.find(g => g.id === gid)?.name || gid;
 
@@ -112,7 +139,7 @@ export default function Attendance() {
     exportToCsv(groupStudents.map(s => ({
       Apprenant: s.full_name,
       Niveau: s.niveau_cefr || '',
-      Statut: statuses[s.id] || 'Présent',
+      Statut: statuses[s.id] || NOT_RECORDED,
       Date: sessionDate,
       Groupe: groupName(selectedGroup),
     })), `presences-${selectedGroup}-${sessionDate}.csv`);
@@ -136,9 +163,10 @@ export default function Attendance() {
         <div>
           <label htmlFor="attendance-group" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Groupe</label>
           <select id="attendance-group" className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white" value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
-            <option value="">— Choisir un groupe —</option>
-            {groups.filter(g => !isClosedCourse(g, closedOnline)).map(g => <option key={g.id} value={g.id}>{g.name} ({g.niveau})</option>)}
+            <option value="">{dayGroups.length ? '— Choisir un groupe —' : 'Aucun groupe n’a cours ce jour-là'}</option>
+            {dayGroups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.niveau}){g.class_days?.length ? ` · ${classDaysText(g.class_days)}` : ''}</option>)}
           </select>
+          <label className="mt-2 flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={allGroups} onChange={e => setAllGroups(e.target.checked)} />Tous les groupes (pas seulement ceux qui ont cours ce jour-là)</label>
         </div>
         <div>
           <label htmlFor="attendance-date" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Date de séance</label>
@@ -202,21 +230,25 @@ export default function Attendance() {
         </div>
       ) : !showHistory && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold">{groupName(selectedGroup)} — {sessionDate}</h2>
-            <div className="flex gap-3 text-xs text-muted-foreground">
-              <span className="text-green-600 font-medium">{Object.values(statuses).filter(s => s === 'Présent').length} présents</span>
-              <span className="text-red-600 font-medium">{Object.values(statuses).filter(s => s === 'Absent').length} absents</span>
+            <div data-testid="attendance-counts" className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+              <span className="text-green-600 font-medium">{counts['Présent']} présent{counts['Présent'] > 1 ? 's' : ''}</span>
+              <span className="text-red-600 font-medium">{counts['Absent']} absent{counts['Absent'] > 1 ? 's' : ''}</span>
+              <span className="text-yellow-700 font-medium">{counts['Retard']} en retard</span>
+              <span className="text-blue-700 font-medium">{counts['Justifié']} justifié{counts['Justifié'] > 1 ? 's' : ''}</span>
+              <span className="font-medium">{counts[NOT_RECORDED]} non saisi{counts[NOT_RECORDED] > 1 ? 's' : ''}</span>
             </div>
           </div>
+          {noClassThatDay && <p role="status" className="border-b border-border bg-amber-50 px-5 py-3 text-sm text-amber-900">Ce groupe n’a pas cours ce jour-là ({classDaysText(selected.class_days)}) : la séance ne peut pas être enregistrée.</p>}
           <div className="divide-y divide-border">
             {groupStudents.map(student => {
-              const status = statuses[student.id] || 'Présent';
+              const status = statuses[student.id] || NOT_RECORDED;
               return (
                 <div key={student.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3">
                   <div>
                     <p className="text-sm font-medium"><PersonLink id={student.id}>{student.full_name}</PersonLink></p>
-                    <p className="text-xs text-muted-foreground">{student.niveau_cefr}</p>
+                    <p className="text-xs text-muted-foreground">{student.niveau_cefr}{status === NOT_RECORDED && <span data-testid="not-recorded" className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">{NOT_RECORDED}</span>}</p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.keys(STATUS_CONFIG).map(s => {
@@ -234,9 +266,16 @@ export default function Attendance() {
               );
             })}
           </div>
-          <div className="px-5 py-4 border-t border-border flex items-center gap-3">
-            <button onClick={handleSave} disabled={!sessionReady || saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:opacity-50">
-              {saving ? 'Enregistrement...' : 'Enregistrer les présences'}
+          {saveError && <div role="alert" className="border-t border-border bg-red-50 px-5 py-3 text-sm text-red-800">
+            <p>{attendanceMessage(saveError)}</p>
+            {saveError.hint === 'attendance.closed_date' && role === 'director' && <label className="mt-2 flex min-h-11 items-center gap-2"><input type="checkbox" checked={override} onChange={e => setOverride(e.target.checked)} />Séance exceptionnelle : enregistrer malgré la fermeture (direction)</label>}
+          </div>}
+          <div className="px-5 py-4 border-t border-border flex flex-wrap items-center gap-3">
+            <button onClick={markAllPresent} disabled={!sessionReady || saving || noClassThatDay || counts[NOT_RECORDED] === 0} className="px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50">
+              Tous présents
+            </button>
+            <button onClick={handleSave} disabled={!sessionReady || saving || noClassThatDay || pendingCount === 0} className="px-5 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:opacity-50">
+              {saving ? 'Enregistrement...' : pendingCount > 0 ? `Enregistrer les présences (${pendingCount})` : 'Enregistrer les présences'}
             </button>
             <button onClick={exportAttendanceCsv} disabled={!sessionReady || saving} className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50">
               <Download size={14} /> Export CSV

@@ -405,26 +405,12 @@
     "qual": "((crm_lead_id IS NULL) OR (( SELECT get_my_role() AS get_my_role) = ANY (ARRAY['director'::text, 'admin'::text, 'receptionist'::text])))",
     "with_check": "((crm_lead_id IS NULL) OR (( SELECT get_my_role() AS get_my_role) = ANY (ARRAY['director'::text, 'admin'::text, 'receptionist'::text])))"
   },
-  "public.placement_tests.receptionist_placement_insert": {
-    "cmd": "INSERT",
-    "permissive": "PERMISSIVE",
-    "roles": "authenticated",
-    "qual": "",
-    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND ((student_id IS NULL) OR (EXISTS ( SELECT 1 FROM students s WHERE ((s.id = placement_tests.student_id) AND (s.deleted_at IS NULL))))))"
-  },
   "public.placement_tests.receptionist_placement_read": {
     "cmd": "SELECT",
     "permissive": "PERMISSIVE",
     "roles": "authenticated",
     "qual": "(( SELECT get_my_role() AS get_my_role) = 'receptionist'::text)",
     "with_check": ""
-  },
-  "public.placement_tests.receptionist_placement_update": {
-    "cmd": "UPDATE",
-    "permissive": "PERMISSIVE",
-    "roles": "authenticated",
-    "qual": "(( SELECT get_my_role() AS get_my_role) = 'receptionist'::text)",
-    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND ((student_id IS NULL) OR (EXISTS ( SELECT 1 FROM students s WHERE ((s.id = placement_tests.student_id) AND (s.deleted_at IS NULL))))))"
   },
   "public.portfolios.receptionist_delete_deny": {
     "cmd": "DELETE",

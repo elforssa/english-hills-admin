@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createAttendanceSessionManager } from '../src/lib/attendanceSession.mjs';
+import { createAttendanceSessionManager, NOT_RECORDED } from '../src/lib/attendanceSession.mjs';
 
 function deferred() {
   let resolve, reject;
@@ -73,3 +73,42 @@ assert.equal(manager.getState().key, 'group-e|2026-09-21');
 assert.deepEqual(manager.getState().statuses, {});
 
 console.log('PASS attendance session slow load, failure/retry, rapid switch and save-refresh isolation');
+
+// RWR-r5 §6.3 (141): untouched rows are « Non saisi » and are never sent; « Tous présents »
+// marks only those; « Enregistrer » sends only the changed rows; a refused row keeps its mark.
+{
+  assert.equal(NOT_RECORDED, 'Non saisi');
+  const sent = [];
+  let stored = [{ student_id: 's1', status: 'Absent' }];
+  const m = createAttendanceSessionManager({
+    loadSession: async () => stored,
+    loadHistory: async () => [],
+    saveRow: async (student, group, date, status, options) => {
+      sent.push({ student, status, override: !!options?.overrideClosed });
+      if (student === 's4') throw Object.assign(new Error('closed'), { code: '22023', hint: 'attendance.closed_date' });
+      stored = [...stored.filter(r => r.student_id !== student), { student_id: student, status }];
+    },
+  });
+  const roster = [{ id: 's1' }, { id: 's2' }, { id: 's3' }];
+  await m.select('g', '2026-11-30');
+  assert.deepEqual(m.getState().statuses, { s1: 'Absent' }, 's2 and s3 are « Non saisi »');
+  assert.deepEqual(m.pending(roster), [], 'nothing to save on load');
+  assert.deepEqual(await m.save('g', '2026-11-30', roster), { skipped: true, empty: true }, 'an untouched roll call writes nothing');
+  assert.deepEqual(sent, []);
+  assert.equal(m.setStatus('g', '2026-11-30', 's2', 'Retard'), true);
+  assert.equal(m.markUnmarked('g', '2026-11-30', roster), 1, '« Tous présents »: only s3');
+  assert.deepEqual(m.getState().statuses, { s1: 'Absent', s2: 'Retard', s3: 'Présent' }, 'explicit marks kept');
+  assert.deepEqual(m.pending(roster), ['s2', 's3']);
+  const result = await m.save('g', '2026-11-30', roster, { overrideClosed: true });
+  assert.deepEqual(sent, [{ student: 's2', status: 'Retard', override: true }, { student: 's3', status: 'Présent', override: true }], 's1 unchanged: not sent');
+  assert.equal(result.failed, 0);
+  assert.deepEqual(m.pending(roster), [], 'saved');
+  const four = [...roster, { id: 's4' }];
+  m.setStatus('g', '2026-11-30', 's4', 'Présent');
+  const refused = await m.save('g', '2026-11-30', four);
+  assert.equal(refused.failed, 1);
+  assert.equal(refused.errors[0].error.hint, 'attendance.closed_date');
+  assert.equal(m.getState().statuses.s4, 'Présent', 'a refused row keeps its mark');
+  assert.deepEqual(m.pending(four), ['s4']);
+  console.log('PASS attendance session: « Non saisi », « Tous présents », changed rows only, refused rows kept, override passed');
+}

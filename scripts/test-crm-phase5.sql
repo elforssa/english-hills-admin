@@ -60,6 +60,19 @@ create function pg_temp.open_day(from_day date,hhmm text) returns date language 
        =(d+hhmm::time) at time zone public.centre_utc_offset()
  order by d limit 1
 $$;
+-- RWR-r5 C2 (141, invariant 5): a result needs the test's start time to have passed; the
+-- fixture moves the test to yesterday without the booking triggers.
+create function pg_temp.past(p uuid) returns void language plpgsql as $$ begin
+ set local session_replication_role=replica;
+ update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p;
+ set local session_replication_role=origin;
+end $$;
+-- RWR-r5 C2 (141): a CRM test edit from the row as stored, with the given changes.
+create function pg_temp.crm_edit(p uuid,changes jsonb) returns jsonb language sql as $$
+ select jsonb_build_object('placement_id',t.id,'expected_updated_at',t.updated_at,'expected_version',l.version,'date_test',t.date_test,'heure',t.heure,
+  'examinateur',t.examinateur,'notes',t.notes,'status',t.status,'score',t.score,'niveau_recommande',t.niveau_recommande)||changes
+ from public.placement_tests t join public.crm_leads l on l.id=t.crm_lead_id where t.id=p
+$$;
 create function pg_temp.center_counts() returns jsonb language sql as $$
  select jsonb_build_array((select count(*) from public.students),(select count(*) from public.enrollments),(select count(*) from public.charges),(select count(*) from public.receipts))
 $$;
@@ -88,26 +101,32 @@ do $$ declare l uuid:=pg_temp.qualified(); req uuid:=gen_random_uuid(); d jsonb:
  -- next open day at 11:30 (never the closed Sunday), chosen before the role switch.
  moved:=pg_temp.open_day((select date_test from public.placement_tests where id=p)+1,'11:30');
  perform pg_temp.ok(moved is not null,'an open day at 11:30 for the move');
+ -- RWR-r5 C2 (141): staff edit a prospect's test only through crm_update_placement_test
+ -- (the receptionist's table policies are gone): a direct write changes no row.
  execute 'set local role authenticated';
  update public.placement_tests set date_test=moved,heure='11:30' where id=p;
+ perform pg_temp.ok(not found,'a direct reschedule as staff changes no row');
  perform pg_temp.denied(format('update public.placement_tests set crm_lead_id=null where id=%L',p),'42501');
  delete from public.placement_tests where id=p;
  perform pg_temp.ok((select count(*)=1 from public.placement_tests where id=p),'receptionist delete is denied by RLS');
  perform pg_temp.denied(format('insert into public.placement_tests(student_name,date_test,heure,crm_lead_id) values(''Bypass'',current_date+1,''10:00'',%L)',l),'42501');
  execute 'reset role';
+ r:=public.crm_update_placement_test(gen_random_uuid(),pg_temp.crm_edit(p,'{"heure":"11:30","status":"Planifié"}'::jsonb||jsonb_build_object('date_test',moved)));
  perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='placement_test_rescheduled'),'generic reschedule recorded');
  perform pg_temp.denied(format('update public.placement_tests set crm_lead_id=null where id=%L',p),'42501');
  perform pg_temp.denied(format('delete from public.placement_tests where id=%L',p),'42501');
  other:=pg_temp.qualified();perform pg_temp.denied(format('update public.placement_tests set crm_lead_id=%L where id=%L',other,p),'42501');
  perform pg_temp.denied(format('update public.placement_tests set status=''Résultat saisi'' where id=%L',p));
  update public.crm_leads set owner_id='80000000-0000-0000-0000-000000000003' where id=l;
- execute 'set local role authenticated';
- update public.placement_tests set status='Résultat saisi',niveau_recommande='A2',score=72 where id=p;
- update public.placement_tests set notes='Résultat précisé' where id=p;
- update public.placement_tests set status='Passé' where id=p;
- update public.placement_tests set status='Résultat saisi',niveau_recommande='B1' where id=p;
- execute 'reset role';
- perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='placement_test_attended'),'direct result implies attendance exactly once');
+ -- Results need the start time to have passed (invariant 5): the test moves to yesterday.
+ set local session_replication_role=replica;
+ update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p;
+ set local session_replication_role=origin;
+ r:=public.crm_update_placement_test(gen_random_uuid(),pg_temp.crm_edit(p,'{"status":"Résultat saisi","niveau_recommande":"A2","score":72}'));
+ r:=public.crm_update_placement_test(gen_random_uuid(),pg_temp.crm_edit(p,'{"notes":"Résultat précisé"}'));
+ perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),pg_temp.crm_edit(p,'{"status":"Passé"}')),'22023'); -- placement.passe_derived
+ r:=public.crm_update_placement_test(gen_random_uuid(),pg_temp.crm_edit(p,'{"niveau_recommande":"B1","score":null}'));
+ perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='placement_test_attended'),'a result implies attendance exactly once');
  perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='placement_result_entered'),'result edits/regression never duplicate milestone');
  select * into strict t from public.crm_tasks where lead_id=l and task_type='post_test_followup';
  perform pg_temp.ok(t.assigned_to='80000000-0000-0000-0000-000000000003'::uuid and t.placement_test_id=p and t.source_kind='placement_result','task owner and placement provenance');
@@ -129,6 +148,7 @@ do $$ declare l uuid; p uuid; r jsonb; state text; req uuid; d jsonb; student uu
   l:=pg_temp.qualified();r:=public.crm_book_placement_test(gen_random_uuid(),pg_temp.booking(l));p:=(r->'placement'->>'id')::uuid;
   -- RWR-r5 §4.6: a manual prospect belongs to its creator; clear it to keep the unowned case.
   update public.crm_leads set owner_id=null where id=l;
+  perform pg_temp.past(p);
   update public.placement_tests set status=state,niveau_recommande=case when state='Affecté' then 'A2' end where id=p;
   perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='placement_test_attended'),'attendance implied by '||state);
   perform pg_temp.ok((select count(*)=case when state='Affecté' then 1 else 0 end from public.crm_activities where lead_id=l and event_type='placement_result_entered'),'result milestone for '||state);
@@ -137,6 +157,7 @@ do $$ declare l uuid; p uuid; r jsonb; state text; req uuid; d jsonb; student uu
  foreach state in array array['LOST','NOT_QUALIFIED'] loop
   l:=pg_temp.qualified();p:=(public.crm_book_placement_test(gen_random_uuid(),pg_temp.booking(l))->'placement'->>'id')::uuid;
   perform pg_temp.act(case when state='LOST' then 'close_lost' else 'close_not_qualified' end,l,jsonb_build_object('reason',case when state='LOST' then 'price' else 'outside_scope' end));
+  perform pg_temp.past(p);
   update public.placement_tests set status='Résultat saisi',niveau_recommande='A2' where id=p;
   perform pg_temp.ok((select status=state from public.crm_leads where id=l),'closed lifecycle preserved');
   perform pg_temp.ok(not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'closed result has no open sales task');
@@ -148,11 +169,11 @@ do $$ declare l uuid; p uuid; r jsonb; state text; req uuid; d jsonb; student uu
  perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),pg_temp.booking(l)));
  l:=pg_temp.qualified();d:=pg_temp.booking(l);perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),d||'{"expected_version":999}'),'PT409');
  perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),d||'{"expected_task_version":999}'),'PT409');
- -- Existing non-CRM tests retain default/result/edit/delete behavior.
- execute 'set local role authenticated';
- insert into public.placement_tests(student_name,date_test,niveau_recommande) values('Non CRM',current_date,'A1') returning id into p;
+ -- Non-CRM tests: since RWR-r5 C2 (141) staff write a learner's own test through the
+ -- learner commands (scripts/test-placement-rules.sql); a system write of a past result
+ -- still produces no CRM milestone, and the admin still deletes it.
+ insert into public.placement_tests(student_name,date_test,heure,status) values('Non CRM',current_date-1,'10:00','Planifié') returning id into p;
  update public.placement_tests set status='Résultat saisi',niveau_recommande='A2' where id=p;
- execute 'reset role';
  perform pg_temp.ok(not exists(select 1 from public.crm_activities where placement_test_id=p),'non-CRM saves never produce CRM milestones');
  perform pg_temp.actor(2);execute 'set local role authenticated';delete from public.placement_tests where id=p;execute 'reset role';
  perform pg_temp.ok(not exists(select 1 from public.placement_tests where id=p),'non-CRM admin deletion preserved');
@@ -175,6 +196,7 @@ do $$ declare policy uuid:=(select id from phase3_policy); l uuid:=pg_temp.quali
  perform pg_temp.actor(1);
  perform public.crm_create_followup_policy(gen_random_uuid(),jsonb_build_object('weekly_hours',(select weekly_hours from public.crm_followup_policies where id=policy),'post_test_sla_minutes',900));
  perform pg_temp.actor(3);
+ perform pg_temp.past(p);
  update public.placement_tests set status='Résultat saisi',niveau_recommande='A2' where id=p;
  perform pg_temp.ok((select policy_id=policy and due_at=crm_security.placement_followup_due(policy,now()) from public.crm_tasks where placement_test_id=p and task_type='post_test_followup'),'result uses frozen lead policy');
  -- Appointment appears once in Casablanca agenda, not as a confirmation task.
@@ -219,6 +241,7 @@ do $$ declare l uuid:=pg_temp.qualified(); p uuid; student uuid:=gen_random_uuid
  -- RWR-r5: the booked appointment is an open action; a real conversion closes it, so the fixture does too.
  perform crm_security.finish_task(t,true,'Converted fixture','phase5-converted-fixture:'||t.id) from public.crm_tasks t where t.lead_id=l and t.status='open';
  counts:=pg_temp.center_counts();
+ perform pg_temp.past(p);
  update public.placement_tests set status='Résultat saisi',niveau_recommande='A2' where id=p;
  perform pg_temp.ok((select status='CONVERTED' from public.crm_leads where id=l) and not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'converted result does not reopen sales');
  perform pg_temp.ok(counts=pg_temp.center_counts(),'converted result creates no center/finance records');

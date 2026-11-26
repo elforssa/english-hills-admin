@@ -463,13 +463,15 @@ const HINT_MESSAGES = {
 // Statuses the test form offers (re-review of #208, owner decision 2026-11-22): a
 // prospect's test that has left « Planifié » is never planned again, whatever the path;
 // a student's own test (no prospect) keeps today's choices.
+// RWR-r5 §6.2 (141): « Passé » is derived from the time, never chosen; it stays listed only
+// on an old row that already carries it.
 export function placementStatusOptions(test) {
   const prospectTest = Boolean(test && (test.is_crm || test.crm_lead_id));
   const replannable = !test || test.status === 'Planifié' || !prospectTest;
   return [...new Set([
-    ...(['Annulé', 'Absent'].includes(test?.status) ? [test.status] : []),
+    ...(['Annulé', 'Absent', 'Passé'].includes(test?.status) ? [test.status] : []),
     ...(replannable ? ['Planifié'] : []),
-    'Passé', 'Résultat saisi', 'Affecté'
+    'Résultat saisi', 'Affecté'
   ])];
 }
 

@@ -80,6 +80,8 @@ select pg_temp.act('qualify_lead',pg_temp.lead('lead2'),jsonb_build_object('conv
 do $$ declare l uuid:=pg_temp.lead('lead2');p uuid;r jsonb;begin
  r:=crm_book_placement_test(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'date_test',pg_temp.open_day((now() at time zone public.centre_utc_offset())::date+2,'10:30'),'heure','10:30','examinateur','Fixture','task_id',(select id from crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' limit 1),'expected_task_version',(select version from crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' limit 1)));
  p:=(r->'placement'->>'id')::uuid;
+ -- RWR-r5 C2 (141, invariant 5): a result needs the test's start time to have passed; the test moves to yesterday.
+ set local session_replication_role=replica; update placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p; set local session_replication_role=origin;
  update placement_tests set status='Résultat saisi',niveau_recommande='A2',score=72 where id=p;
  update placement_tests set notes='Edited result' where id=p;
  perform pg_temp.ok(pg_temp.report()->'summary'->>'tests_booked'='1' and pg_temp.report()->'summary'->>'tests_attended'='1' and pg_temp.report()->'summary'->>'results'='1','distinct placement milestones');

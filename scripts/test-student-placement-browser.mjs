@@ -97,7 +97,7 @@ try {
   assert.deepEqual(headers.slice(1,4), ['Catégorie','Groupe','Programme']);
   // EAP: the status filter no longer offers « Essai (dossier) »; « Clôturer l’année » is the director's only.
   const statusOptions=await page.getByRole('combobox',{name:'Filtrer par statut'}).locator('option').allTextContents();
-  assert.deepEqual(statusOptions,['Dossiers actifs','Tous les statuts','Inscrit','Prospect','Ancien apprenant','Inactif']);
+  assert.deepEqual(statusOptions,['Dossiers actifs','Tous les statuts','Inscrit','Sans inscription','Ancien apprenant','Inactif']);
   await expect(page.getByRole('button',{name:'Clôturer l’année',exact:true})).toHaveCount(0);
   // The pre-registration page is retired: the learner file enrols at the payment.
   await page.goto(`http://localhost:3101/students/${paidId}`);
@@ -217,10 +217,10 @@ try {
   await page.goto(`http://localhost:3101/students/${paidId}`);
   await expect(page.getByText('Terminée',{exact:false}).first()).toBeVisible();
   await expect(page.getByRole('button',{name:'Rouvrir l’inscription'}).first()).toBeVisible();
-  // CSV: Enrolled rows import as Prospect, with a notice.
+  // CSV: Enrolled rows import as Prospect, with a notice (RWR-r5 C2, OD-12: shown « Sans inscription »).
   await page.goto('http://localhost:3101/students/import');
   await page.locator('textarea').fill('full_name,session_type,status\n'+run+' imported,Yearly,Enrolled');
-  await expect(page.getByText('seront importées en Prospect',{exact:false})).toBeVisible();
+  await expect(page.getByText('seront importées « Sans inscription »',{exact:false})).toBeVisible();
   // RWR-r5 B1 (§5.2): the duplicate dry run comes first; a row with no match imports as before.
   await page.getByRole('button',{name:'Vérifier les doublons',exact:true}).click();
   await expect(page.getByText('0 ligne(s) avec un doublon possible',{exact:false})).toBeVisible();

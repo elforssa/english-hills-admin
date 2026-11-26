@@ -58,6 +58,8 @@ do $$ declare l uuid:=(select (v->'lead'->>'id')::uuid from fx where k='manual')
  s2 timestamp:=crm_security.window_at(crm_security.current_policy_id(),'opening',((current_date+3+time '11:30') at time zone public.centre_utc_offset())) at time zone public.centre_utc_offset();begin
  r:=crm_book_placement_test(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'date_test',s1::date,'heure',to_char(s1,'HH24:MI'),'examinateur','Fixture','task_id',(select id from crm_tasks where lead_id=l and task_type='confirm_placement_test' and status='open'),'expected_task_version',(select version from crm_tasks where lead_id=l and task_type='confirm_placement_test' and status='open')));p:=(r->'placement'->>'id')::uuid;
  update placement_tests set date_test=s2::date,heure=to_char(s2,'HH24:MI') where id=p;
+ -- RWR-r5 C2 (141, invariant 5): a result needs the test's start time to have passed; the test moves to yesterday.
+ set local session_replication_role=replica; update placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p; set local session_replication_role=origin;
  update placement_tests set status='Passé' where id=p;
  update placement_tests set status='Résultat saisi',niveau_recommande='A2',score=75 where id=p;
  perform pg_temp.ok((select count(*)=1 from placement_tests where crm_lead_id=l),'one placement');

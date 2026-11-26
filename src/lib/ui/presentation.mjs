@@ -1,7 +1,8 @@
 import { PROGRAMME_LABELS } from '../programCatalog.mjs';
 // Display only: stored domain values and command eligibility remain domain-owned.
 export const TONES = { info: 'bg-blue-50 text-blue-800', success: 'bg-emerald-50 text-emerald-800', warning: 'bg-amber-50 text-amber-900', danger: 'bg-red-50 text-red-800', neutral: 'bg-slate-100 text-slate-700' };
-export const DOSSIER_LABELS = { Enrolled: 'Inscrit', Trial: 'Essai (dossier)', Prospect: 'Prospect', Inactive: 'Inactif', Alumni: 'Ancien apprenant' };
+// OD-12 (RWR-r5 §6.4): a learner file without an enrolment reads « Sans inscription »; the stored value stays Prospect.
+export const DOSSIER_LABELS = { Enrolled: 'Inscrit', Trial: 'Essai (dossier)', Prospect: 'Sans inscription', Inactive: 'Inactif', Alumni: 'Ancien apprenant' };
 // EAP: « Essai (dossier) » stays readable on old files but is no longer a filter choice.
 export const DOSSIER_FILTER_STATUSES = ['Enrolled', 'Prospect', 'Alumni', 'Inactive'];
 export const ENROLLMENT_LABELS = { Submitted: 'Soumise', 'Under Review': 'En cours d’examen', Trial: 'Essai', Confirmed: 'Inscrit — groupe à affecter', Validated: 'Inscription validée', Rejected: 'Refusée', Ended: 'Terminée' };

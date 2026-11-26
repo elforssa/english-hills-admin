@@ -44,9 +44,11 @@ const catalog = () => JSON.parse(sql(`select jsonb_build_object(
 const tables = sql("select tablename from pg_tables where schemaname='public' order by tablename").split('\n');
 // Rows as they were: the two new columns of online_join_tokens are left out of its hash
 // and checked empty separately.
+// RWR-r5 C2 (141): a later migration applied for the acceptance adds groups.class_days, NULL on
+// existing rows; it is left out of the groups hash and checked empty on the old group.
 const data = () => Object.fromEntries(tables.map(table => {
   assert(/^[a-z_0-9]+$/.test(table));
-  const row = table === 'online_join_tokens' ? `(to_jsonb(t) - 'superseded_at' - 'provider')` : 'to_jsonb(t)';
+  const row = table === 'online_join_tokens' ? `(to_jsonb(t) - 'superseded_at' - 'provider')` : table === 'groups' ? `(to_jsonb(t) - 'class_days')` : 'to_jsonb(t)';
   return [table, sql(`select count(*)||':'||md5(coalesce(string_agg(${row}::text,'' order by ${row}::text),'')) from public.${table} t`)];
 }));
 
@@ -140,6 +142,7 @@ for (const file of readdirSync('supabase/migrations').filter(name => /^\d{3}_.*\
 const acceptance = psql(['-q', '-f', 'scripts/test-online-learning.sql']);
 assert.match(acceptance, /PASS online learning SQL acceptance/);
 assert.deepEqual(data(), beforeData, 'the acceptance left no row');
+assert.equal(sql(`select (class_days is null)::text from public.groups where id='${id(2)}'`), 'true', 'the old group has no class days');
 sql(`delete from public.online_join_tokens where id='${id(4)}'; delete from public.online_lessons where id='${id(3)}';
   delete from public.online_courses where group_id='${id(2)}'; delete from public.groups where id='${id(2)}'; delete from public.teachers where id='${id(1)}';`);
 console.log(`PASS stateful 128→129 (online room reliability): two bodies differ by exactly their intended lines with posture and grants intact, two authenticated functions and one private helper added, two nullable columns and two checks on online_join_tokens, ${tables.length} table hashes unchanged, the old pass resolves with the course's provider, acceptance green on the upgraded state`);

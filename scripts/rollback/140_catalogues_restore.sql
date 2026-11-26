@@ -41,6 +41,12 @@ do $$ begin
   if to_regprocedure('public.get_catalogue()') is null or to_regclass('public.programmes') is null then
     raise exception 'Restore 140: migration 140 is not applied' using errcode = '55000';
   end if;
+  -- Rollback order (RWR-r5 C2, 2026-11-26): migration 141 rebuilt save_receptionist_student
+  -- on 140's body; its own restore runs first and returns it to 140.
+  if to_regprocedure('public.book_student_placement_test(uuid,jsonb)') is not null then
+    raise exception 'Restore 140: migration 141 is applied; run scripts/rollback/141_desk_academics_restore.sql first'
+      using errcode = '55000';
+  end if;
   if exists (select 1 from public.crm_data_step_journal where step = 'd4')
      and not exists (select 1 from public.crm_data_step_journal where step = 'd4_revert') then
     raise notice 'Restore 140: D4 ran and is kept (order 2); the old checks come back NOT VALID';

@@ -249,6 +249,12 @@ try {
   const noShow = intake(reception.id, 'Jour 6 absent');
   rpc(reception.id, 'log_exchange', { lead_id: noShow, expected_version: version(noShow), channel: 'phone', result: 'spoke', next: { task_type: 'center_visit', due_at: slotAt('opening', 3, '11:00'), with_test: true } });
   sql(`update public.crm_tasks set due_at=now()-interval '20 minutes' where lead_id=${q(noShow)} and status='open'`);
+  // RWR-r5 C2 §6.2: « Absent » is a result, refused before the test starts, so the test it
+  // carries started 20 minutes ago too (replica role: no booking-hours trigger on this move).
+  sql(`begin;set local session_replication_role=replica;
+   update public.placement_tests set date_test=((now()-interval '20 minutes') at time zone public.centre_utc_offset())::date,
+    heure=to_char((now()-interval '20 minutes') at time zone public.centre_utc_offset(),'HH24:MI') where crm_lead_id=${q(noShow)};
+   commit;`);
   await tasks('overdue', noShow);
   const s6 = script('6 no-show', 2, 'the Tâches row');
   await s6.click(row(noShow).getByRole('button', { name: 'Absent', exact: true }), 'Absent');
