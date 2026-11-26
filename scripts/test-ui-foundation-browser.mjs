@@ -142,6 +142,8 @@ const studentPills=async role=>{
     if(name==='crm_get_timeline'||name==='crm_list_placements'||name==='crm_list_intake_review')return json({rows:[],total:0,has_more:false});
     // Learner file "Comptes famille" panel (PRF-r2 D3): a read-only staff list, no family account in this fixture.
     if(name==='list_family_links')return json([]);
+    // RWR-r5 PR B1 (migration 138, OD-8): the learner file reads its merge set; no merged file here.
+    if(name==='student_merge_set')return json([args.p_student]);
     if(name==='search_students_page') {
      if(hold)await hold;
      if(studentMode==='error')return failure();
@@ -184,10 +186,11 @@ const studentPills=async role=>{
   phase=engine.name()+' reset/debounce';await navigate(app+'/crm/leads?view=mine&layout=list&contact='+contactId+'&lead='+leadId);await page.getByRole('dialog').getByText('Résumé de la dernière demande',{exact:true}).waitFor();
   await sheet.getByText('13–17 ans',{exact:true}).waitFor();
   await sheet.getByText('Publicité · ',{exact:true}).waitFor();const demande=await sheet.innerText();assert(demande.includes('Publicité · UIF ensemble › UIF publicité') && demande.includes('UIF campagne'),'migration 126: ad set › ad then the campaign under Dernière demande');assert.equal(await sheet.getByText('Première demande · ',{exact:true}).count(),0);
-  assert(await sheet.getByText('WhatsApp +212698765432',{exact:true}).count(),'RCC-B1 header destinations: Tél. … · WhatsApp …');assert((await sheet.innerText()).includes('+212698765432'));assert((await sheet.innerText()).includes('+212612345678'));
+  // RWR-r5 B1: numbers are shown in the French national form; links keep E.164.
+  assert(await sheet.getByText('WhatsApp 06 98 76 54 32',{exact:true}).count(),'RCC-B1 header destinations: Tél. … · WhatsApp …');assert((await sheet.innerText()).includes('06 98 76 54 32'));assert((await sheet.innerText()).includes('06 12 34 56 78'));assert(!(await sheet.innerText()).includes('+212'),'no E.164 text in the drawer');
   const summaryBox=await sheet.getByRole('heading',{name:'Résumé de la dernière demande'}).boundingBox(),placementBox=await sheet.getByRole('heading',{name:'Test de niveau',exact:true}).boundingBox();assert(summaryBox.y<placementBox.y,'answer summary precedes downstream panels');
   // RWR-r5 §4.9: WhatsApp is a channel tab of « Noter un échange ».
-  await sheet.getByRole('button',{name:'Noter un échange',exact:true}).click();const action=page.getByRole('dialog').last();await action.getByRole('heading',{name:'Noter un échange',exact:true}).waitFor();await action.getByRole('tab',{name:'WhatsApp',exact:true}).click();await action.getByText('WhatsApp : +212698765432',{exact:true}).waitFor();assert.equal(await action.getByRole('link',{name:'+212698765432'}).getAttribute('href'),'https://wa.me/212698765432');
+  await sheet.getByRole('button',{name:'Noter un échange',exact:true}).click();const action=page.getByRole('dialog').last();await action.getByRole('heading',{name:'Noter un échange',exact:true}).waitFor();await action.getByRole('tab',{name:'WhatsApp',exact:true}).click();await action.getByText('WhatsApp : 06 98 76 54 32',{exact:true}).waitFor();assert.equal(await action.getByRole('link',{name:'06 98 76 54 32'}).getAttribute('href'),'https://wa.me/212698765432');
   await action.getByRole('button',{name:'Annuler',exact:true}).focus();for(let i=0;i<8;i++){await page.keyboard.press('Tab');assert(await page.locator(':focus').evaluate(el=>el.closest('[role=dialog]')?.querySelector('h2')?.textContent==='Noter un échange'),'nested dialog focus trap');}await page.keyboard.press('Escape');await page.getByRole('heading',{name:'Noter un échange',exact:true}).waitFor({state:'hidden'});assert(!requests.some(r=>r.name==='crm_log_exchange'));
   await sheet.getByText('Toutes les réponses aux formulaires',{exact:true}).click();await sheet.getByText('Réponse complète conservée',{exact:true}).waitFor();await sheet.getByRole('navigation',{name:'Pagination'}).getByRole('button',{name:'Suivant'}).click();await sheet.getByText('Demande antérieure',{exact:true}).waitFor();
   assert(requests.filter(r=>r.name==='crm_get_form_answers').every(r=>r.args.p_limit===5 && [0,5].includes(r.args.p_offset)));

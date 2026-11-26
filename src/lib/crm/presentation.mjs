@@ -1,5 +1,6 @@
 import { centreDateTimeInput, centreFormatter, centreInstant, CENTRE_UTC_OFFSET_MINUTES } from '../centreClock.mjs';
 import { isRecordConflict } from '../conflictErrors.mjs';
+import { PEOPLE_MESSAGES } from '../people.mjs';
 
 export const STATUS = {
   NEW: 'Nouveau',
@@ -201,6 +202,7 @@ export function casablancaInstant(value) {
   return centreInstant(value);
 }
 export function commandError(error) {
+  if (PEOPLE_MESSAGES[error?.hint]) return PEOPLE_MESSAGES[error.hint];
   if (isRecordConflict(error)) return 'Ce prospect a changé depuis son ouverture. Les informations sont actualisées. Vérifiez puis réessayez.';
   if (error?.code === '42501') return 'Vous n’avez pas accès à cette action.';
   const message = error?.message || '';
@@ -486,7 +488,8 @@ export function placementStatusOptions(test) {
 }
 
 export function actionErrorMessage(error) {
-  if (error instanceof Error && !error.code && /^(Choisissez|Cochez|Indiquez|Précisez)/.test(error.message)) return error.message;
+  if (error instanceof Error && !error.code && /^(Choisissez|Cochez|Indiquez|Précisez|Saisissez)/.test(error.message)) return error.message;
+  if (PEOPLE_MESSAGES[error?.hint]) return PEOPLE_MESSAGES[error.hint];
   if (isRecordConflict(error)) return STALE_MESSAGE;
   return HINT_MESSAGES[error?.hint] || commandError(error);
 }

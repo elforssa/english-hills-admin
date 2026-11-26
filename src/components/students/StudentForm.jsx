@@ -14,6 +14,8 @@ import { membershipErrorMessage, placeLearnerInGroup } from '@/lib/academic/memb
 import { toast } from 'sonner';
 import { ArrowLeft, Upload } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
+import { checkPhone, formatPhoneFr } from '@/lib/phone.mjs';
+import { usePeopleGate } from '@/components/people/usePeopleGate';
 import {
   ALL_LEVELS,
   SESSION_TYPES,
@@ -75,6 +77,11 @@ export default function StudentForm() {
   // after a lost answer replays the create instead of inserting a second learner.
   const [newStudentId] = useState(() => createLearnerIdentity());
   const [saving, setSaving] = useState(false);
+  // §5.1: a phone is checked on create or when it changes (a stored legacy value never
+  // blocks other edits); §5.2: a new learner passes the duplicate gate first.
+  const [loadedPhone, setLoadedPhone] = useState('');
+  const [storedPhone, setStoredPhone] = useState('');
+  const people = usePeopleGate();
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
   const [groups, setGroups] = useState([]);
@@ -97,6 +104,9 @@ export default function StudentForm() {
           if (d[0]) {
             const row = d[0];
             setLoadedVersion(row.updated_at ?? null);
+            // Shown in the national form (B1); an unchanged number is saved exactly as stored.
+            setStoredPhone(row.telephone ?? '');
+            setLoadedPhone(row.telephone ? formatPhoneFr(row.telephone) : '');
             setForm(f => ({
               ...f,
               ...row,
@@ -105,7 +115,7 @@ export default function StudentForm() {
               session_type: row.session_type ?? 'Yearly',
               referral_source: row.referral_source ?? '',
               date_naissance: row.date_naissance ?? '',
-              telephone:    row.telephone    ?? '',
+              telephone:    row.telephone ? formatPhoneFr(row.telephone) : '',
               email:        row.email        ?? '',
               parent_email: row.parent_email ?? '',
               groupe_id:    row.groupe_id     ?? '',
@@ -224,6 +234,18 @@ export default function StudentForm() {
       notes:          fields.notes          || null,
     };
     if (isEdit && placed) { delete payload.session_type; delete payload.niveau_cefr; }
+    if (!isEdit || (payload.telephone || '') !== (loadedPhone || '')) {
+      const phone = checkPhone(payload.telephone);
+      if (!phone.ok) { setErrors({ telephone: [phone.error] }); toast.error(phone.error); return; }
+    } else payload.telephone = storedPhone || null;
+    if (!isEdit) {
+      try {
+        if (!(await people.check({ phone: payload.telephone, name: payload.full_name, birth: payload.date_naissance }))) {
+          toast.error('Cette personne existe peut-être déjà : répondez pour chaque fiche, puis enregistrez.');
+          return;
+        }
+      } catch { toast.error('Vérification des doublons impossible. Réessayez.'); return; }
+    }
 
     if (canPlaceAtCreation && chosenGroup && !withoutEnrollmentReason.trim()) {
       setErrors({ without_enrollment_reason: ['Indiquez le motif de l’affectation sans inscription payée.'] });
@@ -280,6 +302,7 @@ export default function StudentForm() {
       if (error) { toast.error(commandErrorMessage(error)); setSaving(false); return; }
       newStudentId.settle('created');
       invalidateAfterLearnerSave(qc);
+      if (!(await people.record(studentId))) toast.error('Apprenant créé ; les réponses sur les doublons n’ont pas été enregistrées.');
       const created = Array.isArray(data) ? data[0] : data;
       if (chosenGroup && canPlaceAtCreation) {
         const { error: placeError } = await placeLearnerInGroup(client, {
@@ -304,6 +327,7 @@ export default function StudentForm() {
       newStudentId.settle(created.status);
       if (created.status === 'deleted') { toast.error(created.message); setSaving(false); return; }
       if (created.status === 'already_created') { toast.error(created.message); router.push(`/students/${studentId}`); return; }
+      if (!(await people.record(studentId))) toast.error('Apprenant créé ; les réponses sur les doublons n’ont pas été enregistrées.');
       // Optional placement: a Validated enrollment of the group's programme (DAT-2),
       // unpaid, so placed with the management reason (logged, listed in Contrôles).
       if (chosenGroup && canPlaceAtCreation) {
@@ -368,7 +392,8 @@ export default function StudentForm() {
           </div>
           <div>
             <label htmlFor="telephone" className={labelClass}>Téléphone</label>
-            <input id="telephone" className={inputClass} value={form.telephone || ''} onChange={e => set('telephone', e.target.value)} />
+            <input id="telephone" type="tel" className={fieldErr('telephone') ? inputErrClass : inputClass} value={form.telephone || ''} onChange={e => { set('telephone', e.target.value); setErrors(v => ({ ...v, telephone: undefined })); }} />
+            {fieldErr('telephone') && <p className="text-xs text-red-600 mt-1">{fieldErr('telephone')}</p>}
           </div>
           <div>
             <label htmlFor="email" className={labelClass}>Email (apprenant)</label>
@@ -447,6 +472,7 @@ export default function StudentForm() {
             <p className="text-xs text-muted-foreground mt-1">Enregistré dans le journal ; l’inscription apparaît dans « Contrôles » jusqu’au paiement.</p>
           </div>}
           </>}
+          {people.gate && <div className="col-span-2">{people.gate}</div>}
           <div className="col-span-2">
             <label htmlFor="notes" className={labelClass}>Notes</label>
             <textarea id="notes" className={`${fieldErr('notes') ? inputErrClass : inputClass} h-20 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} />

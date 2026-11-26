@@ -294,7 +294,7 @@ export default function GuideContent() {
 <p>Une routine simple pour ne rien laisser passer. Pour la rentrée et la fin de mois, voir <a href="#q14">Q14</a>.</p>
 </header>
 <figure className="fig">
-<Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches avec le filtre Moi plus non attribué, les onglets En retard, Aujourd’hui, Demain, À venir, En attente, un appel et un rendez-vous au centre" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin. Une ligne par prospect, avec sa prochaine action.</figcaption>
+<Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches avec le filtre Moi plus non attribué, les onglets En retard, Aujourd’hui, Demain, À venir, En attente, un appel et un rendez-vous au centre" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin. Une ligne par contact, avec sa prochaine action&nbsp;: une mère et ses deux enfants tiennent sur une seule ligne.</figcaption>
 <ol className="legend">
 <li><span className="ui">Responsable de la tâche</span>&nbsp;: «&nbsp;Moi + non attribué&nbsp;» par défaut. Passez à <span className="ui">Mes tâches</span>, <span className="ui">Non attribué</span> ou <span className="ui">Toute l’équipe</span> pour voir autre chose.</li>
 <li>Les échéances&nbsp;: <b>En retard</b>, <b>Aujourd’hui</b>, <b>Demain</b>, <b>À venir</b> et <b>En attente</b>, avec le nombre de prospects dans chaque onglet.</li>
@@ -367,7 +367,7 @@ export default function GuideContent() {
 </ol>
 <h4>Cas B&nbsp;: vous ajoutez le prospect vous-même</h4>
 <ol className="steps">
-<li><p><b>Cherchez d’abord.</b> Dans <span className="menu">Opportunités</span>, tapez le nom du contact, de l’apprenant ou le téléphone dans <span className="ui">Rechercher un prospect</span>.</p>
+<li><p><b>Cherchez d’abord.</b> Cliquez sur <span className="ui">Rechercher une personne</span> en haut du menu (l’icône loupe sur téléphone) et tapez le nom, l’email ou le téléphone, dans n’importe quel format (06…, +212…, 00212…, avec ou sans espaces). Les prospects et les apprenants s’affichent, y compris clôturés et archivés. Ouvrir un résultat ne crée rien.</p>
 </li>
 <li><p>S’il n’existe pas, cliquez sur <span className="ui">Ajouter un prospect</span> et remplissez le formulaire.</p>
 </li>
@@ -381,15 +381,22 @@ export default function GuideContent() {
 <ol className="legend">
 <li><span className="ui">Nom du contact</span>&nbsp;: la personne qui appelle ou qui passe (obligatoire).</li>
 <li><span className="ui">Téléphone</span>&nbsp;: la plateforme le met au format international (+212…). Facultatif, mais sans numéro valide vous ne pourrez pas appeler depuis la fiche.</li>
-<li><span className="ui">Nom de l’apprenant</span> (obligatoire) et <span className="ui">Âge</span> (facultatif).</li>
+<li><span className="ui">Nom de l’apprenant</span> et <span className="ui">Âge</span> (facultatif). Laissé vide, la case <span className="ui">C’est la même personne</span> est cochée&nbsp;: un adulte qui s’inscrit pour lui-même est le contact et l’apprenant.</li>
 <li><span className="ui">Origine</span>&nbsp;: Téléphone, Visite au centre, WhatsApp, Recommandation ou Autre.</li>
 <li><b>Premier échange</b>&nbsp;: ce qui a été convenu, par exemple «&nbsp;En attente du prospect&nbsp;» pour quelqu’un qui reviendra.</li>
 </ol>
 </figure>
 <p>Exemple&nbsp;: une mère passe au centre et «&nbsp;reviendra après la paie&nbsp;». Origine <b>Visite au centre</b>, Premier échange <span className="ui">En attente du prospect</span>, sans date&nbsp;: le prospect passe <span className="st st-eng">En discussion</span>, et la plateforme prévoit une relance dans 5 jours. Aucun «&nbsp;Premier contact&nbsp;» n’est planifié.</p>
 <div className="callout info">
-<strong>Contact existant possible</strong><p>Si le même téléphone ou le même email existe déjà, la fenêtre reste ouverte après la création et le signale dans un encadré jaune. Le prospect est créé quand même et rien n’est fusionné&nbsp;: plusieurs enfants d’une même famille restent des prospects séparés. Cliquez sur <span className="ui">Ouvrir les prospects existants</span> pour comparer.</p>
+<strong>Doublon possible</strong><p>Si le même téléphone (dans n’importe quel format), ou le même nom avec la même date de naissance, existe déjà chez un prospect ou un apprenant, rien n’est créé&nbsp;: la fenêtre affiche <b>Doublon possible</b>. Pour chaque fiche, répondez <span className="ui">Même famille, autre personne</span> ou <span className="ui">Personne différente</span>, puis cliquez à nouveau sur <span className="ui">Enregistrer</span>. Si c’est la même personne, ouvrez sa fiche au lieu de créer. Un email déjà connu est seulement signalé après la création, dans un encadré jaune (<span className="ui">Ouvrir les prospects existants</span>). Rien n’est jamais fusionné automatiquement.</p>
 </div>
+<h4>Ajouter un enfant, modifier la fiche</h4>
+<ul className="tight">
+<li><span className="ui">Ajouter un enfant</span> (sur la fiche d’un prospect)&nbsp;: un deuxième apprenant pour le même contact, avec le même téléphone et sa propre prochaine action. Pas de doublon signalé.</li>
+<li><span className="ui">Modifier la fiche</span>&nbsp;: nom du contact, téléphone, WhatsApp, email, nom et âge de l’apprenant. La modification apparaît dans l’historique («&nbsp;Fiche modifiée&nbsp;», numéros masqués).</li>
+<li>Les autres apprenants du même contact s’affichent sur la fiche&nbsp;; un clic ouvre leur fiche.</li>
+<li>Deux fiches pour la même personne&nbsp;? La direction peut les <span className="ui">Fusionner</span>&nbsp;: l’historique des deux reste lisible sur la fiche conservée.</li>
+</ul>
 <h4>Changer le responsable d’un prospect</h4>
 <figure className="fig narrow">
 <Image src="/helpdesk/s05b-assign.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec le menu Autres actions ouvert sur Attribuer un responsable" unoptimized tabIndex={0} role="button" /><ol className="legend">
@@ -443,7 +450,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td><span className="ui">Mauvais numéro</span></td>
-<td><p>Ne compte pas dans les 5 appels. Sous <b>Et ensuite&nbsp;?</b>, gardez l’action actuelle ou choisissez une autre suite&nbsp;: rappel convenu, à faire par nous (retrouver le bon numéro), en attente, ou <span className="ui">Pas pour nous</span> pour clôturer. Le numéro ne se corrige pas encore depuis la fiche&nbsp;: notez le bon numéro dans la note.</p>
+<td><p>Ne compte pas dans les 5 appels. Sous <b>Et ensuite&nbsp;?</b>, gardez l’action actuelle ou choisissez une autre suite&nbsp;: rappel convenu, à faire par nous (retrouver le bon numéro), en attente, ou <span className="ui">Pas pour nous</span> pour clôturer. Vous avez le bon numéro&nbsp;? Saisissez-le dans <span className="ui">Numéro corrigé</span> (tous formats acceptés) et gardez l’action actuelle&nbsp;: la fiche prend le nouveau numéro et une nouvelle série d’appels commence.</p>
 </td>
 </tr>
 <tr>
@@ -877,7 +884,7 @@ export default function GuideContent() {
 </li>
 <li><p>S’il n’existe pas, cliquez sur l’onglet <span className="ui">Nouvel apprenant</span> et saisissez le <span className="ui">Nom complet</span>. C’est le seul champ obligatoire&nbsp;: téléphone et emails sont facultatifs mais précieux.</p>
 </li>
-<li><p>Regardez le bloc <b>Dossiers ressemblants</b> qui s’affiche. Si c’est la même personne, cliquez sur le dossier. Sinon continuez&nbsp;: un homonyme est autorisé. Un téléphone déjà utilisé affiche seulement un avertissement (une famille peut partager un numéro).</p>
+<li><p>Regardez le bloc <b>Dossiers ressemblants</b> qui s’affiche. Si c’est la même personne, cliquez sur le dossier. Sinon continuez&nbsp;: un homonyme est autorisé. Si le même téléphone, ou le même nom avec la même date de naissance, existe déjà, <b>Doublon possible</b> s’affiche à l’enregistrement&nbsp;: répondez pour chaque fiche (<span className="ui">Même famille, autre personne</span> ou <span className="ui">Personne différente</span>) puis enregistrez à nouveau. Une famille peut partager un numéro.</p>
 </li>
 <li><p><b>Étape 2.</b> Choisissez la <span className="ui">Session</span> et l’<span className="ui">Année scolaire</span> (2026/2027 par défaut), puis éventuellement le <span className="ui">Niveau</span>. Une fois le niveau choisi, <span className="ui">Groupe (facultatif)</span> propose les groupes de ce programme, de ce niveau et de cette année, avec les places libres&nbsp;; un groupe complet apparaît grisé («&nbsp;complet&nbsp;») et ne peut pas être choisi. Vous pouvez aussi affecter le groupe plus tard (<a href="#q9">Q9</a>).</p>
 </li>
@@ -1493,7 +1500,7 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Tâches</h4>
-<p>Une ligne par prospect&nbsp;: sa prochaine action. Cinq onglets (<b>En retard, Aujourd’hui, Demain, À venir, En attente</b>), heure de Casablanca. Se met à jour chaque minute.</p>
+<p>Une ligne par contact dans chaque onglet&nbsp;: sa prochaine action. Les autres apprenants du même contact sont listés sur la ligne («&nbsp;Aussi&nbsp;: …&nbsp;»), chacun avec sa propre prochaine action&nbsp;; si l’action d’un frère ou d’une sœur tombe dans un autre onglet, il y a aussi sa propre ligne. Cinq onglets (<b>En retard, Aujourd’hui, Demain, À venir, En attente</b>), heure de Casablanca. Se met à jour chaque minute.</p>
 <ul className="tight">
 <li>Par défaut «&nbsp;Moi + non attribué&nbsp;»&nbsp;; le filtre du responsable du prospect se combine avec celui de la tâche.</li>
 <li><span className="ui">Pas de réponse</span> (appels, un clic), <span className="ui">Noter un échange</span>, <span className="ui">Changer</span>, et les quatre résultats d’un rendez-vous au centre.</li>

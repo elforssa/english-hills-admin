@@ -1,12 +1,13 @@
-// RWR-r5 PR A1 — reception day scripts (plan §8), real UI on the local stack.
+// RWR-r5 PRs A1 and B1 — reception day scripts (plan §8), real UI on the local stack.
 // Each script counts clicks and typed fields through one helper and fails above its target.
 // Numbering: the plan's §8 table rows 0–11 (0 unanswered call … 11 two staff).
 // A1 owns 1, 3, 6, 7, 8, 10, 11; script 0 (the T7 one-tap) is run as well. C1 (payments, §6.1)
-// owns 2 (walk-in who pays now, one flow) and 9 (partial payment, then the balance).
-// Scripts 3 and 8 run at the A1 counts the owner accepted on 2026-11-22 (plan, implementation
-// record): 3 at 7, its ≤ 6 target in B1 (« C'est la même personne », §5.3); 8 at 4 (close), its
-// close-in-2 target in B2 (close reasons, §5.4) and its corrected-in-3 target in B1. The suite
-// fails above those ceilings and logs « ACCEPTED A1 COUNT » with the later target so the gap stays visible.
+// owns 2 (walk-in who pays now, one flow) and 9 (partial payment, then the balance). B1 (people,
+// §5.1–5.3) owns 4 and 5, brings 3 to its ≤ 6 target (« C'est la même personne ») and 8 to
+// « corrected in 3 ». Script 8's close variant stays at the A1 count the owner accepted on
+// 2026-11-22 (plan, implementation record): 4, its close-in-2 target in B2 (close reasons, §5.4).
+// The suite fails above that ceiling and logs « ACCEPTED A1 COUNT » with the later target so the
+// gap stays visible.
 // Invariant 9 (same next action on card, Tâches row, drawer and calendar) is checked in script 1.
 // Synthetic staff, prospects, learners and payments only, removed in finally. No external requests.
 import assert from 'node:assert/strict';
@@ -22,11 +23,11 @@ import { removeStaffAndPayments } from './lib/desk-payments-local.mjs';
 assertLocalFeatureBranch();
 const env = localEnv(), app = 'http://localhost:3101', run = 'day-' + randomUUID();
 const STALE = 'Ce prospect a été modifié, rechargez.';
-let browser, page, users = [], learners = [], phase = 'setup';
+let browser, page, users = [], learners = [], phase = 'setup', family = null;
 const errors = [], gaps = [];
 const as = id => `begin;select set_config('request.jwt.claim.sub',${q(id)},true);set local role authenticated;`;
 const rpc = (id, name, data) => JSON.parse(sql(`${as(id)}select public.crm_${name}(gen_random_uuid(),${q(JSON.stringify(data))}::jsonb);commit;`).split('\n').pop());
-const intake = (id, name) => rpc(id, 'create_manual_lead', { display_name: name, learner_name: 'Apprenant synthétique', source_label: 'Manuel · Téléphone' }).lead.id;
+const intake = (id, name, extra = {}) => rpc(id, 'create_manual_lead', { display_name: name, learner_name: 'Apprenant synthétique', source_label: 'Manuel · Téléphone', ...extra }).lead.id;
 const version = lead => Number(sql(`select version from public.crm_leads where id=${q(lead)}`));
 const detail = (id, lead) => JSON.parse(sql(`${as(id)}select public.crm_get_workspace_detail(${q(lead)});commit;`).split('\n').pop());
 const openRows = lead => JSON.parse(sql(`select coalesce(json_agg(json_build_object('type',task_type,'kind',schedule_kind,'due',due_at)),'[]') from public.crm_tasks where lead_id=${q(lead)} and status='open'`));
@@ -179,19 +180,70 @@ try {
   await s3.click(page.getByRole('button', { name: 'Ajouter un prospect', exact: true }), 'Ajouter un prospect');
   await s3.fill(dialog().getByLabel('Nom du contact', { exact: true }), 'Jour 3 visite', 'contact');
   await s3.fill(dialog().getByLabel('Téléphone', { exact: true }), phone(), 'phone');
-  await s3.fill(dialog().getByLabel('Nom de l’apprenant', { exact: true }), 'Apprenant synthétique', 'learner');
+  // B1 (§5.3): « C'est la même personne » is ticked while the learner field is empty.
+  assert.equal(await dialog().getByLabel('C’est la même personne', { exact: true }).isChecked(), true, '« C’est la même personne » ticked by default');
   await s3.select(dialog().getByLabel('Origine', { exact: true }), 'Visite au centre', 'Origine : Visite au centre');
   await s3.check(dialog().getByLabel('En attente du prospect', { exact: true }), 'En attente du prospect');
   assert.equal(await dialog().getByLabel('Relancer le', { exact: true }).inputValue(), '', 'no date is forced');
   await s3.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
   await toast('Prospect créé'); await panel().waitFor();
-  // Seven with the phone: the learner name is a separate field until B1's « C'est la même personne » (§5.3).
-  s3.done(7, 'accepted for A1; ≤ 6 in B1 with « C’est la même personne » (§5.3)');
+  s3.done();
   const walkIn = await page.evaluate(() => new URL(location.href).searchParams.get('lead'));
+  assert.equal(sql(`select l.learner_name=c.display_name and c.contact_kind='adult_learner' from public.crm_leads l join public.crm_contacts c on c.id=l.contact_id where l.id=${q(walkIn)}`), 't', 'the learner is the contact (adult learner)');
   assert.equal(status(walkIn), 'ENGAGED', 'a walk-in is a conversation: ENGAGED');
   assert.deepEqual(openRows(walkIn).map(r => r.type), ['awaiting_prospect'], 'one action: « En attente »');
   assert.equal(sql(`select count(*) from public.crm_tasks where lead_id=${q(walkIn)} and task_type='first_contact'`), '0', 'a walk-in never schedules « Premier contact »');
   assert.equal(sql(`select count(*) from public.crm_activities where lead_id=${q(walkIn)} and event_type='conversation_recorded' and channel='in_person'`), '1', 'the conversation is logged');
+
+  // 4 — Mother with two children (B1, ≤ 10): one contact, two learners, one Tâches row.
+  phase = 'script 4';
+  await page.goto(`${app}/crm/leads`);
+  const s4 = script('4 mother with two children', 10, 'the prospect list');
+  await s4.click(page.getByRole('button', { name: 'Ajouter un prospect', exact: true }), 'Ajouter un prospect');
+  await s4.fill(dialog().getByLabel('Nom du contact', { exact: true }), 'Jour 4 maman', 'contact');
+  await s4.fill(dialog().getByLabel('Téléphone', { exact: true }), phone(), 'phone');
+  await s4.fill(dialog().getByLabel('Nom de l’apprenant', { exact: true }), 'Jour 4 aînée', 'learner 1');
+  assert.equal(await dialog().getByLabel('C’est la même personne', { exact: true }).isChecked(), false, 'typing a learner unticks « C’est la même personne »');
+  await s4.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
+  await toast('Prospect créé'); await panel().waitFor();
+  const elder = await page.evaluate(() => new URL(location.href).searchParams.get('lead'));
+  await s4.click(drawer().getByRole('button', { name: 'Ajouter un enfant', exact: true }), 'Ajouter un enfant');
+  await dialog().getByRole('heading', { name: 'Ajouter un enfant' }).waitFor();
+  await s4.fill(dialog().getByLabel('Nom de l’apprenant', { exact: true }), 'Jour 4 cadet', 'learner 2');
+  await s4.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
+  await toast('Prospect créé');
+  await page.waitForFunction(id => new URL(location.href).searchParams.get('lead') !== id, elder);
+  await panel().waitFor();
+  s4.done();
+  const younger = await page.evaluate(() => new URL(location.href).searchParams.get('lead'));
+  assert.equal(sql(`select count(distinct contact_id)||'/'||count(*) from public.crm_leads where id in (${q(elder)},${q(younger)})`), '1/2', 'one contact, two learners');
+  assert.equal(sql(`select count(*) from public.person_match_decisions where id_a in (${q(elder)},${q(younger)}) or id_b in (${q(elder)},${q(younger)})`), '0', 'no duplicate flagged between siblings');
+  await drawer().getByRole('button', { name: 'Jour 4 aînée', exact: true }).waitFor();
+  const shown = JSON.parse(sql(`${as(reception.id)}select (select jsonb_agg(r) from unnest(array['overdue','today','tomorrow','upcoming','awaiting']) b,
+    jsonb_array_elements(public.crm_get_work_queue(p_bucket=>b,p_assignee_mode=>'all',p_limit=>50)->'rows') r where (r->>'lead_id')::uuid in (${q(elder)},${q(younger)}));commit;`).split('\n').pop());
+  assert.equal(shown.length, 1, 'one Tâches row for the family');
+  await tasks(bucketOf(shown[0].next_action), shown[0].lead_id);
+  assert.equal(await page.locator(`[data-testid=work-row][data-lead-id="${shown[0].lead_id === elder ? younger : elder}"]`).count(), 0, 'the sibling has no row of its own');
+  await row(shown[0].lead_id).getByTestId('work-row-family').getByText(shown[0].lead_id === elder ? 'Jour 4 cadet' : 'Jour 4 aînée', { exact: false }).waitFor();
+  console.log('PASS day script 4: one contact, two learners, one Tâches row listing the other learner');
+
+  // 5 — Current family calling about something else (B1, ≤ 3): global search by phone in another
+  // format opens the student's file; no prospect is created.
+  phase = 'script 5';
+  const known = randomUUID(), knownPhone = phone();
+  family = known;
+  sql(`insert into public.students(id,full_name,telephone,status,session_type) values(${q(known)},'Jour 5 apprenant inscrit',${q(knownPhone)},'Prospect','Yearly')`);
+  const leadsBefore = sql('select count(*) from public.crm_leads');
+  await page.goto(`${app}/crm/today`);
+  const s5 = script('5 current family calling', 3, 'any page');
+  await s5.click(page.getByRole('button', { name: 'Rechercher une personne', exact: true }).first(), 'Rechercher une personne');
+  // The number as the caller gives it: +212, spaces, no leading 0.
+  await s5.fill(dialog().getByLabel('Nom, téléphone ou e-mail', { exact: true }), '+212 ' + knownPhone.slice(1).replace(/(\d{1})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5'), 'phone, other format');
+  await s5.click(dialog().locator(`[data-testid=people-result][data-kind=student][data-id="${known}"]`), 'open the student');
+  await page.waitForURL(url => url.pathname === `/students/${known}`);
+  await page.getByRole('heading', { name: 'Jour 5 apprenant inscrit' }).waitFor();
+  s5.done();
+  assert.equal(sql('select count(*) from public.crm_leads'), leadsBefore, 'no prospect created');
 
   // 6 — No-show: « Absent » on the Tâches row, then « Confirmer le rappel » (target 2: « Pas venu » →
   // the proposed reminder; review Important 5: the first tap alone writes nothing).
@@ -240,7 +292,23 @@ try {
   assert.deepEqual(openRows(callback).map(r => r.type), ['awaiting_prospect'], 'never a second action; the callback is cancelled');
   assert.equal(sql(`select to_char(due_at at time zone public.centre_utc_offset(),'HH24:MI') from public.crm_tasks where lead_id=${q(callback)} and task_type='callback' order by created_at desc limit 1`), '16:00', 'the agreed time is kept across date changes');
 
-  // 8 — Wrong number, closed (A1 ceiling 4; close in 2 is B2, corrected in 3 is B1).
+  // 8 — Wrong number, corrected (B1, 3): « Mauvais numéro » → the right number → Enregistrer.
+  phase = 'script 8 corrected';
+  const fixedLead = intake(reception.id, 'Jour 8 numéro corrigé', { phone: phone() });
+  await openDrawer(fixedLead);
+  const rightNumber = phone();
+  const s8c = script('8 wrong number (corrected)', 3, 'the open drawer');
+  await s8c.click(panel().getByRole('button', { name: 'Mauvais numéro', exact: true }), 'Mauvais numéro');
+  await dialog().getByRole('heading', { name: 'Noter un échange' }).waitFor();
+  await s8c.fill(dialog().getByLabel('Numéro corrigé', { exact: true }), rightNumber.replace(/(\d{2})(?=\d)/g, '$1 '), 'numéro corrigé');
+  await s8c.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
+  await toast('Numéro corrigé'); await closed('Noter un échange');
+  s8c.done();
+  assert.equal(sql(`select c.phone_e164 from public.crm_contacts c join public.crm_leads l on l.contact_id=c.id where l.id=${q(fixedLead)}`), '+212' + rightNumber.slice(1), 'the contact’s number is corrected (E.164)');
+  assert.deepEqual(openRows(fixedLead).map(r => r.type), ['contact_attempt'], 'calling starts again on the new number: one action');
+  assert.equal(sql(`select count(*) from public.crm_activities where lead_id=${q(fixedLead)} and is_primary and details->>'summary' like 'Mauvais numéro · numéro corrigé%'`), '1', 'one history entry');
+
+  // 8 — Wrong number, closed (A1 ceiling 4; close in 2 is B2).
   phase = 'script 8';
   const wrong = intake(reception.id, 'Jour 8 mauvais numéro');
   await openDrawer(wrong);
@@ -354,7 +422,7 @@ try {
   console.log('PASS day script 11: B refused with « rechargez », reloads and saves once; default views split the work');
 
   assert.deepEqual(errors, [], 'no browser errors');
-  console.log(`PASS reception day scripts 0, 1, 2, 3, 6, 7, 8, 9, 10, 11${gaps.length ? ` — accepted A1 counts (owner, 2026-11-22): ${gaps.join('; ')}` : ''}`);
+  console.log(`PASS reception day scripts 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11${gaps.length ? ` — accepted A1 counts (owner, 2026-11-22): ${gaps.join('; ')}` : ''}`);
 } catch (error) {
   console.error(phase, error.message);
   if (page) {
@@ -365,5 +433,6 @@ try {
 } finally {
   if (browser) await browser.close();
   removeStaffAndPayments(users.map(u => u.id), learners);
+  if (family) sql(`delete from public.students where id=${q(family)}`);
   console.log('PASS synthetic browser fixtures removed');
 }

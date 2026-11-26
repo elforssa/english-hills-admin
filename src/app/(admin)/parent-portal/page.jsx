@@ -16,6 +16,7 @@ import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusCol
 import { getLearnerRecord, getMyLearners, getMyMessages } from '@/lib/portal';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
+import { formatPhoneFr } from '@/lib/phone.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
@@ -456,7 +457,7 @@ export default function ParentPortal() {
                 </div>
                 {p.telephone && (
                   <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                    <Phone size={12} /> {p.telephone}
+                    <Phone size={12} /> {formatPhoneFr(p.telephone)}
                   </span>
                 )}
               </div>

@@ -100,6 +100,9 @@ export function removeStaff(ids) {
  delete from public.crm_contacts where created_by in(${list});delete from public.crm_command_requests where actor_scope in(${list});delete from public.crm_followup_policies where created_by in(${list});
  set constraints all immediate; -- M-A2 (137): fire the deferred checks (prospects are gone) before the ALTERs
  alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;alter table public.placement_tests enable trigger crm_placement_integrity;
+ do $b1$ begin if to_regclass('public.person_match_decisions') is not null then -- B1 (138); absent on the upgrade lanes
+  execute $q$delete from public.person_match_decisions where decided_by in(${list})$q$;
+  execute $q$delete from public.student_merge_journal where merged_by in(${list}) or reverted_by in(${list})$q$; end if; end $b1$;
  alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${list});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;
  delete from public.activity_log where actor_id in(${list}) or target_id in(${list});delete from public.rate_limits where user_id in(${list});commit;`);
 }

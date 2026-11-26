@@ -8,14 +8,17 @@ import {
   LayoutDashboard, Users, GraduationCap, BookOpen, Calendar,
   ClipboardList, CreditCard, FileText, UserCheck, BarChart3,
   LogOut, ChevronDown, ChevronRight, Shield, Menu, X,
-  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, ExternalLink, History, RadioTower, LifeBuoy, Video,
+  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, ExternalLink, History, RadioTower, LifeBuoy, Video, Search,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/AuthContext';
 import { receptionistCanAccess } from '@/lib/roleAccess.mjs';
 
 const ADMIN = ['admin', 'director'];
 const OPERATIONS = [...ADMIN, 'receptionist'];
 const STAFF = ['admin', 'director', 'teacher'];
+// RWR-r5 §5.2: « Rechercher une personne », loaded on first use.
+const PeopleSearch = dynamic(() => import('@/components/people/PeopleSearch'), { ssr: false });
 
 const NAV = [
   { label: 'CRM', icon: Users, roles: OPERATIONS, children: [
@@ -177,7 +180,7 @@ function NavItem({ item, onNavigate }) {
   );
 }
 
-function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
+function SidebarContent({ onNavigate, userRole, userEmail, onLogout, onSearch }) {
   const canSee = (item) => (!item.roles || item.roles.includes(userRole)) &&
     (userRole !== 'receptionist' || !item.href || receptionistCanAccess(item.href.split('?')[0]));
   const filteredNav = NAV
@@ -205,6 +208,11 @@ function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
         </p>
       </div>
 
+      {OPERATIONS.includes(userRole) && <div className="px-3 pt-3">
+        <button type="button" onClick={onSearch} className="flex min-h-9 w-full items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-left text-xs font-medium text-white/80 hover:bg-sidebar-accent/50 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
+          <Search size={14} />Rechercher une personne
+        </button>
+      </div>}
       <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
         {filteredNav.map((item, i) => <NavItem key={i} item={item} onNavigate={onNavigate} />)}
       </nav>
@@ -233,6 +241,7 @@ function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
 
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
   const triggerRef = useRef(null);
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
@@ -293,7 +302,8 @@ export default function Sidebar() {
         style={{ backgroundColor: 'var(--brand-sidebar)' }}
       >
         <Menu size={20} />
-      </button></div>
+      </button>{['admin', 'director', 'receptionist'].includes(role) && <button type="button" onClick={() => setSearching(true)} aria-label="Rechercher une personne" className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-md border focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><Search size={20} /></button>}</div>
+      {searching && <PeopleSearch open onClose={() => setSearching(false)} />}
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
@@ -307,6 +317,7 @@ export default function Sidebar() {
               userRole={userRole}
               userEmail={userEmail}
               onLogout={logout}
+              onSearch={() => { closeMobile(); setSearching(true); }}
             />
           </div>
         </div>
@@ -321,6 +332,7 @@ export default function Sidebar() {
           userRole={userRole}
           userEmail={userEmail}
           onLogout={logout}
+          onSearch={() => setSearching(true)}
         />
       </div>
     </>

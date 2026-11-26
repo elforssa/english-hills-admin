@@ -1,5 +1,6 @@
 import { centreParts } from './centreClock.mjs';
 import { isRecordConflict } from './conflictErrors.mjs';
+import { formatPhoneFr } from './phone.mjs';
 
 export const SCHOOL_YEAR_START_MONTH = 9;
 const schoolDateParts = centreParts();
@@ -17,6 +18,12 @@ export function buildServiceDescription({ sessionType, schoolYear, serviceDetail
   if (!session || !year) return '';
   if (session === 'Other') return ['Autre', String(serviceDetail || '').trim(), year].filter(Boolean).join(' · ');
   return [session, year].join(' · ');
+}
+
+// A receipt keeps the phone it was issued with (never rewritten). Since migration 138 a new
+// receipt copies the learner's E.164 number; every receipt shows the French national form.
+export function receiptPhone(receipt) {
+  return receipt?.telephone ? formatPhoneFr(receipt.telephone) : '';
 }
 
 export function receiptSchoolYear(receipt) {

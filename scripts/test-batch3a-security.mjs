@@ -105,7 +105,7 @@ try {
   await create('enrollments',{student_id:s1.id,group_id:g1.id,status:'Validated',session_type:'Yearly',level:'A1',school_year:'2026/2027'});
   await create('enrollments',{student_id:s2.id,group_id:g2.id,status:'Validated',session_type:'Yearly',level:'A1',school_year:'2026/2027'});
   sql(`update public.profiles set full_name='Synthetic Admin' where id='${admin.id}'`);
-  const pickupAdult=await create('authorized_adults',{student_id:s1.id,full_name:run+' Adult',telephone:'0000000000',relation:'Parent'});
+  const pickupAdult=await create('authorized_adults',{student_id:s1.id,full_name:run+' Adult',telephone:'0612340108',relation:'Parent'});
   const pickups=await Promise.all(Array.from({length:4},()=>request(admin,'/rest/v1/dismissal_logs','POST',{
     student_id:s1.id,adult_id:pickupAdult.id,adult_name:'FORGED',staff_name:'FORGED',confirmed:false,
   })));

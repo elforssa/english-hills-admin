@@ -19,9 +19,9 @@ update public.profiles set role='admin' where id='10000000-0000-0000-0000-000000
 delete from public.profiles where id='10000000-0000-0000-0000-000000000004';
 
 insert into public.students(id,full_name,telephone,email,parent_email,status,session_type)
-values ('20000000-0000-0000-0000-000000000001','Synthetic Yearly','0600000000','student@example.test','parent@example.test','Enrolled','Yearly');
+values ('20000000-0000-0000-0000-000000000001','Synthetic Yearly','0612340022','student@example.test','parent@example.test','Enrolled','Yearly');
 insert into public.students(id,full_name,telephone,status)
-values ('20000000-0000-0000-0000-000000000003','Second Synthetic','0611111111','Prospect');
+values ('20000000-0000-0000-0000-000000000003','Second Synthetic','0612340024','Prospect');
 update public.profiles set role='parent',linked_student_id='20000000-0000-0000-0000-000000000001' where id='10000000-0000-0000-0000-000000000002';
 -- Portal readiness (PRF-r2 D3): families see a learner only through an active link.
 insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
@@ -101,14 +101,14 @@ set local role authenticated;
 
 -- Inline creation is also bound to its normalized identity/contact payload.
 insert into test_results values ('inline', public.create_charge_payment(jsonb_build_object(
-  'student_name','  Inline Synthetic  ','phone',' 0622222222 ','student_email','INLINE@EXAMPLE.TEST',
+  'student_name','  Inline Synthetic  ','phone',' 0612340104 ','student_email','INLINE@EXAMPLE.TEST',
   'session_type','Other','school_year','2026/2027','service_detail','Inline service','gross_amount','25.00',
   'payment_amount','0.00','payment_method','Espèces',
   'idempotency_key','30000000-0000-0000-0000-000000000013')));
 do $$ declare student_count bigint := (select count(*) from public.students where full_name like 'Inline Synthetic%'); begin
   begin
     perform public.create_charge_payment(jsonb_build_object(
-      'student_name','Different Inline','phone','0622222222','student_email','inline@example.test',
+      'student_name','Different Inline','phone','0612340104','student_email','inline@example.test',
       'session_type','Other','school_year','2026/2027','service_detail','Inline service','gross_amount','25',
       'payment_amount','0','payment_method','Espèces',
       'idempotency_key','30000000-0000-0000-0000-000000000013'));

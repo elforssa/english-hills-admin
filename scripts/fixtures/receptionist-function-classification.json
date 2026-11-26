@@ -112,6 +112,10 @@
     "gate": "crm_reader",
     "receptionist": "open"
   },
+  "crm_create_prospect(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
   "crm_disable_lifecycle(p_connection uuid, p_version bigint)": {
     "gate": "crm_director",
     "receptionist": "locked"
@@ -260,6 +264,16 @@
     "gate": "crm_reader",
     "receptionist": "open"
   },
+  "crm_merge_contacts(p_request_key uuid, p_source uuid, p_target uuid, p_expected_source_version bigint, p_expected_target_version bigint)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "753c2a3e8742c58298136a39b181a02e"
+  },
+  "crm_merge_prospects(p_request_key uuid, p_source uuid, p_target uuid, p_expected_source_version bigint, p_expected_target_version bigint)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "8e647efb16b4378d74291dcfd07cc181"
+  },
   "crm_publish_lifecycle_policy(p_connection uuid, p_connection_version bigint, p_data jsonb)": {
     "gate": "crm_director",
     "receptionist": "locked"
@@ -361,6 +375,10 @@
     "gate": "crm_reader",
     "receptionist": "open"
   },
+  "crm_update_prospect(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
   "delete_mistaken_receipt(p_receipt_id uuid, p_reason text, p_idempotency_key uuid)": {
     "gate": "roles:director",
     "receptionist": "locked"
@@ -377,6 +395,11 @@
   "find_duplicate_receipts(p_student uuid, p_charge uuid, p_amount numeric, p_date date)": {
     "gate": "capability:manage_finance_operations",
     "receptionist": "open"
+  },
+  "find_people(p_query text, p_phone text, p_name text, p_birth date, p_limit integer)": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "f890fb097cce166f197c81409dfcee66"
   },
   "get_finance_charge_summary()": {
     "gate": "finance_staff",
@@ -486,6 +509,11 @@
     "receptionist": "open",
     "md5": "3e4a88760904d2c90cfc696e8b073e99"
   },
+  "merge_students(p_source uuid, p_target uuid)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "ce23318aebbd78c478d7fd1613aea9db"
+  },
   "my_member_group_ids()": {
     "gate": "manual",
     "receptionist": "not_staff",
@@ -591,6 +619,30 @@
     "gate": "roles:admin,director",
     "receptionist": "locked"
   },
+  "person_name_key(raw text)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "phone_e164(raw text)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "phone_is_placeholder(e164 text)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "phone_key(raw text)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "phone_mask(raw text)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "phone_search_key(query text)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
   "place_learner_in_group(p_student uuid, p_group uuid, p_student_updated_at timestamp with time zone, p_enrollment uuid, p_school_year text, p_enrollment_updated_at timestamp with time zone, p_capacity_override_reason text, p_without_enrollment_reason text)": {
     "gate": "capability:assign_group",
     "receptionist": "open"
@@ -645,6 +697,11 @@
     "gate": "capability:manage_finance_operations",
     "receptionist": "open"
   },
+  "record_person_match_decisions(p_subject_kind text, p_subject_id uuid, p_decisions jsonb)": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "9f578d2e89b77d82fc29a227bc5cb671"
+  },
   "recover_missing_profile()": {
     "gate": "manual",
     "receptionist": "open",
@@ -679,6 +736,10 @@
     "receptionist": "rls"
   },
   "report_years()": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "require_phone(raw text)": {
     "gate": "invoker",
     "receptionist": "rls"
   },
@@ -743,6 +804,10 @@
     "gate": "receptionist_only",
     "receptionist": "open"
   },
+  "search_desk_students(p_query text, p_limit integer)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
   "search_students_page(p_search text, p_status text, p_age_category text, p_session text, p_level text, p_incomplete boolean, p_source text, p_plan text, p_page integer, p_page_size integer, p_group text, p_payment text)": {
     "gate": "invoker",
     "receptionist": "rls"
@@ -757,6 +822,15 @@
     "receptionist": "locked",
     "md5": "036c8a82e3aef5a9aa4aae632cfd4001"
   },
+  "student_merge_preview(p_source uuid, p_target uuid)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "06dbcc85b61d572843dc89a5c3645e6e"
+  },
+  "student_merge_set(p_student uuid)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
   "teacher_can_access_student_group(p_student uuid, p_group uuid)": {
     "gate": "manual",
     "receptionist": "not_staff",
@@ -766,6 +840,11 @@
     "gate": "manual",
     "receptionist": "not_staff",
     "md5": "b536286d8bcf8733d814ce59676a4d20"
+  },
+  "unmerge_student(p_source uuid)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "e06670a635913f34f5a3cefdda1130e0"
   },
   "void_financial_charge(p_charge_id uuid, p_reason text, p_idempotency_key uuid)": {
     "gate": "roles:director",

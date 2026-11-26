@@ -2,7 +2,7 @@
 
 import { toast } from 'sonner';
 import { money, receiptAmounts, receiptNumberLabel, receiptStatus } from './receiptFinance.js';
-import { RECEIPT_PAPER_FORMAT, receiptSchoolYear } from './receiptPresentation.js';
+import { RECEIPT_PAPER_FORMAT, receiptPhone, receiptSchoolYear } from './receiptPresentation.js';
 import { retryingImport } from './retryingImport.mjs';
 
 const BLUE = [30, 77, 139];
@@ -52,7 +52,7 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   let y = 8;
 
   // Client receipts never paginate. Fit the variable detail rows into one A5.
-  const details = [receipt.nom_prenom, receipt.telephone, receipt.email,
+  const details = [receipt.nom_prenom, receiptPhone(receipt), receipt.email,
     receipt.session_type, receiptSchoolYear(receipt), receipt.niveau,
     receipt.service_description, receipt.mode_paiement, receipt.transaction_reference].filter(Boolean);
   let detailFontSize = 8.5;
@@ -112,7 +112,7 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   doc.text(`Statut : ${receiptStatus(receipt)}`, width - margin, y, { align: 'right' }); y += 4;
   sectionTitle('Apprenant');
   detailRow('Nom', receipt.nom_prenom);
-  detailRow('Téléphone', receipt.telephone);
+  detailRow('Téléphone', receiptPhone(receipt));
   detailRow('Email', receipt.email);
 
   sectionTitle('Session');

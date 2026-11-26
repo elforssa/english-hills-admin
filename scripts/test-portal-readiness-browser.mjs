@@ -11,9 +11,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomInt, randomUUID, randomBytes } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { formatPhoneFr } from '../src/lib/phone.mjs';
 
 assertLocalFeatureBranch(new URL('../', import.meta.url));
 const env = Object.fromEntries(readFileSync(new URL('../.env.local', import.meta.url), 'utf8').split('\n').flatMap(line => {
@@ -28,7 +29,11 @@ const sql = input => execFileSync('docker', ['exec', '-i', container, 'psql', '-
 const run = 'portal-ui-' + randomUUID().slice(0, 8), password = randomBytes(18).toString('base64url');
 const ids = Object.fromEntries(['teacher', 'group', 'otherGroup', 'child', 'other', 'adult'].map(k => [k, randomUUID()]));
 const users = {};
-const phones = { child: '0655' + run.slice(-6), other: '0666' + run.slice(-6), adult: '0677' + run.slice(-6) };
+// Invented digits only: since migration 138 (RWR-r5 B1) a student phone must be a valid number,
+// stored in E.164, so the leak checks look for both forms.
+const digits = String(randomInt(100000, 1000000));
+const phones = { child: '0655' + digits, other: '0666' + digits, adult: '0677' + digits };
+const storedPhones = Object.values(phones).map(p => '+212' + p.slice(1));
 let browser;
 
 async function createUser(key, role) {
@@ -62,7 +67,7 @@ async function signIn(key, home) {
 }
 // Every address or phone of the fixtures except the viewer's own login.
 function assertNoContacts(bodies, viewer) {
-  const values = [...Object.values(phones), ...Object.values(users).map(u => u.email).filter(e => e !== users[viewer].email)];
+  const values = [...Object.values(phones), ...storedPhones, ...Object.values(users).map(u => u.email).filter(e => e !== users[viewer].email)];
   for (const body of bodies) for (const value of values) assert.ok(!body.includes(value), `${viewer} received a contact value`);
 }
 async function composerOptions(page) {
@@ -112,6 +117,13 @@ try {
   await teacher.page.getByText('Lina ' + run).waitFor();
   assert.equal(await teacher.page.getByRole('columnheader', { name: 'Téléphone' }).count(), 0, 'no phone column for a teacher');
   assert.equal(await teacher.page.getByText(phones.child).count(), 0);
+  assert.equal(await teacher.page.getByText('+212' + phones.child.slice(1)).count(), 0);
+  // Since 138 a phone is displayed « 06 55 … » (review of #217): no form of it, the display one included.
+  assert.equal(await teacher.page.getByText(formatPhoneFr(phones.child)).count(), 0);
+  const teacherGroupText = await teacher.page.locator('body').innerText();
+  for (const form of [phones.child, '+212' + phones.child.slice(1), formatPhoneFr(phones.child), phones.child.slice(1)]) {
+    assert.ok(!teacherGroupText.includes(form), `teacher group page shows no phone (${form.slice(0, 4)}…)`);
+  }
   await teacher.page.goto(app + '/attendance');
   await teacher.page.locator('select').first().selectOption(ids.group);
   await teacher.page.getByText('Sara ' + run).waitFor();

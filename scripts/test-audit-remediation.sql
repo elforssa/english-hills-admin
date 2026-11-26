@@ -43,7 +43,7 @@ where id='00000000-0000-4000-8000-00000000a003';
 insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
   ('00000000-0000-4000-8000-00000000d001','parent','00000000-0000-4000-8000-00000000a003','audit-parent@example.invalid','active',now());
 insert into public.authorized_adults(id,student_id,full_name,telephone,relation) values
-  ('00000000-0000-4000-8000-00000000e001','00000000-0000-4000-8000-00000000d001','Synthetic Adult','0000000000','Parent');
+  ('00000000-0000-4000-8000-00000000e001','00000000-0000-4000-8000-00000000d001','Synthetic Adult','0612340046','Parent');
 
 do $$ begin
   if has_function_privilege('authenticated','public.check_rate_limit(text,integer,integer)','EXECUTE') then

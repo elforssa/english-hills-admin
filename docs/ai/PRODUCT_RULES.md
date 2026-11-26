@@ -44,7 +44,7 @@ RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_fol
 - A call attempt less than the minimum gap (3 hours) after the previous one is refused unless marked « Tentative réelle (hors délai) ». « Pas de réponse » saves on one tap with no undo; a mistake is corrected by a new exchange (OD-20 = B).
 - An appointment's outcome (four results) can be recorded from its start time; « Venu · pas intéressé » closes the prospect.
 - Conversion keeps the planned test: it becomes the student's. A planned test of an active prospect belongs to its open appointment.
-- Intake prospects (Meta, website) are owned by the director-chosen default owner, or are unassigned when none is set (OD-6). The next action's assignee is the prospect's owner. « Tâches » opens on « Moi + non attribué » and shows one row per prospect.
+- Intake prospects (Meta, website) are owned by the director-chosen default owner, or are unassigned when none is set (OD-6). The next action's assignee is the prospect's owner. « Tâches » opens on « Moi + non attribué » and shows one row per prospect (one row per contact once PR B1 is released, below).
 - History shows one row per user action; the rows it caused are behind « Détails ».
 - A placement-test edit sends the prospect version the user saw. Placement tests may be « Annulé » (with its cancellation) or « Absent ».
 
@@ -119,6 +119,17 @@ From Batch E release E-2 ([plan PCR-r2](../architecture/plans/payment-correction
 Premium is a cancelled product (owner decisions of 2026-10-08). Every Yearly student is a Yearly student: no screen, receipt, PDF, e-mail, export or report shows a "Formule" or presents Standard/Premium as a choice, and new activity never creates a record containing `Premium`. One owner-accepted exception: a new receipt on an undated non-legacy Yearly charge copies that charge's own text.
 
 The `plan_type` columns on `students`, `charges` and `receipts` (and the student-list `p_plan` parameter) are **inert**: nothing reads them for display; new charges get the fixed value `Standard` because the existing constraint requires a value for Yearly, and new receipts get NULL. They are kept rather than dropped (owner decision Q2). Issued receipts and settled or voided charges keep their stored text (Q1). The workshop module's database objects remain until Release B (planned, not approved). Contract: [receipt model](../receipt-financial-model.md#formule-retirement-113-current-contract); release evidence in [CURRENT_STATE](CURRENT_STATE.md).
+
+### People (RWR-r5 PR B1; implemented on a pull request, migration 138 not applied, not merged as of 2026-11-25)
+
+[Plan RWR-r5](../architecture/plans/receptionist-workflow.md) §5.1–5.3 and its [B1 implementation record](../architecture/plans/receptionist-workflow.md#implementation-record-pr-b1-m-b1-migration-138). These rules hold once 138 is applied and the pull request is merged.
+
+- **Phones** are stored in E.164 (`+212…`). A student or authorized-adult phone is checked only when it is created or changed (« Numéro invalide », « Numéro fictif : laissez vide »); every other update of a row with an old bad number still succeeds. A placeholder such as « 06 00 00 00 00 » is no phone. Existing numbers are rewritten only by data step D3, with its own approval. Every screen, list, export and printed receipt shows a stored phone in the French national form; only `tel:` and WhatsApp links use E.164. Stored receipts are never rewritten.
+- **Search:** every people search box finds a phone in any format from 6 digits (06…, +212…, 00212…, spaces or dashes). « Rechercher une personne » lists prospects and students, closed and archived included; opening a result creates nothing.
+- **Duplicate gate:** a new prospect or student with the same phone, or the same name and birth date, as an existing person is not created until each match is answered « Même famille, autre personne » or « Personne différente »; the answer is recorded. « Ajouter un enfant » (same contact) and « C'est la même personne » (the learner is the contact) are not duplicates. Shared phone alone never merges.
+- **« Tâches »:** one row per contact; the contact's other learners are listed on it, each with its own next action.
+- **Wrong number:** « Mauvais numéro » with « Numéro corrigé » replaces the contact's number and starts a new call sequence; the action is kept.
+- **Merges (director, admin; OD-8 = A, « link, don't move »):** a merged prospect or student keeps all its history under its own id and is linked to the kept one, whose screens show both. No enrollment, charge, receipt, attendance or test row changes. A student merge is refused when both files have live enrollments, when both have portal access, or while the file merged away still has an unvoided charge to pay (« Encaissez ou soldez d'abord le solde de ce dossier »), and can be undone (« Annuler la fusion »). Prospect and contact merges are refused when either record changed since it was shown.
 
 ## People, opportunities and academics
 

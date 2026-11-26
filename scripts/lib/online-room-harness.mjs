@@ -285,6 +285,8 @@ export const SHELL_OUTLINE = [
   { path: 'src/components/layout/Sidebar.jsx', from: 'return (', last: true, depth: 1, lines: [
     '<>',
     '  div.lg:hidden fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b bg-background px-4',
+    // « Rechercher une personne » (RWR-r5 B1): a dialog in a portal, no box in the page.
+    '  {searching} PeopleSearch',
     '  {mobileOpen} div.lg:hidden fixed inset-0 z-40 flex',
     '  div.operational operational-sidebar hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0',
   ] },

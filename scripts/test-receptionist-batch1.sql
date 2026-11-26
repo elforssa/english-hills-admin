@@ -54,7 +54,7 @@ insert into public.assessments(id,student_id,group_id,commentaire) values
   '96000000-0000-0000-0000-000000000030','Read only assessment');
 insert into public.authorized_adults(id,student_id,full_name,telephone,relation) values
  ('96000000-0000-0000-0000-000000000061','96000000-0000-0000-0000-000000000020',
-  'Synthetic adult','0600000000','Parent');
+  'Synthetic adult','0612340057','Parent');
 
 create function pg_temp.denied(statement text) returns void language plpgsql as $$ begin
  begin execute statement; exception when insufficient_privilege then return; end;
@@ -304,7 +304,7 @@ do $$ declare v_student uuid:='96000000-0000-0000-0000-000000000021';
  if not exists(select 1 from public.students where id=v_student and status='Prospect' and plan_type='Standard') then
    raise exception 'Dossier create failed'; end if;
  select updated_at into v_version from public.students where id=v_student;
- perform public.save_receptionist_student(v_student,v_version,'{"telephone":"0600000000","notes":"Reception note"}');
+ perform public.save_receptionist_student(v_student,v_version,'{"telephone":"0612340307","notes":"Reception note"}');
  perform pg_temp.invalid(format('select public.save_receptionist_student(%L,%L,%L::jsonb)',
    v_student,v_version-interval '1 second','{"telephone":"stale"}'));
  select updated_at into v_teacher_version from public.get_teacher_operations('96000000-0000-0000-0000-000000000010');

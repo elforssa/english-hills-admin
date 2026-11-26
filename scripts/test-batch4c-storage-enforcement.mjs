@@ -298,7 +298,7 @@ try {
   await denied(() => patch(admin, 'students', child.id, { photo_url: 'https://example.invalid/legacy' }));
   await denied(() => patch(admin, 'portfolios', portfolio.id, { file_url: 'documents/forged.png' }));
   await denied(() => patch(admin, 'enrollments', enrollment.id, { documents_urls: ['documents/forged.png'] }));
-  await denied(() => request(admin, '/rest/v1/authorized_adults', 'POST', { student_id: child.id, full_name: run, telephone: '000', relation: 'Autre', photo_url: 'asset:' + randomUUID() }));
+  await denied(() => request(admin, '/rest/v1/authorized_adults', 'POST', { student_id: child.id, full_name: run, telephone: '0612340109', relation: 'Autre', photo_url: 'asset:' + randomUUID() })); // a valid invented number (138): the forged photo is what is refused
 
   assert.equal(sql("select count(*) from pg_policies where schemaname='storage' and policyname='reserved asset insert' and cmd='INSERT'"), '1');
   assert.equal(sql("select count(*) from pg_policies where schemaname='storage' and cmd in ('SELECT','UPDATE','DELETE')"), '0');

@@ -56,7 +56,7 @@ export default function ReceiptNew() {
     return charge?.enrollment_id || null;
   };
 
-  const handleSubmit = async (payload, { groupId = '' } = {}) => {
+  const handleSubmit = async (payload, { groupId = '', recordPeople = null } = {}) => {
     setSaving(true);
     const client = getBrowserClient();
     const { data, error } = await client.rpc('create_charge_payment', { p_payload: payload });
@@ -66,6 +66,11 @@ export default function ReceiptNew() {
       return;
     }
     clearPendingPayment();
+    // §5.2: the duplicate-gate answers of « Nouvel apprenant », once the learner exists.
+    if (recordPeople && data.charge_id) {
+      const { data: charge } = await client.from('charge_balances').select('student_id').eq('id', data.charge_id).maybeSingle();
+      if (charge?.student_id && !(await recordPeople(charge.student_id))) toast.warning('Paiement enregistré ; les réponses sur les doublons n’ont pas été enregistrées.');
+    }
     // A replay keeps the chosen group: placed now if the lost first response never got to it.
     // A replayed payment returns only its charge and receipt, so the enrollment is the one
     // the first run linked to that charge.

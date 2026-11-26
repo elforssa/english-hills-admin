@@ -33,6 +33,7 @@ import { hasCapability } from '@/lib/roleAccess.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { closeSchoolYear, listArchivedStudents, membershipErrorMessage, restoreStudent } from '@/lib/academic/membershipActions.mjs';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { formatPhoneFr } from '@/lib/phone.mjs';
 
 // Director (ACA-8): archived files, restored with their enrollments kept Ended.
 function ArchivedStudentsDialog({ onClose, onRestored }) {
@@ -309,7 +310,7 @@ export default function StudentsPage() {
       exportToCsv(rows.map(s => ({
         Nom: s.full_name,
         Email: s.email || '',
-        Téléphone: s.telephone || '',
+        Téléphone: s.telephone ? formatPhoneFr(s.telephone) : '',
         Catégorie: s.age_category || '',
         Groupe: s.group_name ? `${s.group_name}${Number(s.extra_group_count) > 0 ? ` +${s.extra_group_count}` : ''}` : 'À affecter',
         Session: s.session_type || '',
@@ -414,7 +415,7 @@ export default function StudentsPage() {
                     <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link></p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · <ProgrammePill sessionType={s.session_type} /> {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     {renderGroup(s)}
-                    <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
+                    <p className="text-xs text-muted-foreground">{s.telephone ? formatPhoneFr(s.telephone) : '—'}</p>
                     <p className="mt-1 text-xs"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-1 font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="ml-2 font-semibold">{money(s.payment_balance)} MAD · solde restant actuel</span>}</p>
                   </div>
                   <span className={`${PILL_CLASS} ml-3 ${STUDENT_STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,s.status)}</span>
@@ -476,7 +477,7 @@ export default function StudentsPage() {
                           className="font-semibold hover:underline">{s.niveau_cefr || '—'}</Link>
                           : <span className="font-semibold">{s.niveau_cefr || '—'}</span>}
                       </td>
-                      <td className="px-3 py-3 text-muted-foreground">{s.telephone || '—'}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{s.telephone ? formatPhoneFr(s.telephone) : '—'}</td>
                       <td className="px-3 py-3">
                         <span className={`${PILL_CLASS} ${STUDENT_STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,s.status)}</span>
                       </td>

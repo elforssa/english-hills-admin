@@ -221,6 +221,9 @@ try {
   await page.goto('http://localhost:3101/students/import');
   await page.locator('textarea').fill('full_name,session_type,status\n'+run+' imported,Yearly,Enrolled');
   await expect(page.getByText('seront importées en Prospect',{exact:false})).toBeVisible();
+  // RWR-r5 B1 (§5.2): the duplicate dry run comes first; a row with no match imports as before.
+  await page.getByRole('button',{name:'Vérifier les doublons',exact:true}).click();
+  await expect(page.getByText('0 ligne(s) avec un doublon possible',{exact:false})).toBeVisible();
   await page.getByRole('button',{name:'Importer 1 apprenant(s)',exact:true}).click();
   await expect.poll(() => sql(`select status from public.students where full_name='${run} imported'`).trim()).toBe('Prospect');
   // Reception (Q3 = B): paid learners are placed from « Groupe à affecter » and the

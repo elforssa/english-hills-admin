@@ -397,7 +397,8 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.match(receiptForm, /<Field label="Groupe \(facultatif\)">/);
   assert.match(receiptForm, /const groupSession = form\.session_type && form\.session_type !== 'Other' \? form\.session_type : '';/);
   assert.match(receiptForm, /const groupOffered = Boolean\(groupSession && form\.level && form\.school_year\) && !targetEnrollment\?\.group_id;/);
-  assert.match(receiptForm, /\{ groupId: confirmsEnrollment && groupOffered \? groupId : '' \}\);/);
+  // RWR-r5 B1: the same options also carry the duplicate-gate recorder of « Nouvel apprenant ».
+  assert.match(receiptForm, /\{ groupId: confirmsEnrollment && groupOffered \? groupId : '', recordPeople: mode === 'new' \? people\.record : null \}\);/);
   assert.match(receiptForm, /disabled=\{group\.free === 0\}/, 'a full group cannot be chosen');
   assert.equal(groupSeatsLabel(3), '3 places libres');
   assert.equal(groupSeatsLabel(1), '1 place libre');

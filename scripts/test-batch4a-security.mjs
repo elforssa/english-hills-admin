@@ -213,7 +213,7 @@ try {
   const legacyId=randomUUID();
   sql("insert into public.storage_assets(id,bucket_id,object_path,purpose,uploader_id,state,provenance) values ('"+legacyId+"','documents','assets/"+legacyId+"','legacy_unclassified','"+admin.id+"','staff_only','synthetic_unknown');");
   await denied(()=>app(admin,'sign',{assetId:legacyId}));
-  const registration={full_name:run+' Registration',telephone:'0600000000',email:run+'-registration@example.invalid',consent:true,idempotency_key:randomUUID()};
+  const registration={full_name:run+' Registration',telephone:'0612340216',email:run+'-registration@example.invalid',consent:true,idempotency_key:randomUUID()};
   async function register(body) { return fetch('http://127.0.0.1:3101/api/public/inscription',{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:3101','x-real-ip':run},body:JSON.stringify(body)}); }
   const studentCount=count('students');
   // EAP (127, D4): online pre-registration is closed; the route answers 410 Gone before

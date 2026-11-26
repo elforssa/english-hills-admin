@@ -50,7 +50,7 @@ export default function AdmissionsCalendar() {
     })}</section>) : null}</ReadState></div>
     <div className="mt-4 flex flex-wrap items-center gap-2"><Button variant="outline" disabled={cursors.length===1} onClick={()=>setCursors(x=>x.slice(0,-1))}>Précédents</Button><Button variant="outline" disabled={!query.data?.has_more||query.isFetching} onClick={()=>setCursors(x=>[...x,query.data.next_cursor])}>Suivants</Button>{query.data?.has_more&&<p role="status" className="text-sm text-slate-600">D’autres rendez-vous restent à charger. Cette page ne couvre pas toute la période.</p>}</div>
     <p className="mt-5 text-xs text-slate-500">Le nom d’examinateur est un libellé ; aucune disponibilité n’est vérifiée. Le test d’un prospect est annulé avec son rendez-vous (« Changer » ou clôture) ; un test annulé ou absent ne se replanifie pas. Replanifiez un test prévu ou renseignez son résultat depuis sa fiche.</p>
-    {selected&&<LeadDetailSheet key={selected} leadId={selected} onClose={()=>change('lead','',true)} onRestoreFocus={()=>{(origin.current?.isConnected ? origin.current : heading.current)?.focus();}}/>}
+    {selected&&<LeadDetailSheet key={selected} leadId={selected} onOpenLead={id=>change('lead',id,true)} onClose={()=>change('lead','',true)} onRestoreFocus={()=>{(origin.current?.isConnected ? origin.current : heading.current)?.focus();}}/>}
     {editing&&<LegacyPlacementEditor key={editing} id={editing} onClose={()=>setEditing(null)} onSave={async()=>{setEditing(null);await refresh();}}/>}
   </div>;
 }
