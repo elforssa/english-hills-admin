@@ -450,6 +450,7 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-portal-readiness.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-lead-ad-source.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-enrollment-at-payment.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-desk-payments.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-course-dates-close.sql
           python3 scripts/test-crm-dgi-b2-mutations.py
       - name: Payment, receipt deletion and receptionist rollback-only regression
@@ -508,6 +509,9 @@ jobs:
           node scripts/test-crm-time-travel-local.mjs
           node scripts/test-crm-sequences.mjs
           node scripts/test-crm-next-action-local.mjs
+      - name: Desk payments over HTTP — double click, retry, two tabs, two staff (RWR-r5 PR C1, invariant 13)
+        if: matrix.shard == 'sql-and-concurrency'
+        run: node scripts/test-receipt-idempotency-local.mjs
       # Last in its shard: it keeps its synthetic director login after cleanup.
       - name: Competing payments and duplicate idempotency key race
         if: matrix.shard == 'sql-and-concurrency'
@@ -600,7 +604,7 @@ jobs:
       - name: Lead intake director panel browser suite
         if: matrix.shard == 'browser-crm'
         run: npm run test:crm-intake-admin-browser
-      - name: Reception forms and day scripts (RWR-r5 PR A1, §4.9 T7, invariant 15, §8)
+      - name: Reception forms, day scripts and payment screens (RWR-r5 PRs A1 and C1, §4.9 T7, invariants 12 and 15, §8)
         if: matrix.shard == 'browser-crm'
         run: npm run test:reception-browser
   required:

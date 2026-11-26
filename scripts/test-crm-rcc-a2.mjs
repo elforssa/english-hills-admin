@@ -22,15 +22,23 @@ const commands = eap.slice(eap.indexOf('CREATE OR REPLACE FUNCTION public.crm_st
 const hinted = new Set([...commands.matchAll(/'crm_enrollment\.([a-z_]+)'/g)].map(m => m[1]));
 assert.deepEqual([...hinted].sort(), [...PLAN, ...FALLBACK_REASONS].sort(), 'every server hint is mapped and every mapped reason is emitted');
 assert(!/trial_requires_group/.test(commands), 'the essai reason is gone from the server command');
-const eapHints = new Set([...commands.matchAll(/hint = 'eap\.([a-z_]+)'/g)].map(m => m[1]));
+// The wrapper's eap.* refusals come from its latest bodies: crm_start_enrollment (127) and,
+// from migration 138 (RWR-r5 C1), crm_enroll_and_collect, crm_reserve_without_payment and
+// the payment guards. Every one has a French message and a recovery, and nothing else is mapped.
+const desk = readFileSync(new URL('../supabase/migrations/138_desk_payments.sql', import.meta.url), 'utf8');
+const eapHints = new Set([...`${commands}\n${desk}`.matchAll(/hint = 'eap\.([a-z_]+)'/g)].map(m => m[1]));
 assert.deepEqual([...eapHints].sort(), Object.keys(EAP_REASONS).sort(), 'the wrapper\'s eap.* refusals are mapped');
+// The client words are the server's own (a raise doubles its %).
+for (const reason of eapHints) if (desk.includes(`'eap.${reason}'`)) {
+  assert(desk.replaceAll('%%', '%').includes(EAP_REASON_TEXT[reason]), `${reason}: the 138 server text is the client text`);
+}
 for (const [reason, entry] of Object.entries(EAP_REASONS)) assert.equal(entry.message, EAP_REASON_TEXT[reason], `${reason}: the shared French wording`);
-const FIELDS = [null,'name','birth','confirmNew','session','year','level','group','amount'];
+const FIELDS = [null,'name','birth','confirmNew','session','year','level','group','amount','gross','discount','dueDate'];
 for (const [reason, entry] of Object.entries({ ...ENROLLMENT_REASONS, ...EAP_REASONS })) {
   assert(entry.message && /[éèàâêîôûçÉ’«]|^[A-Z]/.test(entry.message) && !/[A-Za-z]+_[a-z]+|crm_|SQL|uuid/i.test(entry.message), `${reason}: French message without tokens`);
   assert([null,1,2,3].includes(entry.step), `${reason}: step`);assert(FIELDS.includes(entry.field), `${reason}: field`);
   assert([true,false,'until-change'].includes(entry.submit), `${reason}: submit`);
-  assert(['close','discovered','correct','linked','escalate','reselect','refresh','enrollments','retry'].includes(entry.recovery), `${reason}: recovery`);
+  assert(['close','discovered','correct','linked','escalate','reselect','refresh','enrollments','retry','balances'].includes(entry.recovery), `${reason}: recovery`);
   if (entry.field) assert(entry.step, `${reason}: a field always has a step`);
 }
 for (const reason of ['birth_date_future','birth_date_invalid','learner_name_invalid']) assert.equal(ENROLLMENT_REASONS[reason].step, 1, `${reason} goes to step 1, not step 2`);

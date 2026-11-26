@@ -223,9 +223,10 @@ export default function CrmActionDialog({
       });
       await refresh();
       // No success pop-up (§4.9): a toast, and a new prospect opens in the drawer. Only
-      // possible existing contacts keep the result screen.
+      // possible existing contacts keep the result screen. « Inscrire maintenant » goes on
+      // to « Inscrire et encaisser » in the same flow (RWR-r5 C1, day script 2).
       if (action === 'manual' && saved?.contact_candidates?.length) { setResult(saved); toast.success('Prospect créé'); }
-      else if (action === 'manual') { toast.success('Prospect créé'); onCreated(saved.lead.id); }
+      else if (action === 'manual') { toast.success('Prospect créé'); onCreated(saved.lead.id, firstForm.kind === 'enrol'); }
       else { toast.success('Enregistré'); onClose(); }
     } catch (err) {
       if (isRecordConflict(err)) {
@@ -249,10 +250,10 @@ export default function CrmActionDialog({
     }} onEscapeKeyDown={e => {
       if (busy) e.preventDefault();
     }}><DialogHeader><DialogTitle>{titles[action]}</DialogTitle><DialogDescription>{action === 'manual' ? 'Un contact, un apprenant, une prochaine conversation.' : lead?.contact_name}</DialogDescription></DialogHeader>
- {result ? <div className="space-y-4" role="status"><p className="font-medium">{action === 'manual' ? 'Nouveau prospect créé.' : 'Action enregistrée.'} {STATUS[result.lead.status]}</p>{result.open_tasks?.[0] && <div className="rounded-lg bg-blue-50 p-4 text-sm"><p className="font-medium">Prochaine action · {taskTitle(resultNextTask || result.open_tasks[0])}</p>{SCHEDULE_KINDS[resultNextTask?.schedule_kind] && <p className="mt-1 text-xs font-medium text-blue-900">{SCHEDULE_KINDS[resultNextTask.schedule_kind]}</p>}<p className="mt-1">{scheduledLabel(resultNextTask)}</p><p className="mt-2 text-xs text-slate-500">{resultNextTask?.local_date ? 'Horaire confirmé par le calendrier de suivi.' : 'Consultez la fiche pour confirmer l’horaire.'}</p></div>}{result.unreachable_eligible && <p className="text-sm">{result.failed_attempts} appels infructueux. Vous pouvez prévoir un autre appel ou clôturer comme injoignable depuis la fiche.</p>}
+ {result ? <div className="space-y-4" role="status"><p className="font-medium">{action === 'manual' ? 'Nouveau prospect créé.' : 'Action enregistrée.'} {STATUS[result.lead.status]}</p>{result.open_tasks?.[0] && <div className="rounded-lg bg-blue-50 p-4 text-sm"><p className="font-medium">Prochaine action · {result.next_action?.label || taskTitle(resultNextTask || result.open_tasks[0])}</p>{SCHEDULE_KINDS[resultNextTask?.schedule_kind] && <p className="mt-1 text-xs font-medium text-blue-900">{SCHEDULE_KINDS[resultNextTask.schedule_kind]}</p>}<p className="mt-1">{scheduledLabel(resultNextTask)}</p><p className="mt-2 text-xs text-slate-500">{resultNextTask?.local_date ? 'Horaire confirmé par le calendrier de suivi.' : 'Consultez la fiche pour confirmer l’horaire.'}</p></div>}{result.unreachable_eligible && <p className="text-sm">{result.failed_attempts} appels infructueux. Vous pouvez prévoir un autre appel ou clôturer comme injoignable depuis la fiche.</p>}
   {action === 'manual' && result.contact_candidates?.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm"><p className="font-medium">Contact existant possible</p><p className="my-2">Le nouveau prospect est déjà créé. Aucun contact n’a été fusionné. Ouvrir un contact existant ne rattache pas cette demande à son dossier.</p>{result.contact_candidates.map(candidate => <div key={candidate.id} className="mt-3"><p>{candidate.display_name}</p><Button variant="link" className="px-0" onClick={() => onCandidate(candidate.id)}>Ouvrir les prospects existants</Button></div>)}</div>}
 
-  <Button disabled={busy} onClick={() => action === 'manual' ? onCreated(result.lead.id) : onClose()}>{action === 'manual' ? 'Continuer avec le nouveau prospect' : 'Terminé'}</Button>
+  <Button disabled={busy} onClick={() => action === 'manual' ? onCreated(result.lead.id, firstForm.kind === 'enrol') : onClose()}>{action === 'manual' ? 'Continuer avec le nouveau prospect' : 'Terminé'}</Button>
  </div> : <form onSubmit={submit} className="space-y-4"><fieldset disabled={busy} className="space-y-4">
   {action === 'manual' && <>{text('name', 'Nom du contact', true)}{text('phone', 'Téléphone', false, 'tel')}{text('whatsapp', 'WhatsApp (si différent)', false, 'tel')}<div className="grid grid-cols-[2fr_1fr] gap-3">{text('learner', 'Nom de l’apprenant', true)}<Field label="Âge"><input className={inputClass} type="number" min="0" max="120" value={values.age || ''} onChange={e => set('age', e.target.value)} /></Field></div>{text('program', 'Programme / intérêt')}{select('source', 'Origine', {
               'Téléphone': 'Téléphone',

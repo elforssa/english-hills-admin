@@ -924,6 +924,11 @@ Rule (a) detail from the read-only plan: no cancelled action carried a test, and
 - **D1 dropped.** The seven D1 functions are dropped. `crm_data_step_journal` and its rows stay.
 - **Wrappers revoked.** Twelve old wrappers are revoked from `public`, `anon`, `authenticated` and `service_role`: `crm_add_note`, `crm_record_call_outcome`, `crm_record_whatsapp`, `crm_record_conversation`, `crm_record_conversation_decision`, `crm_qualify_lead`, `crm_schedule_task`, `crm_complete_task`, `crm_cancel_task`, `crm_close_lost`, `crm_close_not_qualified` and `crm_reopen_lead`. `crm_reassign`, `crm_book_placement_test` and `crm_update_placement_test` keep their grant, because current screens call them.
 - **`placement_tests` grants.** `anon` loses every table and column privilege; `authenticated` loses `TRUNCATE` and keeps `DELETE` and its column `INSERT`/`UPDATE` (owner decision 2026-11-23, below).
+- **Payment guards on every path (section 7, after the owner review of PR #216).** Every charge and receipt is inserted by `create_charge_payment_financial` (not API-executable), reached through `create_charge_payment` (« Encaisser », and « Inscrire et encaisser » after its CRM step) and `crm_reserve_without_payment`; no application code writes charges or receipts with the service role.
+  - `receipts_reserved_commitment_guard` (before insert on `receipts`): no receipt on a charge reserved for a prospect that is still open (not merged, no enrollment, not converted, lost or not qualified) — `eap.reservation_collect_on_prospect`. « Inscrire et encaisser » links that prospect to its new enrollment before paying, so only its own payment passes; another prospect of the same learner, « Encaisser » (any role) and a service-role write are refused. A prospect closed without enrolling leaves an ordinary commitment, which « Encaisser » collects with its enrollment (ADR-015).
+  - `create_charge_payment`, re-created from its 127 body (prosrc md5 `2263c8d7…`, checked by the precondition) with one block: a new tuition charge (not « Autre ») **without a chosen enrollment** next to a live unlinked commitment of the same learner, programme and year is refused — `eap.unlinked_commitment_exists` — so « Encaisser » collects the commitment instead. A charge paid onto an enrollment the staff chose passes (a deliberate link, for example the current session while the next session's deposit is open, the 128 shape); a retry of an earlier request replays. « Inscrire et encaisser » (always an explicit enrollment) holds the same rule itself, with « Nouvelle session » as its only override; « Réserver sans paiement » holds it before its charge.
+  - The trigger function is in `crm_security`, with no EXECUTE for `anon`, `authenticated` or `service_role`.
+  - A row trigger on `charges` was tried first and dropped: it refused charges paid onto a chosen enrollment next to a next-session deposit (`test-course-dates-close.sql`) and fixture setups of `test-finance-batch-e.sql`.
 - **Rows.** The migration writes no row.
 - **Restore file.** `scripts/rollback/137_crm_one_next_action_enforce_restore.sql` drops the triggers, functions and index, re-grants the wrappers and restores the 136 `placement_tests` grants exactly (checked with `aclexplode`). D1 is not restored.
 
@@ -1102,6 +1107,106 @@ Rule (a) detail from the read-only plan: no cancelled action carried a test, and
 - Pre-existing, not caused by A2: `crm_get_today` fails with `invalid input syntax for type time` on legacy non-CRM tests with malformed times.
 
 **Gates after this release:** release A (A1, D1, A2) complete. **Next: B1 and C1**, which can run in parallel; then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7, each with the owner's separate approval.
+
+### Implementation record: PR C1 (payments, migration 138)
+
+**Owner approval (Maroine, 2026-11-25), decisions and scope lines verbatim:**
+
+> Decisions: OD-2 = A (« Réserver sans paiement » = a charge with a due date linked to the prospect; no enrollment, no seat, no conversion; ADR-015 kept). OD-7 = A (only the director voids receipts).
+>
+> The prospect's next action « Encaisser l'acompte » after « Réserver sans paiement » MUST go through set_next_action and satisfy the 137 triggers. No bypass, no change to the one-action rule, and no second open action.
+>
+> Not authorized: Production, data steps, merge, release.
+
+Migration 138: C1 merges first and PR B1 rebases onto it as 139 (owner, 2026-11-25). Implemented, not merged, not applied anywhere but private local stacks.
+
+**What `138_desk_payments.sql` does.**
+
+- **Precondition.** Refuses (`55000`) unless `crm_enroll_and_collect` is the 127 body (prosrc md5 `84babfb6…`), `create_charge_payment` is the 127 body (`2263c8d7…`), `crm_security.action_label` is the 136 body (`fae61b36…`) and migration 137's `crm_tasks_one_open_per_lead` exists.
+- **`crm_charge_reservations`.** Prospect ↔ charge link (charge unique), RLS on, no API grant, append-only trigger (`eap.reservation_append_only`).
+- **`get_open_balances(student)`.** Requires `manage_finance_operations`. Every live, not voided charge with a balance from `charge_balances`, oldest first (`created_at, id`), with the enrollment status and `reserved_lead_id` while the reserving prospect is still open and unconverted.
+- **`find_duplicate_receipts(student, charge, amount, date)`.** The §6.1 rule: `same_charge` (same learner, amount, day and charge) or `recent_by_you` (same staff member, same learner, within 2 minutes); live receipts only, at most 5.
+- **`crm_enroll_and_collect`.** Re-created from the 127 body. The payment may name `charge_id` (an unlinked live commitment of the same learner, programme and year, validated under lock, else `eap.commitment_unavailable`); without it, a new tuition charge next to an unlinked live charge of the same programme and year is refused (`eap.unlinked_commitment_exists`) unless `new_session` is true. A zero payment on a commitment is refused (`eap.payment_required`). No `service_role` EXECUTE (as at 127).
+- **`crm_reserve_without_payment(request_key, data)`.** Enrolment-intent lock, replay through `crm_command_requests`, prospect, programme, level, price and due-date checks (due date from the business date to one year), new or existing learner as in `crm_start_enrollment`, refusals next to an unlinked commitment or an active enrollment, then the charge through `create_charge_payment_financial` (payment 0, stable key), the reservation row, one primary history entry and the next action through `crm_security.set_next_action` (`enrollment_followup`, reminder, due on the due date, instructions « Encaisser l’acompte »). The 137 index and deferred triggers check the result; no bypass. Granted to `authenticated` only (no `service_role` EXECUTE, as for `crm_enroll_and_collect`).
+- **`crm_security.action_label`.** The 136 body with one change: the enrolment action written by `crm_reserve_without_payment` is labelled « Encaisser l’acompte » on every view (invariant 9). The marker is structured: the task's source key (`reservation:<lead>:<request>:next-action`, source kind `enrollment`), not the instruction text, so a reschedule keeps the label and an edited instruction does not change it.
+- **`crm_security.set_next_action`.** The 137 body (prosrc md5 `0b48aedd…`, checked in the precondition) with one block: when an « Encaisser l’acompte » action is replaced by another enrolment action (« Changer » to a new date, or an exchange that keeps the enrolment step) while its reservation is open (a live charge without an enrollment), the new action carries the marker (source kind `enrollment`, key `reservation:<lead>:moved:<command>:next-action`). A different kind of action, a close or the payment ends it. The restore file re-creates the 137 body and checks its md5.
+- **Rows.** The migration writes no row. **Restore file:** `scripts/rollback/138_desk_payments_restore.sql` (refuses while reservation rows exist unless exported; restores the 127 and 136 bodies and checks their md5; keeps reserved charges and open actions as ordinary rows). Restore and re-apply were run on the private stack.
+
+**Application.**
+
+- `src/components/finance/PaymentPanel.jsx` and `src/lib/finance/paymentPanel.mjs`: the open-balance chooser (« Encaisser sur cet engagement »), the amounts, all errors at once and the duplicate panel, shared by `ReceiptForm.jsx` and `CrmEnrollmentDialog.jsx`.
+- « Encaisser » (`ReceiptForm.jsx`): reads `get_open_balances`, opens on the oldest open balance, shows a reserved charge with « Ouvrir le prospect » only, a zero payment needs a due date (« Réserver sans paiement »), the duplicate panel replaces `window.confirm`.
+- Wizard (`CrmEnrollmentDialog.jsx`): step 1 is one click when nobody matches; level re-filled when the programme changes back; « Encaisser sur cet engagement » / « Nouvelle session »; « Encaisser maintenant » / « Réserver sans paiement »; every payment error at once; « La remise dépasse le prix » inline; the duplicate check; a reservation result screen.
+- Receipts list: « Avec solde » (`?solde=1`), French programme labels, no repeated session or service; « Reste aujourd’hui ».
+- Void page and intake review: one idempotency key per form opening (reused while the request is unchanged; a lock against double submit).
+- « Ajouter un prospect » with « Inscrire maintenant » opens « Inscrire et encaisser » after the save (day script 2 « one flow »; `CrmActionDialog.jsx`, `CrmWorkspace.jsx`).
+- Error texts for the new reasons (`membershipActions.mjs`, `enrollmentErrors.mjs`); `taskTitle` shows « Encaisser l’acompte » for task rows.
+
+**Interpretations — confirmed by the owner (Maroine, 2026-11-25), verbatim:**
+
+> - Approved: « Réserver sans paiement » from Encaisser without a prospect = a commitment with a required price and due date, no payment, linked to the learner; from the wizard, linked to the prospect.
+> - Approved: the action_label change in 139.
+
+(« 139 » in this quote is the migration's provisional number at the time; it is 138.)
+> - Approved: « Inscrire maintenant » opens the wizard after the prospect is created.
+
+As implemented:
+
+1. On « Encaisser » (no prospect on that screen), « Réserver sans paiement » is the existing zero-payment commitment of the learner; the screen requires a price above zero and a due date (the server keeps the 127 commitment rules and does not require the due date there). Only the CRM wizard links a reservation to a prospect, where the server requires both, and sets « Encaisser l’acompte ».
+2. The label change in `action_label` is in 138 so that the card, drawer, Tâches row and calendar agree (invariant 9); the instructions alone did not reach the server label.
+3. « Inscrire maintenant » on a new prospect now goes straight to the wizard (needed for day script 2 at ≤ 12, one flow).
+
+**Owner review of PR #216 (2026-11-25), item 3, verbatim:**
+
+> Close the residual on the server: a direct create_charge_payment (or any other payment path) must not pay a reserved commitment, because that would create a payment without an enrollment (ADR-015). Paying a reserved commitment must go through the enrol-and-collect path. Add a test. Also confirm the server guard against a second tuition charge covers every path that creates a tuition charge, not just crm_enroll_and_collect. If one doesn't, guard it or list it.
+
+Done by section 7 above. Paths that pay a reserved commitment: every one (the receipt trigger, including service-role writes) except « Inscrire et encaisser » on its own prospect. Paths that create a tuition charge, all guarded against a second charge next to an unlinked commitment: `create_charge_payment` at « Encaisser » (section 7), `crm_enroll_and_collect` (section 4) and `crm_reserve_without_payment` (section 5); `create_charge_payment_financial` is the only function that inserts charges or receipts and is not API-executable.
+
+Listed, not guarded: a direct service-role insert into `charges` (no application code does it; operator data steps follow their own approval); and a new charge paid onto an enrollment the staff chose, by design.
+
+Outside the one-commitment rule, unchanged on purpose and listed: a payment at « Encaisser » that creates a new charge while the learner has an active enrollment of the same programme and year (and no unlinked commitment) is still attached to that enrollment, as before 138 (the 127 behaviour; a further charge on an enrolled learner, for example another package, is not an NF-4 commitment).
+
+**Independent review of PR #216 at `67522a6` (2026-11-25): CHANGES REQUIRED. Owner decisions (Maroine, 2026-11-25), verbatim:**
+
+> Fix B1: make crm_security.reserved_commitment_receipt_guard() SECURITY DEFINER with search_path pinned and EXECUTE kept revoked from every API role, so an ordinary service_role receipt on an unreserved charge works exactly as at 137, and a reserved one is refused with eap.reservation_collect_on_prospect. Rewrite the test to run under « set local role service_role » for both cases.
+>
+> Fix B2: send new_session only when the user explicitly chose « Nouvelle session » (f.newSession); show another open prospect's reservation with « Ouvrir le prospect » (not selectable); never land on « Nouvelle session » after a refusal. Add a browser test of the screen after a reservation_collect_on_prospect refusal, and a server test that a second tuition charge without an explicit new_session is refused.
+>
+> Nits: revoke service_role EXECUTE on crm_reserve_without_payment, as for crm_enroll_and_collect. Base the « Encaisser l'acompte » label on a structured marker, not the instruction text, if it stays small; otherwise list it.
+>
+> Merge order: C1 merges FIRST. Renumber your migration to 138 (and the rollback file and every test that names it). B1 will rebase onto you as 139 and do the integration (E.164 for the reservation's new learner, reservations following prospect merges). Don't change B1's files.
+
+The reviewer's full text was not pasted into the implementation session; the fixes follow the owner's decisions above.
+
+- **B1.** The receipt guard is `SECURITY DEFINER` with `search_path = pg_catalog, pg_temp`; EXECUTE stays revoked from `public`, `anon`, `authenticated` and `service_role`. Before, as `SECURITY INVOKER`, every service-role receipt with a charge failed with `42501` (the service role cannot read reservations or prospects); the old test ran as the owner. `test-desk-payments.sql` now runs both cases under `set local role service_role` (checking that this role cannot read those tables): a receipt on an unreserved charge is written, one on a reserved charge is refused with `eap.reservation_collect_on_prospect`. With the guard switched back to invoker the suite fails with `42501`, as the review found.
+- **B2.** The wizard sends `new_session` only when the staff clicked « Nouvelle session ». A commitment reserved for another open prospect is shown with « Ouvrir le prospect » (link to that prospect) and is neither selectable nor chosen by default; the wizard opens on the oldest selectable commitment. With commitments listed and neither one nor « Nouvelle session » chosen, it shows « Choisissez l’engagement à encaisser, ou « Nouvelle session ». », hides the new-price fields and sends nothing. After a refusal that re-reads the balances it opens on the oldest selectable commitment or on no choice, never on « Nouvelle session ». Tests: `test-payment-panel.mjs` (selection helpers); `test-payment-screens-browser.mjs` (another prospect's wizard, a submit with no choice, and the screen after a `reservation_collect_on_prospect` refusal reached through a stale balance read); `test-desk-payments.sql` (a second tuition charge with `new_session` false or absent is refused).
+- **Nits.** `crm_reserve_without_payment` and `crm_enroll_and_collect` have no `service_role` EXECUTE (tested). The server label uses the task's source key (above, tested both ways).
+- **Renumbered** to 138 with its restore file, every test that names it and the upgrade-lane ceilings (`max = 138`, 138 in the lists).
+
+**Re-review of PR #216 at `84e8432` (2026-11-25): CHANGES REQUIRED, one finding (invariant 9).** The Opportunités list rendered `taskTitle(lead.next_task)`, whose payload has no instructions or source key, so it showed « Finaliser l’inscription » where the card, drawer, Tâches and calendar show « Encaisser l’acompte ». Fixed as the reviewer proposed: the list renders `lead.next_action.label` (as `OpportunityCard` does), the action dialog's result card renders `result.next_action.label`, `taskTitle` lost its instruction-text branch, and `test-payment-screens-browser.mjs` checks the list row.
+
+**Owner decision (Maroine, 2026-11-25), verbatim:**
+
+> Owner decision (Maroine, 2026-11-25): moving an « Encaisser l'acompte » action to a new date with « Changer » (same enrolment kind, same open reservation) keeps the « Encaisser l'acompte » label on every screen. The marker carries over to the new action. Only a different kind of action, a close or a payment ends it. Implement it in 138 (not applied yet) through set_next_action, with a test. Record my decision verbatim in the plan's implementation record.
+
+Implemented in 138 through `set_next_action` (above). `test-desk-payments.sql` moves the action twice with `crm_change_next_action` (one open action each time, a new action carrying the marker, the label kept, the previous action replaced), then checks that another kind of action, a close (and a reopen to an enrolment action) and the payment end it.
+
+**Residuals (not in this PR).**
+
+- Prices are typed (no catalogue until PR B2).
+- Integration with PR B1 (E.164 for the reservation's new learner, reservations following prospect merges) is B1's, as migration 139.
+
+**Tests.**
+
+- New: `test-desk-payments.sql` (grants and roles, `get_open_balances`, the duplicate rule and window, reservation refusals, success, replay, conflict, append-only, label, the guard and its scope, the section-7 guards on « Encaisser » by every staff role, another prospect, a service-role receipt, a closed prospect, « Autre », another year, a chosen enrollment next to a next-session deposit and a retry; rolled back; fails with either guard removed, or with the receipt guard as invoker), `test-receipt-idempotency-local.mjs` (invariant 13 over HTTP: double click, retry, two tabs, two staff, void double click, receptionist void refused, wizard double submit, reservation double click and races; the 138 guards with two staff at once — two commitments, and collecting a reservation from its card while « Encaisser » tries it; 42 checks), `test-payment-panel.mjs` (unit, in `npm test`), `test-payment-screens-browser.mjs` (invariant 12 in both screens, « Encaisser sur cet engagement », the duplicate panel on both screens, the OD-2 reservation and its collection, « Avec solde »), `scripts/lib/desk-payments-local.mjs` (clean-up of payment fixtures).
+- Day scripts 2 (12 actions, ≤ 12, one flow) and 9 (3 actions, ≤ 4, opens on the balance) added to `test-reception-day-scripts-browser.mjs`.
+- Changed for the new behaviour, assertions otherwise unchanged: `test-crm-rcc-a2-browser.mjs`, `test-crm-rcc-b1-browser.mjs`, `test-crm-phase6-browser.mjs` (one-click step 1; phase6 chooses « Nouvelle inscription » before the new-charge checks), `test-receipt-client-regressions.mjs` (no `window.confirm`).
+- `test-crm-rcc-a2.mjs` and `test-membership-actions.mjs` read the eap.* refusals from 138 too: every one has the same French text on the client, and the wizard's table maps exactly the server's refusals. (Verify at `fec11c2` failed because `test-crm-rcc-a2.mjs` still read the server's refusals from the 127 file only; the seven C1 reasons already had their French messages. Three C1 server texts were aligned with them word for word, and the two section-7 reasons were added.)
+- `test-receipt-charge-payments.sql`: the catalog loop's zero-payment commitments use school year 2028/2029, so the suite's later 2026/2027 payments without a chosen enrollment are not second charges next to them; no assertion changed.
+- `test-payment-screens-browser.mjs`: « Avec solde » waits for the filtered rows before counting (Verify at `fec11c2` counted during the reload on the runner).
+- Upgrade-lane ceilings to 138; `receptionist-function-classification.json` regenerated (three new functions, gate `manage_finance_operations`).
+
+**Release notes (for a later approval).** Apply 138 first, then deploy the application within minutes (the C1 build calls the new functions; the previous build keeps working on 138 except that « Encaisser » refuses a new tuition charge without a chosen enrollment next to an unlinked commitment, and every path refuses a payment on a commitment reserved for an open prospect). Rollback: deploy the previous build, then run the restore file.
 
 ## IMPLEMENTATION CONTRACT
 

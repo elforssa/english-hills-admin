@@ -49,7 +49,8 @@ const button=name=>dialog().getByRole('button',{name,exact:true});
 async function done(){await button('Terminé').click();}
 async function open(id){await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
 async function start(id){await open(id);await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await dialog().getByText('1 / 3 · Apprenant').waitFor();}
-async function newLearner(){await button('Créer un nouvel apprenant').click();await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();}
+// RWR-r5 C1 (§6.1): with no matching learner, « Créer un nouvel apprenant » goes straight to step 2.
+async function newLearner(){await button('Créer un nouvel apprenant').click();await dialog().getByText('2 / 3 · Inscription').waitFor();}
 async function toPayment(){await button('Continuer').click();await dialog().getByText('3 / 3 · Paiement').waitFor();}
 async function pay(paid='1000',gross='3000'){await dialog().getByLabel('Prix brut convenu',{exact:true}).fill(gross);await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill(paid);}
 async function noRaw(){const text=await page.locator('body').innerText();assert(!/crm_enrollment|eap\.|SQLSTATE|\b22023\b|\bPT409\b|\b40001\b|\b42501\b|Invalid new learner|Qualified unlinked|Student unavailable|Enrollment (unavailable|group)|Valid future task|Payment exceeds|Idempotency key|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text),'no raw server text, hint, SQLSTATE or identifier rendered');}

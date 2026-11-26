@@ -247,7 +247,11 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.match(receiptForm, /eq\('idempotency_key', key\)/);
   assert.match(receiptForm, /Ce paiement a déjà été enregistré : reçu N°/);
   assert.match(receiptForm, /if \(todayPayment > 0\) savePendingPayment\(idempotencyKey\.current\(\)\);\n\s+onSubmit\(/);
-  assert.match(receiptForm, /window\.confirm\(identicalReceiptPrompt\(/);
+  // RWR-r5 C1 (§6.1): the in-app duplicate panel replaces window.confirm; the rule is the server's.
+  assert.doesNotMatch(receiptForm, /window\.confirm/);
+  assert.match(receiptForm, /fetchDuplicates\(getBrowserClient\(\), \{ studentId: form\.student_id, chargeId: form\.charge_id,/);
+  assert.match(receiptForm, /<DuplicateReceiptPanel matches=\{duplicates\} onConfirm=\{finish\}/);
+  assert.match(receiptForm, /rpc\('get_open_balances', \{ p_student: form\.student_id \}\)/);
   assert.match(receiptForm, /clearPendingPayment\(\{ key: result\.key \}\)/);
   assert.match(receiptForm, /if \(submitting\.current\) return;/);
   const newReceiptPage = await readFile(new URL('../src/app/(admin)/receipts/new/page.jsx', import.meta.url), 'utf8');

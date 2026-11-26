@@ -99,6 +99,8 @@ export function noteRequired({ action, outcomeLed, interaction, reason, step, un
     || result === 'other_step'
     || result === 'not_suitable' && unsuitableReason === 'other';
 }
+// A task row's type title. The action label of a prospect (« Encaisser l’acompte »
+// included, invariant 9) is the server's next_action.label, never derived here.
 export function taskTitle(task) {
   if (!task) return 'Action';
   return `${TASKS[task.task_type] || 'Action'}${FOLLOWUP_REASONS[task.followup_reason] ? ` · ${FOLLOWUP_REASONS[task.followup_reason]}` : ''}`;

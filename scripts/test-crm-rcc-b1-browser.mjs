@@ -376,7 +376,7 @@ try {
   phase=`${E} long alert 390`;await setSize({width:390,height:844});await openDrawer(qualified[1]);
 
   await sheet().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();
-  await top().getByRole('button',{name:'Créer un nouvel apprenant',exact:true}).click();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('2 / 3 · Inscription').waitFor();
+  await top().getByRole('button',{name:'Créer un nouvel apprenant',exact:true}).click();await top().getByText('2 / 3 · Inscription').waitFor();
   // EAP: the payment step is the long one (price, discount, amount, date, method, reference, note).
   await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('3 / 3 · Paiement').waitFor();await settled(top());
   const step3=await top().evaluate(el=>{const f=el.querySelector('[data-dialog-footer]').getBoundingClientRect(),r=el.getBoundingClientRect();return {scrolls:el.scrollHeight>el.clientHeight,fb:f.bottom,bottom:r.bottom,top:r.top,vh:innerHeight};});
@@ -400,7 +400,7 @@ try {
   // 9. Frozen RCC-A2 retry survives breakpoint crossings (I5): same dialog node, same key/payload.
   phase=`${E} frozen across breakpoints`;await setSize({width:390,height:844});const frozenLead=qualified[2+(engine===chromium?0:1)];await openDrawer(frozenLead);
   await sheet().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();await top().getByRole('button',{name:'Créer un nouvel apprenant',exact:true}).click();
-  await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('2 / 3 · Inscription').waitFor();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('3 / 3 · Paiement').waitFor();
+  await top().getByText('2 / 3 · Inscription').waitFor();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('3 / 3 · Paiement').waitFor();
   await top().getByLabel('Prix brut convenu',{exact:true}).fill('3000');await top().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('1000');
   await page.route('**/rest/v1/rpc/crm_enroll_and_collect',route=>route.fulfill({status:502,contentType:'text/plain',body:'Bad Gateway'}));startCalls.length=0;
   await top().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();

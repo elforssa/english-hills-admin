@@ -61,6 +61,18 @@ export const EAP_REASONS = {
   // The chosen enrollment already has a charge: step 2 re-reads the enrollments, which
   // then offer « Encaisser sur ce montant » (receipt form) or the Q12 link.
   enrollment_already_charged: { message: EAP_REASON_TEXT.enrollment_already_charged, step: 2, field: null, submit: true, recovery: 'enrollments' },
+  // RWR-r5 C1 (138): the payment step re-reads the learner's open balances.
+  unlinked_commitment_exists: { message: EAP_REASON_TEXT.unlinked_commitment_exists, step: 3, field: null, submit: true, recovery: 'balances' },
+  commitment_unavailable: { message: EAP_REASON_TEXT.commitment_unavailable, step: 3, field: null, submit: true, recovery: 'balances' },
+  reservation_price_required: { message: EAP_REASON_TEXT.reservation_price_required, step: 3, field: 'gross', submit: true, recovery: 'correct' },
+  reservation_free: { message: EAP_REASON_TEXT.reservation_free, step: 3, field: 'discount', submit: true, recovery: 'correct' },
+  reservation_due_required: { message: EAP_REASON_TEXT.reservation_due_required, step: 3, field: 'dueDate', submit: true, recovery: 'correct' },
+  reservation_due_invalid: { message: EAP_REASON_TEXT.reservation_due_invalid, step: 3, field: 'dueDate', submit: true, recovery: 'correct' },
+  reservation_already_enrolled: { message: EAP_REASON_TEXT.reservation_already_enrolled, step: 2, field: null, submit: true, recovery: 'enrollments' },
+  // A commitment reserved for another open prospect of this learner: the balances are
+  // re-read; « Nouvelle session » stays available. A reservation is never edited.
+  reservation_collect_on_prospect: { message: EAP_REASON_TEXT.reservation_collect_on_prospect, step: 3, field: null, submit: true, recovery: 'balances' },
+  reservation_append_only: { message: EAP_REASON_TEXT.reservation_append_only, step: null, field: null, submit: false, recovery: 'escalate' },
 };
 export const PAID_LINK_REFUSED_MESSAGE = 'Aucun paiement n’est enregistré pour cette inscription : saisissez le paiement pour la confirmer.';
 // Payment refusals of create_charge_payment (122) carry no hint. The desk guard answers
