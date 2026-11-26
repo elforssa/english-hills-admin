@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { assertLocalStack, resetLocalDatabase } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 assertLocalFeatureBranch();
 const processEnv = { ...process.env, PGPASSWORD: 'postgres', SUPABASE_TELEMETRY_DISABLED: '1', DISABLE_EXTERNAL_EMAIL: 'true' };
@@ -76,7 +78,7 @@ function catalogFails() {
 }
 
 console.log('Resetting local database to migration 118');
-cli(['db', 'reset', '--local', '--version', '118', '--no-seed']);
+resetLocalDatabase(['--version', '118', '--no-seed'], { env: processEnv, stdio: ['ignore', 'pipe', 'ignore'] });
 assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '118');
 const before = catalog(), beforeAround = surroundings();
 const offenders = Object.keys(before).filter(name => before[name].src.includes("'40001'") || /serialization_failure/i.test(before[name].src)).sort();

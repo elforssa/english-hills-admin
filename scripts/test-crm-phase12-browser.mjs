@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 assert(readFileSync('.git/HEAD', 'utf8').startsWith('ref: refs/heads/codex/'));
 const env = Object.fromEntries(readFileSync('.env.local', 'utf8').split('\n').flatMap(line => {
   const m = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);

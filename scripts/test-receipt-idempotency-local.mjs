@@ -17,6 +17,8 @@ import { createClient } from '@supabase/supabase-js';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { openDaySql, openSlotSql } from './lib/centre-days.mjs';
 import { removeStaffAndPayments } from './lib/desk-payments-local.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 assertLocalFeatureBranch();
 const processEnv = { ...process.env, PGPASSWORD: 'postgres', SUPABASE_TELEMETRY_DISABLED: '1', DISABLE_EXTERNAL_EMAIL: 'true' };

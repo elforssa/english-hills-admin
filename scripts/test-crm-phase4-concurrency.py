@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import subprocess
 import uuid
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 ROOT = Path(__file__).resolve().parents[1]
 head = (ROOT / '.git/HEAD').read_text().strip()
@@ -37,6 +39,17 @@ set local role authenticated;
 select public.crm_{name}({quote(key)}::uuid,{quote(json.dumps(payload))}::jsonb);
 commit;"""
     result = sql(statement, False)
+    if result.returncode:
+        return {'error': result.stderr}
+    return json.loads(result.stdout.strip())
+
+def trusted(name, key, payload):
+    # 142 (deviation 3): crm_create_manual_lead has no API role; as fixture setup it runs
+    # from the trusted postgres session as the same staff member, so the fixture is unchanged.
+    result = sql(f"""begin;
+set local request.jwt.claim.sub={quote(actor)};
+select public.crm_{name}({quote(key)}::uuid,{quote(json.dumps(payload))}::jsonb);
+commit;""", False)
     if result.returncode:
         return {'error': result.stderr}
     return json.loads(result.stdout.strip())
@@ -75,7 +88,7 @@ commit;""")
         'not_qualified': {'close': {'status': 'NOT_QUALIFIED', 'reason': 'program_not_suitable', 'note': 'Parent conversation'}},
     }
     for decision in ('callback', 'qualify', 'lost', 'not_qualified'):
-        intake = command('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Decision test', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
+        intake = trusted('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Decision test', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
         lead = intake['lead']['id']
         task = intake['open_tasks'][0]
         if decision == 'callback':
@@ -94,7 +107,7 @@ commit;""")
         assert command('log_exchange', key, payload) == results[0]
         assert 'Request key payload conflict' in command('log_exchange', key, payload | {'note': 'Changed'}).get('error', '')
         print('PASS concurrent + network replay: ' + decision, flush=True)
-    intake = command('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Decision race', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
+    intake = trusted('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Decision race', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
     lead = intake['lead']['id']
     payload = {'lead_id': lead, 'expected_version': 1, 'channel': 'phone', 'result': 'spoke', 'note': 'Parent conversation', 'next': nexts['lost']}
     results = race('log_exchange', [(str(uuid.uuid4()), payload), (str(uuid.uuid4()), payload)])

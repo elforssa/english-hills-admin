@@ -3,6 +3,7 @@
 from pathlib import Path
 import subprocess
 import sys
+from lib.local_stack import assert_local_stack
 
 platform = Path(sys.argv[1]).read_text()
 assert 'CREATE TABLE auth.users' in platform and 'CREATE TABLE storage.objects' in platform
@@ -10,6 +11,7 @@ assert 'CREATE TABLE public.' not in platform and '\nCOPY ' not in platform
 files = sorted(Path('supabase/migrations').glob('*.sql'))
 assert [f.name[:3] for f in files] == [f'{i:03}' for i in range(1, 96)]
 container = 'supabase_db_hills-admin-next'
+assert_local_stack(container=container)  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 
 def run(args, data=''):

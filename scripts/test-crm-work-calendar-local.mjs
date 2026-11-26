@@ -4,6 +4,8 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { workCalendarFixture } from './lib/crm-work-calendar-fixture.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', container: 'supabase_db_hills-admin-next' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const directory=process.env.O3_WORK_EVIDENCE_DIR || join(tmpdir(),'hills-o3-work-evidence');mkdirSync(directory,{recursive:true});
 const plans=process.argv.includes('--plans');
 const sql=input=>{ const response=spawnSync(plans?'docker':'psql',plans?['exec','-i','supabase_db_hills-admin-next','psql','-X','-qAt','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1']:['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},maxBuffer:50*1024*1024});if(response.status!==0)throw Object.assign(new Error(response.stderr),response);return response.stdout+(plans ? response.stderr : '');};

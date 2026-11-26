@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ apiUrl: 'http://127.0.0.1:54321', container: 'supabase_db_hills-admin-next' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 const root = new URL('../', import.meta.url);
 assert.ok(!process.argv.includes('--ui') || process.stdin.isTTY, '--ui requires an interactive terminal so fixture cleanup can run');

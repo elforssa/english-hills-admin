@@ -469,6 +469,27 @@ Open items:
 - **Local evidence (development key, installed Chrome, the Production policy of the branch):** the whiteboard half of [scripts/test-online-zoom-classroom.mjs](../../scripts/test-online-zoom-classroom.mjs) passes: start, a stroke by the teacher and one by the learner, the phone-shaped participant's picture and read-only line, the teacher's PDF export, the stop, and zero policy refusals. The report is attached to the pull request. **Update 2026-11-16:** the independent review of that day returned CHANGES REQUIRED; Zoom had replaced its whiteboard build overnight (`mwfe40q7`), which now raises one refusal of `eval` on `script-src` from the whiteboard's own script. The owner's conditional decision of 2026-11-16 was applied after a comparison that found no difference with eval allowed: the refusal is a named, expected exception and the header is unchanged (no `'unsafe-eval'`). The script was made independent of Zoom's toolbar, a phone that joins late, reloads or reconnects now gets the read-only line, and the script passes again on that build, with two more steps.
 - **Not verified:** the Production key and its whiteboard source, real phones and iPhone Safari, and anything after a merge.
 
+## Receptionist workflow follow-ups (RWR-r5) — implemented on a pull request, migration 142 not applied, not merged — 2026-11-26
+
+**IMPLEMENTED ON A PULL REQUEST; NOT APPLIED, NOT MERGED, NOT DEPLOYED.** Approved by the owner on 2026-11-26: one Tier 3 PR, migration 142 (C2 holds 141; renumbered at merge). Full record, the approval verbatim and the decision for each table: [follow-ups record](../architecture/plans/receptionist-workflow.md#implementation-record-follow-ups-pr-migration-142).
+
+- **Migration 142:**
+  - `evaluate_conversion` falls back to the prospect's programme (defence in depth: the validated `enrollments_confirmed_has_programme` makes the case unreachable today);
+  - `service_role` loses EXECUTE on the three catalogue functions;
+  - `crm_get_today` reads legacy test times with `calendar_time` instead of failing;
+  - `crm_create_manual_lead` has no API role (deviation 3);
+  - 24 tables and 2 views lose the `anon` DELETE/TRUNCATE and the `authenticated` TRUNCATE grants; `authenticated` DELETE is revoked on the 14 tables and 2 views that no screen deletes from, and kept on the 10 that RLS-gated screens use (`placement_tests` unchanged since 137).
+  - Restore: `scripts/rollback/142_rwr_follow_ups_restore.sql`.
+- **Without a migration:**
+  - the action result card and the « Hors des nouveaux horaires » row show the date once;
+  - browser test of « Annuler ce paiement » as the director;
+  - SQL test of a payment after a moved « Encaisser l'acompte »;
+  - the upgrade lanes read their ceiling from the migrations folder;
+  - the 139 restore header is corrected;
+  - `test-crm-phase7-concurrency.py` is rebuilt and wired into CI; `test-crm-phase3-concurrency.py` is deleted (covered by the phase 4 and 5 concurrency suites, `test-crm-concurrency-local.mjs` and `test-no-retry-conflicts-local.mjs`);
+  - the local-stack guard `scripts/lib/local-stack.mjs`, under which local database suites need `HILLS_LOCAL_STACK` ([WORKFLOWS](WORKFLOWS.md#local-stack-guard-follow-ups-142)).
+- **Production database ledger and deployed source unchanged** by this entry.
+
 ## Receptionist workflow — batched record 2026-11-26 (hotfix #220, data steps D3 and D5)
 
 **Hotfix #220 MERGED / DEPLOYED; D3 RUN AND VERIFIED; D5 RUN AND VERIFIED (2026-11-26).** This is the first batched record: by the owner's decision of 2026-11-26, release and data-step records are batched in one documentation PR. The full records, the owner's words verbatim, the wrappers, backups and recovery steps are in the plan: [hotfix #220](../architecture/plans/receptionist-workflow.md#release-record-hotfix-pr-220--2026-11-26), [D3](../architecture/plans/receptionist-workflow.md#release-record-data-step-d3--2026-11-26), [D5](../architecture/plans/receptionist-workflow.md#release-record-data-step-d5--2026-11-26) and [decisions, follow-ups and gates](../architecture/plans/receptionist-workflow.md#owner-decisions-follow-ups-and-gates--2026-11-26). No migration: the ledger stays 001–139.

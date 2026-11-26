@@ -5,6 +5,8 @@ import { readFileSync,writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { workCalendarFixture } from './lib/crm-work-calendar-fixture.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const sql=input=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},maxBuffer:50*1024*1024});
 assert.equal(sql('select max(version) from supabase_migrations.schema_migrations').trim(),'107');
 assert.equal(sql('select count(*) from public.crm_leads').trim(),'0');

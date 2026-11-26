@@ -4,6 +4,8 @@ OIDs, row data, statistics and sequence counters are deliberately excluded.
 """
 import json,os,subprocess
 from pathlib import Path
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 assert Path('.git/HEAD').read_text().startswith('ref: refs/heads/codex/')
 query="""begin isolation level repeatable read read only;
 with critical as (

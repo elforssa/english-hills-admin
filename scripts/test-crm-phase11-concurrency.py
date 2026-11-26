@@ -2,6 +2,8 @@
 """Local synthetic accounts: overlapping requests, competing claims, lease fencing and
 rolling-refresh enqueue races (DGI-A D3)."""
 import concurrent.futures,json,os,subprocess,time,uuid
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 # Same guard as the Phase 12 matrix: a local codex/ or claude/ branch, or a GitHub Actions pull request.
 branch=subprocess.run(['git','branch','--show-current'],text=True,capture_output=True,check=True).stdout.strip()
 assert branch.startswith(('codex/','claude/')) or (os.environ.get('GITHUB_ACTIONS')=='true' and os.environ.get('GITHUB_EVENT_NAME')=='pull_request'), 'Refusing to run outside a feature branch'

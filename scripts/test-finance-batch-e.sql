@@ -217,7 +217,8 @@ grant usage on sequence e2_n to public;
 create function pg_temp.qualified_lead() returns uuid language plpgsql as $$
 declare l uuid; n bigint := nextval('e2_n'); begin
   perform pg_temp.act(3);
-  l := (public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'Batch E parent ' || n,
+  -- 142 (deviation 3): the screens' create; crm_create_manual_lead has no API role.
+  l := (public.crm_create_prospect(gen_random_uuid(), jsonb_build_object('display_name', 'Batch E parent ' || n,
     'learner_name', 'BatchE' || n || ' Learner', 'phone', '06' || lpad((72900000 + n)::text, 8, '0'), 'source_label', 'Manual'))->'lead'->>'id')::uuid;
   -- RWR-r5 M-A2 revokes crm_qualify_lead: « On a parlé » → « Inscrire maintenant » qualifies the prospect (OD-11).
   perform public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', (pg_temp.lead(l)).version,

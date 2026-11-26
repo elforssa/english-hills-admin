@@ -24,6 +24,7 @@ import { once } from 'node:events';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
 
 assertLocalFeatureBranch(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
@@ -38,6 +39,7 @@ if (!file.ONLINE_VIDEO_PROVIDER_API_KEY || !file.ONLINE_VIDEO_PROVIDER_API_SECRE
 const base = process.env.OL_SUPABASE_URL || file.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.OL_SERVICE_ROLE_KEY || file.SUPABASE_SERVICE_ROLE_KEY;
 const container = process.env.OL_DB_CONTAINER || 'supabase_db_hills-admin-next';
+assertLocalStack({ container }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const port = process.env.OL_APP_PORT || '3103', app = `http://localhost:${port}`;
 const reportPath = process.env.OL_ZOOM_ROOM_REPORT || 'scripts/.zoom-room-report.json';
 assert.match(base, /^http:\/\/127\.0\.0\.1:\d+$/, 'local Supabase only');

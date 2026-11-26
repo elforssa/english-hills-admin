@@ -1783,6 +1783,8 @@ The superseded first backup (12:04:02–12:06:22 UTC, data 12,195,723 bytes, `e5
 - revoke `crm_create_manual_lead` now that the B1 build is deployed (deviation 3);
 - desk work: the 11 unreadable phones left by D3 and the 3 desk follow-ups after D5 (above).
 
+**Update (follow-ups PR, 2026-11-26):** the first ten follow-ups above are built in one PR, the [follow-ups record](#implementation-record-follow-ups-pr-migration-142) (migration 142; not applied, not merged). The desk work stays with the desk.
+
 **Gates:** A1, D1, A2, C1, B1, D3 and D5 are done. **Next:** B2 (catalogues, with D6's functions, migration 140; no prices), then C2 (with D7) and D4. Each needs the owner's separate approval.
 
 ### Implementation record: PR B2 (M-B2, migration 140)
@@ -2015,6 +2017,126 @@ The superseded first backup (12:04:02–12:06:22 UTC, data 12,195,723 bytes, `e5
 2. No data is written by 141 except the empty age bounds of `programme_levels`. Existing files and tests are not re-checked until edited.
 3. D7 needs its own approval (« approve D7 ») with the `d7_plan()` counts; until it runs, groups without ticked days are not restricted by class day (the attendance page shows them every day).
 4. Rollback: deploy the B2 build, then (`select crm_security.d7_revert();` first if D7 ran and is kept) run `141_desk_academics_restore.sql`. It must run before B2's restore.
+
+### Implementation record: follow-ups PR (migration 142)
+
+**Owner approval (Maroine, 2026-11-26), verbatim:**
+
+> Owner approval (Maroine, 2026-11-26): one follow-ups PR (Tier 3 where it touches grants or finance), built from fresh origin/main, migration 142 (C2 holds 141; renumber at merge). Same standing checklist as before.
+>
+> Include:
+> 1. evaluate_conversion: coalesce(e.session_type, l.session_type), with a test converting an enrollment that has no programme.
+> 2. Revoke service_role EXECUTE on get_catalogue, catalogue_set_price and catalogue_save_programme.
+> 3. A browser test that clicks « Annuler ce paiement » as the director and checks the receipt is voided.
+> 4. The action result card shows the date once.
+> 5. A test for payment after an « Encaisser l'acompte » move.
+> 6. test-crm-h3-upgrade-103-current.sql: the « current 138 » label → current; and the stale sentences in the 139 restore header.
+> 7. The unwired test-crm-phase3-concurrency.py and test-crm-phase7-concurrency.py: fix them to the current commands and wire them into CI, or delete them with a justification.
+> 8. crm_get_today must not fail on malformed legacy placement times.
+> 9. Revoke crm_create_manual_lead from authenticated (deviation 3), after moving every remaining caller.
+> 10. The 24 public tables with anon/authenticated DELETE/TRUNCATE: revoke what no screen needs (keep what RLS-gated screens use, e.g. the Admissions trash button), listing each table with its decision.
+> 11. The local-stack guard in scripts/lib: refuse « supabase db reset », or writes, unless HILLS_LOCAL_STACK matches the CLI's stack and the target ports; cover the fixed container name and the hard-coded 54321/54322 ports.
+>
+> Not authorized: Production, merge, release. Hand off with the PR number, exact head SHA, green run id and one status.
+
+**Tier 3** (grants and finance). Built from `origin/main` `51ff79c` (B2 merged). Migration `142_rwr_follow_ups.sql`; C2 holds 141, so the number is renumbered at merge. The upgrade test finds the file by its name (`NNN_rwr_follow_ups.sql`), so a renumber changes no test. Its restore is `scripts/rollback/142_rwr_follow_ups_restore.sql`.
+
+**Migration 142, in order:**
+- **§0 preconditions.** Refuses unless 140 is applied (`get_catalogue` and the programme catalogue exist) and the live bodies are the expected ones: `evaluate_conversion` md5 `b6dc2f58…` (140), `crm_get_today` md5 `2be1f5a0…` (140), `crm_security.calendar_time` md5 `3500aa82…` (108). Each body is rebuilt from the live cumulative definition, never an earlier snapshot.
+- **§1 (item 1).** `crm_security.evaluate_conversion` writes `session_type = coalesce(e.session_type, l.session_type)`. **Contradiction flagged:** the validated constraint `enrollments_confirmed_has_programme` (migration 120) means a Confirmed or Validated enrollment always has a programme, so the case the owner described cannot occur on a database at 120 or later. The coalesce is defence in depth. The test proves it by dropping that constraint inside a savepoint, converting a Confirmed enrollment with no programme through `crm_start_enrollment`, and rolling the savepoint back (the constraint is checked present afterwards). New md5 `00e4765c…`.
+- **§2 (item 2).** `revoke execute` from `service_role` on `get_catalogue()`, `catalogue_set_price(text,text,numeric,text,uuid)` and `catalogue_save_programme(text,bigint,jsonb)`. Each still checks the staff role itself. No server code calls them with the service key: the receipt e-mail function reads the labels from `programmeLabels.mjs`.
+- **§3 (item 8).** `crm_get_today` reads legacy placement times with `crm_security.calendar_time(...)` (migration 108: `null` for a time it cannot read) in place of the two `::time` casts. A legacy test with an unreadable time is left off the schedule instead of failing « Aujourd'hui ». New md5 `463f07e0…`.
+- **§4 (item 9).** `revoke execute on public.crm_create_manual_lead(uuid,jsonb)` from `public`, `anon`, `authenticated` and `service_role`. No screen or edge function calls it: B1's screens and the deployed build create through `crm_create_prospect`; a static check in `test-crm-next-action-ui.mjs` keeps it that way. The function stays, for the trusted fixture path only. The RPW-r2 classification fixture drops its entry (208 functions; policies unchanged).
+- **§5 (item 10).** Table privileges, one decision per relation (below). For every listed relation: `DELETE` and `TRUNCATE` revoked from `anon`, `TRUNCATE` revoked from `authenticated`. For the revoked group only: `DELETE` revoked from `authenticated`. `service_role` and every `SELECT`/`INSERT`/`UPDATE` grant are unchanged. `placement_tests` was already `DELETE`-only for `authenticated` since 137 and is not touched.
+
+**Item 10, the decision for each relation.** A screen's delete was found by reading every `.delete(` and `entities.X.delete` in `src` (no API route or edge function deletes with the user's token).
+
+| Relation | Decision | Screen that deletes (RLS-gated) |
+| --- | --- | --- |
+| `announcements` | keep `authenticated` DELETE | Communications |
+| `assessments` | keep | Évaluations; teacher portal |
+| `authorized_adults` | keep | the student's authorised-adults editor |
+| `certificates` | keep | Certificats |
+| `groups` | keep | Groupes (trash button) |
+| `learning_assessments` | keep | Évaluations pédagogiques |
+| `leave_requests` | keep | Congés |
+| `messages` | keep | Communications |
+| `payroll` | keep | Paie |
+| `portfolios` | keep | Portfolios |
+| `placement_tests` | already DELETE-only since 137 (the Admissions trash button); unchanged | Tests de niveau |
+| `activity_log` | revoke `authenticated` DELETE | none (append-only history) |
+| `anon_rate_limits` | revoke | none (server limiter) |
+| `app_config` | revoke | none |
+| `attendance` | revoke | none (attendance is saved, never deleted) |
+| `dismissal_logs` | revoke | none (history) |
+| `enrollments` | revoke | none (enrollment commands only) |
+| `notifications` | revoke | none |
+| `premium_attendance`, `premium_group_memberships`, `premium_groups`, `premium_homework_submissions`, `premium_sessions` | revoke | none (Premium retired) |
+| `students` | revoke | none (archive and merge commands only) |
+| `teachers` | revoke | none |
+| `charge_balances`, `legacy_receipt_reconciliation` (views) | revoke | none (read-only views) |
+
+That is 24 tables and the 2 views. On every one, `anon` loses `DELETE` and `TRUNCATE` and `authenticated` loses `TRUNCATE`. A ratchet in `test-rwr-follow-ups.sql` checks every public table, view and materialised view: nothing outside the keep list grants `DELETE` or `TRUNCATE` to `anon` or `authenticated`.
+
+**Restore.** `142_rwr_follow_ups_restore.sql` refuses unless 142 is applied (`crm_create_manual_lead` not executable by `authenticated` and both 142 md5s). It puts back the two 140 bodies (checked by md5), the `service_role` grants, `crm_create_manual_lead` for `authenticated`, and the 26 relations' grants. A second run refuses. `140_catalogues_restore.sql` now refuses while 142 is applied (« Restore 140: migration 142 is applied; run scripts/rollback/142_rwr_follow_ups_restore.sql first »).
+
+**Items without a migration:**
+- **Item 3.** `test-payment-screens-browser.mjs` §5: the director pays at the desk (which confirms the enrollment), opens « Corriger le paiement », sees « Dernier paiement actif de l’inscription. », types a reason, accepts the browser confirmation and clicks « Annuler ce paiement ». The test checks the toast « Paiement annulé. L’inscription reste confirmée et apparaît dans « Inscriptions confirmées sans paiement actif ». », « Annulé » and the reason on the receipt, no second « Corriger le paiement », the receipt voided by the director with that reason in the database, the full amount due again (`get_open_balances`), and « Déjà annulé » with « Saisir le paiement corrigé » on the correction page.
+- **Item 4.** The server label (`crm_security.action_label`) already carries the date (`DD/MM HH:MI`). The result card in `CrmActionDialog` shows the scheduled line only when there is no server label. The « Hors des nouveaux horaires » row in `WorkQueue` had the same double date and now shows the label alone. Checks: a static check in `test-crm-next-action-ui.mjs`, and one date in the outside-hours row in `test-reception-forms-browser.mjs`. **Note:** the result card is reached only when `contact_candidates` is not empty, and `crm_create_prospect` always returns `[]`, so the card is effectively unreachable today.
+- **Item 5.** `test-desk-payments.sql`, block « moved then paid ». It moves the reserved « Encaisser l'acompte » action to an in-hours slot from the server (`crm_security.next_window`). It then pays on the reserved charge through `crm_enroll_and_collect` and checks:
+  - the prospect is CONVERTED, with no open task;
+  - the moved task is cancelled with « Inscription confirmée » and one `task_cancelled` activity keyed `conversion-task:<lead>:<moved>`;
+  - `next_action` is null, and there is still one charge, with 2000 left.
+- **Item 6.** The five « current » upgrade tests read the ledger ceiling from `supabase/migrations` (`scripts/lib/upgrade-ceiling.sql`), so no label or ceiling goes stale again; the h3 « current 138 » label is gone. The 139 restore header now says that a merged student stays hidden, because the restore refuses while any student is merged.
+- **Item 7.** `test-crm-phase7-concurrency.py` is rebuilt on the current commands and wired into the sql-and-concurrency shard:
+  - it creates through `crm_create_prospect`;
+  - it qualifies through `crm_log_exchange` (« On a parlé » → « Inscrire maintenant », with a slot from `centre-days.mjs`);
+  - it confirms and pays through `crm_enroll_and_collect`, with only the two revenue hooks disabled inside the fixture transaction;
+  - the races are unchanged: reconcile against reconcile, reconcile against a real void, and a later deletion.
+  - **`test-crm-phase3-concurrency.py` is deleted.** Its races are covered by the CI suites: `test-crm-phase4-concurrency.py` and `test-crm-phase5-concurrency.py` (concurrent and network replay of « Noter un échange », competing decisions), `test-crm-concurrency-local.mjs` and `test-no-retry-conflicts-local.mjs` (stale versions and task conflicts). The one scenario not covered is a concurrent create with the same request key; a sequential replay of the same key is tested.
+- **Item 11.** `scripts/lib/local-stack.mjs` (with `local_stack.py` for the Python scripts). Before the first statement it refuses unless all of these hold:
+  - `HILLS_LOCAL_STACK` equals this checkout's `project_id` (`supabase/config.toml`, the stack the CLI uses here);
+  - every port, API URL and container the script hard-codes is that stack's (`[db]` and `[api]` ports, `supabase_db_<project_id>`);
+  - `docker inspect` shows those containers publishing exactly those ports.
+
+  « supabase db reset » runs only through `resetLocalDatabase()` / `local-stack.mjs db-reset`, which also refuses `--linked`, `--db-url`, `--project-ref` and `--workdir`. This covers:
+  - the CI workflow (67 resets);
+  - the scripts' own resets: `test-crm-h3-04-local.mjs`, `test-crm-meta-reconciliation-repair-local.mjs`, `test-conflicts-without-retry-upgrade.mjs`, `test-crm-meta-funnel-r4-concurrency.py`, `test-crm-r4-advisory-concurrency.py`, `test-receipt-migration-rehearsal.sh` and `test-receipt-school-year-migration.sh`.
+
+  The guard is wired into the 103 scripts (shared helpers included) that hard-code `54321`, `54322` or `supabase_db_hills-admin-next`. The shared helpers run it lazily before their first statement: `crm-next-action-local.mjs`, `receptionist-catalog.mjs`, `storage-inventory-local.mjs` and `generate-rls-role-evaluation.mjs`. `npm test` adds `test-local-stack-guard.mjs`:
+  - unit cases on a temporary config and a fake docker;
+  - a ratchet: every script with such a literal or a reset calls the guard. Four static-data files are allowlisted with a reason;
+  - CI resets go through the wrapper, and the local-database job sets `HILLS_LOCAL_STACK: hills-admin-next` and runs the guard right after `supabase start`.
+
+  **Local runs now need** `export HILLS_LOCAL_STACK=<project_id>` (WORKFLOWS).
+
+**CI.**
+- `npm test` adds `test-local-stack-guard.mjs`.
+- The sql-and-concurrency shard adds `test-rwr-follow-ups.sql` (after `test-catalogues-d6.sql`) and `test-crm-phase7-concurrency.py` (after phase 6).
+- The 112–116 shard adds « Follow-ups 140 to 142 upgrade, restore and re-apply », which runs `test-rwr-follow-ups-142-upgrade.mjs` on a reset to 140. The test checks four things:
+  - a planned legacy test with the time `10h` fails « Aujourd'hui » at 140;
+  - 142 writes no row and changes no policy or trigger; exactly the six functions and the 26 relations change;
+  - « Aujourd'hui » answers;
+  - the 140 restore refuses; the 142 restore gives back the exact 140 catalogue; a second restore refuses; a re-apply equals the first apply.
+
+**Existing tests changed, with the reason (checklist 4):**
+- **Fixture creates moved to a trusted session (item 9), assertions unchanged.** `crm_create_manual_lead` has no API role, so fixtures that used it now call it from the trusted `postgres` session as the same staff member (137's convention) or create through `crm_create_prospect`:
+  - SQL: `test-crm-phase3.sql` (its staff loop now asserts `crm_create_manual_lead` is denied with 42501, then creates through `crm_create_prospect`), `test-crm-rcc-a2.sql` (the birth-date check moves to `crm_create_prospect`, « prospect create keeps its current_date check »), `test-finance-batch-e.sql`, `test-enrollment-at-payment.sql`, `test-course-dates-close.sql`, `test-desk-payments.sql`;
+  - browser (`create_manual_lead` added to the `REVOKED` set or the rpc helper): phase 4, 5 and 6, work calendar, rcc-a2, rcc-b1, opportunities, row staff labels, rcc-a1, reception forms, reception day scripts, `test-crm-rcc-a2-upgrade.mjs`;
+  - Node: `test-crm-next-action-136-upgrade.mjs` and `test-crm-next-action-137-upgrade.mjs` (trusted call); `test-crm-next-action-local.mjs` (HTTP) creates through `crm_create_prospect` and asserts `crm_create_manual_lead` returns 403 / 42501;
+  - Python concurrency: phase 4, 5 and 6, rcc-a2 and finance-batch-e (`trusted()`).
+- **`test-enrollment-group-consistency.sql` (item 10):** the API delete of an enrollment now fails with 42501 (the `authenticated` DELETE is revoked), so the five deletes of protected history assert the 42501 first, then prove the `egc.history_protected` trigger as the owner (`pg_temp.delete_guarded`). The trigger assertion is unchanged.
+- **`test-batch3b-security.mjs` (item 10):** the staff API delete of a closed enrollment now asserts 403 / 42501 and that the row stays (no screen deletes an enrollment); the clean-up removes it as before.
+- **`test-catalogues.sql` (item 2):** the grant check adds « not executable by service_role ».
+- **The five « current » upgrade tests (item 6):** the ceiling comes from `scripts/lib/upgrade-ceiling.sql`.
+- **`test-receptionist-function-classification` fixture (item 9):** regenerated with `--write`; only the `crm_create_manual_lead` entry is removed.
+- **`test-reception-forms-browser.mjs` (item 4):** adds the one-date check on the outside-hours row.
+- **`test-payment-screens-browser.mjs` (item 3):** adds §5.
+- **Item 11, guard call only, no assertion changed:** every script listed by `git diff --stat` with the comment « follow-ups 142 (item 11) ».
+
+**Not done or not verified here:** Production, merge and release are not authorized. The coalesce case is unreachable while `enrollments_confirmed_has_programme` is validated (see §1). The result card (item 4) is not reachable from any screen today, so its fix is proven by the static check only.
+
+**Release notes for 142 (for the release approval; nothing here is authorized).** Renumber to the next free number at merge (C2 holds 141). Apply after 140 (and after C2's 141 if it lands first; 142 touches no C2 object). The deployed build needs no change: no screen calls `crm_create_manual_lead`, deletes from a revoked table, or calls a catalogue function with the service key. Rollback: `142_rwr_follow_ups_restore.sql`, before any 140 restore.
 
 ## IMPLEMENTATION CONTRACT
 

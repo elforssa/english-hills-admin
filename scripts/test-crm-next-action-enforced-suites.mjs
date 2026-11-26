@@ -10,8 +10,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { assertLocalStack } from './lib/local-stack.mjs';
 
 const port = process.env.CRM_SUITES_PORT || '54322';
+assertLocalStack({ dbPort: port }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const suites = [
   'test-crm-next-action', 'test-crm-rcc-a1', 'test-crm-rcc-a2', 'test-crm-phase5', 'test-student-placement',
   'test-crm-phase6', 'test-crm-phase7', 'test-enrollment-at-payment', 'test-course-dates-close', 'test-crm-phase8',

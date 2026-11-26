@@ -471,7 +471,8 @@ select pg_temp.place(pg_temp.id(219), pg_temp.id(306), pg_temp.id(419));
 -- A CRM-converted paid enrollment without a group (ended by « Terminer sans groupe »).
 create function pg_temp.lead() returns uuid language plpgsql as $$ declare l uuid; begin
   perform pg_temp.act(3);
-  l := (public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'CDC parent',
+  -- 142 (deviation 3): the screens' create; crm_create_manual_lead has no API role.
+  l := (public.crm_create_prospect(gen_random_uuid(), jsonb_build_object('display_name', 'CDC parent',
     'learner_name', 'CDC CRM child', 'phone', '0671999001', 'source_label', 'Phone'))->'lead'->>'id')::uuid;
   -- RWR-r5 M-A2 revokes crm_qualify_lead: « On a parlé » → « Inscrire maintenant » qualifies at step enrollment (OD-11).
   perform public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),

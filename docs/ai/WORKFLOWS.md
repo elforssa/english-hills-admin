@@ -162,6 +162,10 @@ The [deployed UX corrections](../architecture/evidence/receptionist-production-u
 
 Under deployed [UIF-r1a](../architecture/plans/english-hills-ui-foundation.md#uif-r1a--owner-approved-stable-row-staff-identity), Opportunities Board/List, My Work and drawer current owner/assignee displays use safe labels projected by existing bounded reads. Moving an independent staff picker between pages does not change unchanged row identity. Current reassignment labels remain visible outside the picker page; prospect owner and task assignee remain separate. Migration 110 and the matching frontend are deployed; Production is recorded through 110 in [CURRENT_STATE](CURRENT_STATE.md#ui-foundation-production-closeout--2026-10-06).
 
+## Local stack guard (follow-ups 142)
+
+Every script that resets or writes to a local Supabase stack checks the stack first (`scripts/lib/local-stack.mjs`). Before running any database suite, export the name of this checkout's stack, which is its `project_id` in `supabase/config.toml`: `export HILLS_LOCAL_STACK=hills-admin-next` in the repository, or a private stack's own name. Without the export, or with another stack's name, a port or a container, the script stops before its first statement. To reset the database use `node scripts/lib/local-stack.mjs db-reset [--version N] [--no-seed]`, never `supabase db reset` directly. CI sets the variable in the local-database job.
+
 ## Guarded release wrapper
 
 How a release/operator session applies a reviewed migration to Production. This is the method used for migration 125 (Batch H, [release record](../architecture/plans/audit-follow-ups.md#release-record-r0r3)), and the one the ledger records in [CURRENT_STATE](CURRENT_STATE.md) for migrations 117–124. It grants no approval: each step runs only as the owner's release approval names it, under [AGENTS](../../AGENTS.md).

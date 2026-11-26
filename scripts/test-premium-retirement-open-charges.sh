@@ -2,6 +2,7 @@
 # Local rehearsal of supabase/manual/premium_retirement_open_charge_descriptions.sql (D5a)
 # over the 112 -> 113 upgrade fixture. Local Supabase only; synthetic data only.
 set -euo pipefail
+node "$(cd "$(dirname "$0")" && pwd)/lib/local-stack.mjs" assert --db-port 54322 >/dev/null  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 project_root=$(cd "$(dirname "$0")/.." && pwd)
 script="$project_root/supabase/manual/premium_retirement_open_charge_descriptions.sql"

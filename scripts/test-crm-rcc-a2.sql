@@ -199,13 +199,14 @@ do $$ declare zone text:=current_setting('TimeZone'); today date:=(now() at time
 end $$;
 select 'PASS birth date: a year before the Casablanca date accepted, today too recent, tomorrow rejected in every session TimeZone, malformed/infinite invalid, existing path unaffected';
 
--- Manual lead creation keeps its own current_date rule (B2 scope).
+-- Prospect creation keeps its own current_date rule (B2 scope). 142 (deviation 3): the
+-- screens' create is crm_create_prospect (crm_create_manual_lead has no API role).
 do $$ declare st text; msg text; begin
  perform pg_temp.actor(3);execute 'set local role authenticated';
- begin perform public.crm_create_manual_lead(gen_random_uuid(),jsonb_build_object('display_name','A2 manual birth','learner_name','A2 manual learner','phone','0698765432','source_label','Manual','learner_birth_date',current_date+1));
+ begin perform public.crm_create_prospect(gen_random_uuid(),jsonb_build_object('display_name','A2 manual birth','learner_name','A2 manual learner','phone','0698765432','source_label','Manual','learner_birth_date',current_date+1));
  exception when others then get stacked diagnostics st=returned_sqlstate,msg=message_text; end;
  execute 'reset role';
- perform pg_temp.ok(st='22023' and msg='Birth date cannot be in the future','manual lead keeps its current_date check: '||coalesce(st,'none')||' '||coalesce(msg,''));
+ perform pg_temp.ok(st='22023' and msg='Birth date cannot be in the future','prospect create keeps its current_date check: '||coalesce(st,'none')||' '||coalesce(msg,''));
 end $$;
 
 -- New-learner confirmation when candidates exist.

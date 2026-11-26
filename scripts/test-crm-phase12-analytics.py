@@ -13,5 +13,11 @@ for old,new in [('"timezone":"Africa/Casablanca"','"timezone":"America/New_York"
  s=s.replace(old,new)
 s=s.replace('rollback;', "select pg_temp.ok((select bool_and(timezone='Africa/Casablanca') from crm_followup_policies),'operational policy remains Casablanca while reporting is New York');\nrollback;")
 command=['docker','exec','-i','supabase_db_hills-phase12-platform','psql','-X','-q','-U','postgres','-d','phase12_upgrade','-v','ON_ERROR_STOP=1'] if args.disposable else ['psql','-X','-q','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1']
+if not args.disposable:
+ # Follow-ups 142 (item 11): this checkout's stack only, before any statement (the disposable
+ # phase12 platform stack is a separate database-only project).
+ import sys; sys.path.insert(0,str(Path(__file__).resolve().parent))
+ from lib.local_stack import assert_local_stack
+ assert_local_stack(db_port='54322')
 subprocess.run(command,input=s,text=True,env={**os.environ,'PGPASSWORD':'postgres'},check=True)
 print('PASS Phase12 EUR/MAD suppression, New York cohort midnight boundary, unchanged Casablanca operations, full analytics reconciliation')

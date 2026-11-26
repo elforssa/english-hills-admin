@@ -53,7 +53,7 @@ function OutsideHours({ onOpen, onAction }) {
     <h3 className="text-sm font-semibold text-amber-900">Hors des nouveaux horaires ({total})</h3>
     <p className="text-xs text-amber-900">Fixés avant le changement d’horaires : l’heure est gardée. Appelez le contact et changez l’heure si besoin.</p>
     <ul className="mt-2 divide-y divide-amber-100">{query.data.rows.map(row => <li key={row.action.id} data-testid="outside-hours-row" data-lead-id={row.lead_id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-      <button type="button" className="min-w-0 text-left" onClick={() => onOpen(row.lead_id)}><span className="block break-words text-sm font-medium">{row.contact_name}</span><span className="block text-xs text-slate-700">{row.action.label} · {scheduledLabel(row.action)}</span></button>
+      <button type="button" className="min-w-0 text-left" onClick={() => onOpen(row.lead_id)}><span className="block break-words text-sm font-medium">{row.contact_name}</span><span className="block text-xs text-slate-700">{row.action.label || scheduledLabel(row.action)}</span></button>
       <Button size="sm" variant="outline" className="min-h-9" onClick={() => onAction(row.lead_id, 'change')}>Changer</Button>
     </li>)}</ul>
     {total > 20 && <div className="mt-2 flex gap-2"><Button size="sm" variant="ghost" disabled={!offset} onClick={() => setOffset(x => Math.max(0, x - 20))}>Précédents</Button><Button size="sm" variant="ghost" disabled={offset + 20 >= total} onClick={() => setOffset(x => x + 20)}>Suivants</Button></div>}

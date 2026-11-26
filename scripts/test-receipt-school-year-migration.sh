@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+node "$(cd "$(dirname "$0")" && pwd)/lib/local-stack.mjs" assert --db-port 54322 >/dev/null  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 if [[ "${1:-}" != '--confirm-disposable-local' ]]; then
   echo 'Refusing to reset a database. Re-run with --confirm-disposable-local after confirming local Supabase is disposable.' >&2
@@ -24,13 +25,13 @@ fi
 restore_local() {
   status=$?
   trap - EXIT
-  supabase db reset --local --no-seed >/dev/null
+  node "$project_root/scripts/lib/local-stack.mjs" db-reset --no-seed >/dev/null
   exit "$status"
 }
 trap restore_local EXIT
 
 cd "$project_root"
-supabase db reset --local --version 056 --no-seed
+node "$project_root/scripts/lib/local-stack.mjs" db-reset --version 056 --no-seed
 psql "$db_url" -X -v ON_ERROR_STOP=1 <<'SQL'
 insert into public.students(id,full_name,status)
 values ('91000000-0000-0000-0000-000000000001','Synthetic legacy year fixture','Prospect');

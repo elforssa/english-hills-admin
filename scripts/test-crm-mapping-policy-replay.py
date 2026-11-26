@@ -6,8 +6,10 @@ The dump must be from an application-empty Supabase database; never use producti
 from pathlib import Path
 import subprocess
 import sys
+from lib.local_stack import assert_local_stack
 
 container = 'supabase_db_hills-admin-next'
+assert_local_stack(container=container)  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 platform = Path(sys.argv[1]).read_text()
 assert 'CREATE TABLE auth.users' in platform and 'CREATE TABLE storage.objects' in platform
 assert 'CREATE TABLE public.' not in platform and '\nCOPY ' not in platform

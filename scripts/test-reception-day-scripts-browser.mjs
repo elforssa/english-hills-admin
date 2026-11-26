@@ -24,7 +24,8 @@ const STALE = 'Ce prospect a été modifié, rechargez.';
 let browser, page, users = [], learners = [], phase = 'setup', family = null;
 const errors = [], gaps = [];
 const as = id => `begin;select set_config('request.jwt.claim.sub',${q(id)},true);set local role authenticated;`;
-const rpc = (id, name, data) => JSON.parse(sql(`${as(id)}select public.crm_${name}(gen_random_uuid(),${q(JSON.stringify(data))}::jsonb);commit;`).split('\n').pop());
+// 142 (deviation 3): crm_create_manual_lead has no API role; the fixture create runs trusted.
+const rpc = (id, name, data) => JSON.parse(sql(`${name === 'create_manual_lead' ? as(id).replace('set local role authenticated;', '') : as(id)}select public.crm_${name}(gen_random_uuid(),${q(JSON.stringify(data))}::jsonb);commit;`).split('\n').pop());
 const intake = (id, name, extra = {}) => rpc(id, 'create_manual_lead', { display_name: name, learner_name: 'Apprenant synthétique', source_label: 'Manuel · Téléphone', ...extra }).lead.id;
 const version = lead => Number(sql(`select version from public.crm_leads where id=${q(lead)}`));
 const detail = (id, lead) => JSON.parse(sql(`${as(id)}select public.crm_get_workspace_detail(${q(lead)});commit;`).split('\n').pop());

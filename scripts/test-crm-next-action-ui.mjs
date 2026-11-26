@@ -137,4 +137,18 @@ console.log('PASS placement status options: no « Planifié » for a prospect te
   const callers = walk('src').filter(path => /\.(js|jsx|mjs|ts|tsx)$/.test(path) && REVOKED.test(readFileSync(path, 'utf8')));
   assert.deepEqual(callers, [], 'no source file names a wrapper revoked by migration 137');
   console.log('PASS no screen calls a command wrapper revoked by migration 137');
+  // Follow-ups 142 (deviation 3): crm_create_manual_lead has no API role; the screens and the
+  // edge functions create through crm_create_prospect.
+  const manual = [...walk('src'), ...walk('supabase/functions')].filter(path => /\.(js|jsx|mjs|ts|tsx)$/.test(path) && /\bcrm_create_manual_lead\b/.test(readFileSync(path, 'utf8')));
+  assert.deepEqual(manual, [], 'no source file or edge function calls crm_create_manual_lead (revoked by 142)');
+  console.log('PASS no screen or edge function calls crm_create_manual_lead (revoked by 142)');
+  // Follow-ups 142 (owner item 4): the next action's server label already carries its date
+  // (crm_security.action_label, DD/MM HH:MI); the result card and the « Hors des nouveaux
+  // horaires » row show the scheduled line only when there is no server label.
+  const dialogSource = readFileSync('src/components/crm/CrmActionDialog.jsx', 'utf8');
+  assert.match(dialogSource, /\{!result\.next_action\?\.label && <p className="mt-1">\{scheduledLabel\(resultNextTask\)\}<\/p>\}/, 'result card: the date once');
+  assert.equal(dialogSource.match(/scheduledLabel\(resultNextTask\)/g).length, 1, 'result card: one scheduled line');
+  const queueSource = readFileSync('src/components/crm/WorkQueue.jsx', 'utf8');
+  assert.doesNotMatch(queueSource, /row\.action\.label\} · \{scheduledLabel/, 'outside-hours row: the date once');
+  console.log('PASS the action result card and the outside-hours row show the date once');
 }

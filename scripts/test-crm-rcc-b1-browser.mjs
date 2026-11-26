@@ -14,6 +14,8 @@ import { openDaySql } from './lib/centre-days.mjs';
 import { BAND_QUERIES, COMMAND_LABELS, historySummary, resolveBand, EVENTS } from '../src/lib/crm/presentation.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
 import { formatPhoneFr } from '../src/lib/phone.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 assertLocalFeatureBranch();
 process.on('unhandledRejection',error=>{console.error('unhandled',error?.message);});
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
@@ -24,7 +26,9 @@ const run='rcc-b1-'+randomUUID(),password=randomBytes(24).toString('base64url'),
 let browser,actor,page,phase='setup',context;const pageErrors=[],consoleErrors=[],writes=[],external=[],fetchChecks=[];
 // M-A2 (137) revoked these wrappers for API roles: fixture-only calls to them run in a trusted
 // session (same JWT claim, same rows); every other call still runs as authenticated.
-const REVOKED=new Set(['add_note','record_call_outcome','record_whatsapp','record_conversation','record_conversation_decision','qualify_lead','schedule_task','complete_task','cancel_task','close_lost','close_not_qualified','reopen_lead']);
+const REVOKED=new Set(['add_note','record_call_outcome','record_whatsapp','record_conversation','record_conversation_decision','qualify_lead','schedule_task','complete_task','cancel_task','close_lost','close_not_qualified','reopen_lead',
+  // 142 (deviation 3): crm_create_manual_lead has no API role; fixture creates run trusted.
+  'create_manual_lead']);
 const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};${REVOKED.has(name)?'':'set local role authenticated;'}select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const timeline=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};set local role authenticated;select public.crm_get_timeline(p_lead=>'${id}',p_limit=>20);commit;`));

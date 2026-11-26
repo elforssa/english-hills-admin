@@ -3,6 +3,7 @@ import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classify, digest, humanReport, uuid } from './storage-inventory.mjs';
+import { assertLocalStack } from './local-stack.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 export const LOCAL_URL = 'http://127.0.0.1:54321';
@@ -48,6 +49,7 @@ export function localContext(opts = {}) {
   const url = opts.url ?? env.NEXT_PUBLIC_SUPABASE_URL;
   const target = guardTarget(url, { apply: opts.apply, production: opts.production, confirmProject: opts['confirm-project'], linkedProject });
   if (env.NEXT_PUBLIC_SUPABASE_URL !== LOCAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_URL !== LOCAL_URL) throw new Error('Environment URL mismatch');
+  assertLocalStack({ apiUrl: LOCAL_URL, container }); // follow-ups 142 (item 11)
   function sql(input) {
     try {
       return execFileSync('docker', ['exec', '-i', container, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', 'postgres', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'],

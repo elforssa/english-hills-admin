@@ -7,6 +7,8 @@ import { chromium } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { openDaySql } from './lib/centre-days.mjs';
 import { LIVE_POLICY, createStaff, localEnv, removeStaff } from './lib/crm-next-action-local.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ apiUrl: 'http://127.0.0.1:54321', container: 'supabase_db_hills-admin-next' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 assertLocalFeatureBranch(new URL('../', import.meta.url));
 const env = Object.fromEntries(readFileSync('.env.local', 'utf8').split('\n').flatMap(line => {

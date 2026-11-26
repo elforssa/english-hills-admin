@@ -15,6 +15,8 @@ import {
   DIAGNOSTICS_PAGE, buildPublishPayload, canRetry, defaultEffectiveFrom, groupMetaForms, jobsToHandle, metaConnection,
   retirePlan, rpcErrorMessage,
 } from '../src/lib/crm/intakeAdmin.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 assertLocalFeatureBranch();
 const processEnv = { ...process.env, PGPASSWORD: 'postgres', SUPABASE_TELEMETRY_DISABLED: '1', DISABLE_EXTERNAL_EMAIL: 'true' };

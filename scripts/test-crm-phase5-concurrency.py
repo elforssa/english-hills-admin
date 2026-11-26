@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import subprocess
 import uuid
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 ROOT = Path(__file__).resolve().parents[1]
 head = (ROOT / '.git/HEAD').read_text().strip()
@@ -42,7 +44,7 @@ commit;"""
     return json.loads(result.stdout.strip())
 
 def trusted(name, key, payload):
-    # RWR-r5 PR A2 (migration 137): a wrapper revoked from authenticated, used here only as
+    # RWR-r5 PR A2 (migration 137; crm_create_manual_lead since 142): a wrapper revoked from authenticated, used here only as
     # fixture setup, runs from the trusted postgres session as the same staff member, so the
     # fixture state is unchanged; the revocation itself is tested in test-single-writer.sql.
     result = sql(f"""begin;
@@ -75,7 +77,7 @@ commit;""")
     print('PASS concurrent policy publication uses distinct increasing versions', flush=True)
 
     def qualified():
-        intake = command('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Placement race', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
+        intake = trusted('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Placement race', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
         lead = intake['lead']['id']
         due = sql("select (now()+interval '1 day')::text").stdout.strip()
         result = trusted('qualify_lead', str(uuid.uuid4()), {'lead_id': lead, 'expected_version': 1, 'conversation_channel': 'phone', 'note': 'Placement agreed', 'qualification_step': 'placement_test', 'next_task': {'task_type': 'confirm_placement_test', 'due_at': due}})

@@ -52,7 +52,10 @@ try {
   eq(hours.body.opening_hours['2'], LIVE_POLICY.opening_hours['2'], 'opening hours are the published version');
 
   // Role boundary at the HTTP edge.
-  const created = await command(tokens.reception, 'crm_create_manual_lead', { display_name: 'HTTP prospect', learner_name: 'Apprenant synthétique', email: `${run}@example.invalid`, source_label: 'Manuel · Téléphone' });
+  // 142 (deviation 3): the screens' create is crm_create_prospect; crm_create_manual_lead has no API role.
+  const manual = await command(tokens.reception, 'crm_create_manual_lead', { display_name: 'HTTP refusé 142', learner_name: 'Apprenant synthétique', email: `m-${run}@example.invalid`, source_label: 'Manuel · Téléphone' });
+  eq([manual.status, manual.body?.code], [403, '42501'], 'crm_create_manual_lead is refused over HTTP (no API role)');
+  const created = await command(tokens.reception, 'crm_create_prospect', { display_name: 'HTTP prospect', learner_name: 'Apprenant synthétique', email: `${run}@example.invalid`, source_label: 'Manuel · Téléphone' });
   eq(created.status, 200, 'receptionist creates a prospect');
   const lead = created.body.lead.id;
   eq(created.body.lead.owner_id, reception.id, '§4.6: a manual prospect is owned by its creator');
@@ -151,7 +154,7 @@ try {
   const visitAt = slotAt('opening', 9, '11:00');
   const firstKey = randomUUID();
   const firstData = { display_name: 'HTTP appel entrant', learner_name: 'Apprenant synthétique', email: `in-${run}@example.invalid`, source_label: 'Manuel · Téléphone', first_exchange: { channel: 'phone', next: { task_type: 'center_visit', due_at: visitAt, with_test: true } } };
-  const inbound = await command(tokens.reception, 'crm_create_manual_lead', firstData, firstKey);
+  const inbound = await command(tokens.reception, 'crm_create_prospect', firstData, firstKey);
   eq(inbound.status, 200, 'create with a first exchange');
   const inboundLead = inbound.body.lead.id;
   eq(inbound.body.lead.status, 'QUALIFIED', 'OD-11: the agreed appointment with a test qualifies the new prospect');
@@ -161,21 +164,21 @@ try {
   eq(sql(`select count(*) from public.crm_activities where lead_id=${q(inboundLead)} and is_primary`), '1', '§4.7: one history entry for create and exchange');
   eq(sql(`select count(*) from public.crm_submissions where lead_id=${q(inboundLead)} and core_fields ? 'first_exchange'`), '0', 'the acquisition snapshot keeps the contact fields only');
   invariants(inboundLead, 'create with first exchange');
-  const inboundReplay = await command(tokens.reception, 'crm_create_manual_lead', firstData, firstKey);
+  const inboundReplay = await command(tokens.reception, 'crm_create_prospect', firstData, firstKey);
   eq(inboundReplay.body.lead.id, inboundLead, 'replaying the create returns the same prospect');
   eq(sql(`select count(*) from public.crm_leads where id in (select lead_id from public.crm_submissions where core_fields->>'display_name'='HTTP appel entrant')`), '1', 'the replay creates nothing');
-  const walkIn = await command(tokens.reception, 'crm_create_manual_lead', { display_name: 'HTTP visite', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Visite au centre', first_exchange: { channel: 'in_person', next: { task_type: 'awaiting_prospect' } } });
+  const walkIn = await command(tokens.reception, 'crm_create_prospect', { display_name: 'HTTP visite', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Visite au centre', first_exchange: { channel: 'in_person', next: { task_type: 'awaiting_prospect' } } });
   eq([walkIn.status, walkIn.body.lead.status, walkIn.body.next_action?.task_type], [200, 'ENGAGED', 'awaiting_prospect'], 'a walk-in « reviendra » waits, with no date chosen');
   invariants(walkIn.body.lead.id, 'walk-in');
   // Review Important 2 (§4.8 observation 5): a walk-in is never created without its in-person exchange.
   for (const first_exchange of [undefined, { channel: 'phone', next: { task_type: 'awaiting_prospect' } }]) {
-    const refused = await command(tokens.reception, 'crm_create_manual_lead', { display_name: 'HTTP visite refusée', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Visite au centre', ...(first_exchange ? { first_exchange } : {}) });
+    const refused = await command(tokens.reception, 'crm_create_prospect', { display_name: 'HTTP visite refusée', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Visite au centre', ...(first_exchange ? { first_exchange } : {}) });
     eq([refused.status, refused.body?.hint], [400, 'crm_create.walk_in_exchange_required'], `a walk-in ${first_exchange ? 'with a phone exchange' : 'without its exchange'} is refused`);
   }
   eq(sql(`select count(*) from public.crm_submissions where core_fields->>'display_name'='HTTP visite refusée'`), '0', 'a refused walk-in leaves no prospect and no « Premier contact »');
   const lunch = sql(`select to_json((((now() at time zone public.centre_utc_offset())::date+9)::timestamp+'13:00') at time zone public.centre_utc_offset())#>>'{}'`);
   for (const bad of [{ channel: 'phone', next: 'keep' }, { channel: 'phone', next: { close: { status: 'LOST', reason: 'price' } } }, { channel: 'other', next: { task_type: 'awaiting_prospect' } }, { channel: 'phone', next: { task_type: 'callback', schedule_kind: 'appointment', due_at: lunch } }]) {
-    const refused = await command(tokens.reception, 'crm_create_manual_lead', { display_name: 'HTTP refusé', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Téléphone', first_exchange: bad });
+    const refused = await command(tokens.reception, 'crm_create_prospect', { display_name: 'HTTP refusé', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Téléphone', first_exchange: bad });
     eq(refused.status, 400, `an invalid first exchange is refused whole (${JSON.stringify(bad.next).slice(0, 40)})`);
   }
   eq(sql(`select count(*) from public.crm_submissions where core_fields->>'display_name'='HTTP refusé'`), '0', 'a refused first exchange leaves no prospect behind');

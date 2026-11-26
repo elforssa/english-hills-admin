@@ -82,7 +82,8 @@ values (pg_temp.id(700), 'Validated', 'Yearly', '2026/2027', 'Child 2', pg_temp.
 -- A qualified lead with an open « Finaliser l'inscription » task, created by reception.
 create function pg_temp.lead(n integer) returns uuid language plpgsql as $$ declare l uuid; begin
   perform pg_temp.act(3);
-  l := (public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'EAP parent ' || n,
+  -- 142 (deviation 3): the screens' create; crm_create_manual_lead has no API role.
+  l := (public.crm_create_prospect(gen_random_uuid(), jsonb_build_object('display_name', 'EAP parent ' || n,
     'learner_name', 'EAP child ' || n, 'phone', '06' || lpad((71000000 + n)::text, 8, '0'), 'source_label', 'Phone'))->'lead'->>'id')::uuid;
   -- RWR-r5 M-A2 revokes crm_qualify_lead: « On a parlé » → « Inscrire maintenant » qualifies at step enrollment (OD-11).
   perform public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),

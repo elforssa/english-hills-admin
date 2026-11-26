@@ -2,6 +2,8 @@
 """Local committed synthetic milestones, competing workers, fencing and cleanup. No HTTP."""
 import concurrent.futures,json,os,subprocess
 from pathlib import Path
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 branch=subprocess.run(['git','branch','--show-current'],capture_output=True,text=True,check=True).stdout.strip()
 assert branch.startswith('codex/') or (os.getenv('GITHUB_ACTIONS')=='true' and os.getenv('GITHUB_EVENT_NAME')=='pull_request')
 args=['psql','-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1']

@@ -16,8 +16,10 @@ The restore block holds the 124 body of every function the migration replaces.
 Port: AFU_PORT (default 54322).
 """
 import os, re, subprocess, sys
+from lib.local_stack import assert_local_stack
 
 PORT = os.environ.get('AFU_PORT', '54322')
+assert_local_stack(db_port=PORT)  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 MIGRATION = 'supabase/migrations/125_audit_follow_ups.sql'
 RESTORE = 'scripts/rollback/125_audit_follow_ups_restore.sql'
 BEGIN, END = '-- BEGIN GENERATED FUNCTIONS (scripts/generate-centre-clock.py)', '-- END GENERATED FUNCTIONS'
