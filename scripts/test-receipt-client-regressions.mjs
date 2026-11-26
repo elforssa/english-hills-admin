@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { createStableIdempotencyKey } from '../src/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
-import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, paymentErrorMessage, PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, PAYMENT_EMAIL_FROM_DOSSIER_MESSAGE, PAYMENT_BUSY_MESSAGE, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
+import { buildServiceDescription, receiptSchoolYear, receiptServiceDescription, receiptServiceSummary, paymentErrorMessage, PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, PAYMENT_EMAIL_FROM_DOSSIER_MESSAGE, PAYMENT_BUSY_MESSAGE, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
 import { groupMatchesEnrollment } from '../src/lib/academicPrograms.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
@@ -28,8 +28,14 @@ assert.equal(buildServiceDescription({ sessionType: 'Adults', schoolYear: '2026/
 assert.equal(buildServiceDescription({ sessionType: 'Other', schoolYear: '2026/2027', serviceDetail: 'Examen Cambridge' }), 'Autre · Examen Cambridge · 2026/2027');
 assert.equal(receiptSchoolYear({ school_year_snapshot: '2026/2027' }), '2026/2027');
 assert.equal(receiptSchoolYear({ service_description: 'Legacy 2024 text only' }), '', 'historical text must not be parsed for a year');
-assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: 'Standard', school_year_snapshot: '2026/2027' }), 'Yearly · 2026/2027');
-assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: null, school_year_snapshot: '2026/2027' }), 'Yearly · 2026/2027');
+// RWR-r5 §5.4: the stored text keeps the programme code; every screen, the PDF and the
+// CSV read it in French (the catalogue label).
+assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: 'Standard', school_year_snapshot: '2026/2027' }), 'Programme annuel · 2026/2027');
+assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: null, school_year_snapshot: '2026/2027' }), 'Programme annuel · 2026/2027');
+assert.equal(receiptServiceSummary({ legacy: true }), 'Historique');
+assert.equal(receiptServiceDescription({ service_description: 'Summer Camp · 2026/2027' }), 'Stage d’été · 2026/2027');
+assert.equal(receiptServiceDescription({ service_description: 'Autre · Examen Cambridge · 2026/2027' }), 'Autre · Examen Cambridge · 2026/2027');
+assert.equal(receiptServiceDescription({ legacy: true }), 'Reçu historique');
 
 // Owner decision Q7: every idempotency conflict shows the receptionist-facing French wording.
 assert.equal(PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, "Ce paiement a peut-être déjà été enregistré. Ne le saisissez pas une deuxième fois : ouvrez la liste des reçus de l'élève et vérifiez d'abord.");
@@ -161,7 +167,8 @@ assert.doesNotMatch(receiptForm, /\[charges, form\.charge_id, initialData\.charg
 
 const finance = await readFile(new URL('../src/lib/receiptFinance.js', import.meta.url), 'utf8');
 // The data: URL module cannot resolve a relative import; point it at the file.
-const financeModule = finance.replace("from './centreClock.mjs'", `from '${new URL('../src/lib/centreClock.mjs', import.meta.url)}'`);
+const financeModule = finance.replace("from './centreClock.mjs'", `from '${new URL('../src/lib/centreClock.mjs', import.meta.url)}'`)
+  .replace("from './programCatalog.mjs'", `from '${new URL('../src/lib/programCatalog.mjs', import.meta.url)}'`);
 const { receiptAmounts } = await import(`data:text/javascript,${encodeURIComponent(financeModule)}`);
 assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00Z' }).payment, 125,
   'a voided receipt must still display its original issued amount');

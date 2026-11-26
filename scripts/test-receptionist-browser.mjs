@@ -196,7 +196,7 @@ try {
   await page.getByText('Plus de filtres',{exact:false}).click();
   for (const label of ['Filtrer par statut','Filtrer par paiement','Filtrer par catégorie',
     'Filtrer par affectation de groupe','Filtrer par session','Filtrer par niveau',
-    'Filtrer par complétude','Filtrer par source']) {
+    'Filtrer par complétude','Filtrer par origine']) {
     await page.getByRole('combobox', { name: label }).waitFor();
   }
   assert.equal(await page.getByRole('button', { name: 'CSV', exact: true }).count(), 0);
@@ -586,10 +586,11 @@ try {
   console.log('PASS stale receptionist edit: HTTP 409 PT409 at once, French conflict text, latest record reloaded');
   // Items 2 and 3: source and e-mail of an unplaced learner, saved and the e-mail change logged.
   await page.getByRole('textbox', { name: 'Email (apprenant)' }).fill(`${run}-ready@example.invalid`);
-  await page.getByRole('combobox', { name: 'Comment avez-vous connu le centre ?' }).selectOption('Recherche Google');
+  // RWR-r5 B2 (§5.4): the learner's « Origine » is the origin list (students.origin_code).
+  await page.getByRole('combobox', { name: 'Origine', exact: true }).selectOption('google');
   await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await page.waitForURL(app + `/students/${readyStudent}`);
-  assert.equal(sql(`select email||':'||referral_source from public.students where id='${readyStudent}'`), `${run}-ready@example.invalid:Recherche Google`);
+  assert.equal(sql(`select email||':'||origin_code from public.students where id='${readyStudent}'`), `${run}-ready@example.invalid:google`);
   assert.equal(sql(`select count(*) from public.activity_log where target_id='${readyStudent}' and after->>'kind'='student_email_change'
     and after->>'author_role'='receptionist' and actor_id='${user}'`), '1');
   await page.goto(app + '/students/new');

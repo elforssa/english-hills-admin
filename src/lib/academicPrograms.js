@@ -1,6 +1,7 @@
 export {
   LEGACY_LEVELS, YEARLY_LEVELS, ADULT_LEVELS, ONLINE_SESSION_TYPES, SESSION_TYPES, PUBLIC_SESSION_TYPES,
   LEVELS_BY_SESSION, ALL_LEVELS, getLevelsForSession, isOnlineSessionType,
+  PROGRAMMES, PROGRAMME_LABELS, programmeName, serviceLine,
 } from './programCatalog.mjs';
 
 export function groupMatchesSelection(group, sessionType, level) {

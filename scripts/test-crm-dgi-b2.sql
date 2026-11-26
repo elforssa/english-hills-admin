@@ -79,14 +79,16 @@ do $$ declare s uuid;l uuid:=pg_temp.lead('L1');begin
  insert into crm_submission_attribution(submission_id,provider,attribution_status) values(s,'website','partial');
  perform crm_security.resolve_submission(l,s,(select version from crm_leads where id=l),gen_random_uuid());end $$;
 -- L2 and L4: real qualification (records a conversation), enrollment and collected
--- receipt; L4's receipt is then voided (converted, not paid).
+-- receipt; L4's receipt is then voided (converted, not paid). Each enrolls in its own
+-- programme: since 140 (RWR-r5 §5.4, invariant 11) a conversion writes the enrollment's
+-- programme to the prospect, so the program buckets below stay those of the forms.
 alter table receipts disable trigger on_receipt_created;
 do $$ declare k text;r jsonb;l uuid;s uuid;e uuid;receipt uuid;begin
  foreach k in array array['L2','L4'] loop
   l:=pg_temp.lead(k);
   perform pg_temp.act('qualify_lead',l,jsonb_build_object('conversation_channel','phone','note','Qualified','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));
   -- EAP (127): enroll and collect in one step (replaces crm_start_enrollment + create_charge_payment).
-  r:=crm_enroll_and_collect(gen_random_uuid(),jsonb_build_object('enrollment',jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','B2 child '||k,'birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'B2 child '||k,'2014-05-10'),'confirm_new',true),
+  r:=crm_enroll_and_collect(gen_random_uuid(),jsonb_build_object('enrollment',jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','B2 child '||k,'birth_date','2014-05-10','session_type',case k when 'L4' then 'Adults' else 'Yearly' end,'school_year','2026/2027','level',case k when 'L4' then 'Beginning 1' else 'Child 2' end,'candidate_review',crm_security.candidate_token(l,'B2 child '||k,'2014-05-10'),'confirm_new',true),
    'payment',jsonb_build_object('gross_amount',1500,'payment_amount',500,'payment_method','Espèces')));
   s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;receipt:=(r->>'receipt_id')::uuid;
   set constraints all immediate;set constraints all deferred;

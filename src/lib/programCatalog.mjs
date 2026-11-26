@@ -30,6 +30,47 @@ export const SESSION_TYPES = [
   ...ONLINE_SESSION_TYPES,
 ];
 
+// RWR-r5 §5.4 (migration 140): the programme catalogue. These rows equal the seed of
+// public.programmes (scripts/test-catalogue-labels.mjs); a stored code is never
+// translated anywhere else. `crmSelectable` is the seed default: the director can
+// change it on the catalogue screen (get_catalogue returns the live value).
+export const PROGRAMMES = [
+  { code: 'Yearly', label: 'Programme annuel', audience: 'enfants', crmSelectable: true, enrollable: true },
+  { code: 'Adults', label: 'Adultes', audience: 'adultes', crmSelectable: true, enrollable: true },
+  { code: 'Summer Camp', label: 'Stage d’été', audience: 'enfants', crmSelectable: true, enrollable: true },
+  { code: 'Communication Junior', label: 'Communication junior', audience: 'ados', crmSelectable: true, enrollable: true },
+  { code: 'Communication Adult', label: 'Communication adultes', audience: 'adultes', crmSelectable: true, enrollable: true },
+  { code: 'One-to-One', label: 'Cours individuel', audience: 'tous', crmSelectable: true, enrollable: true },
+  { code: 'Mise à niveau', label: 'Mise à niveau', audience: 'tous', crmSelectable: true, enrollable: true },
+  { code: 'Online', label: 'Cours en ligne', audience: 'tous', crmSelectable: true, enrollable: true },
+  { code: 'Online One-to-One', label: 'Cours individuel en ligne', audience: 'tous', crmSelectable: true, enrollable: true },
+  { code: 'Other', label: 'Autre programme', audience: 'tous', crmSelectable: true, enrollable: false },
+];
+
+// Finance keeps a « Legacy » code for balances carried over from the old system.
+export const PROGRAMME_LABELS = {
+  ...Object.fromEntries(PROGRAMMES.map(p => [p.code, p.label])),
+  Legacy: 'Ancien solde',
+};
+
+// The French label of a stored programme code; an unknown value is shown as stored.
+export function programmeName(code) {
+  return PROGRAMME_LABELS[code] || code || '';
+}
+
+// Options for a programme <select>: the stored code as value, the French label as text.
+export function programmeOptions(codes = SESSION_TYPES) {
+  return codes.map(code => ({ value: code, label: programmeName(code) }));
+}
+
+// A stored « Programme · 2026/2027 » text (receipt and charge service lines, written
+// before and after 140 with the code) read in French; the stored text never changes.
+export function serviceLine(text) {
+  const value = String(text || '');
+  const [head, ...rest] = value.split(' · ');
+  return PROGRAMME_LABELS[head] ? [PROGRAMME_LABELS[head], ...rest].join(' · ') : value;
+}
+
 // CDC (migration 128, Q1 = A): the programmes whose groups carry a start and an end
 // date (courses). Yearly, Other and the Communication programmes may carry dates.
 export const COURSE_DATE_PROGRAMMES = ['Mise à niveau', 'Adults', 'Summer Camp', 'One-to-One'];

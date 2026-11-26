@@ -5,9 +5,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { Search, Phone, Mail, Users, ArrowRight, BookOpen } from 'lucide-react';
-import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, programmeName } from '@/lib/academicPrograms';
 import { recordHref } from '@/lib/navigation.mjs';
-import { DOSSIER_FILTER_STATUSES, DOSSIER_LABELS, displayLabel } from '@/lib/ui/presentation.mjs';
+import { DOSSIER_FILTER_STATUSES, DOSSIER_LABELS, displayLabel, ageCategoryLabel } from '@/lib/ui/presentation.mjs';
 
 const STATUS_CONFIG = {
   Enrolled: { bg: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100', dot: 'bg-emerald-500' },
@@ -106,7 +106,7 @@ export default function StudentsDirectory() {
       <div className="flex gap-2 mb-6 flex-wrap">
         <select aria-label="Filtrer l'annuaire par session" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white" value={filterSession} onChange={e => { setFilterSession(e.target.value); setFilterLevel(''); }}>
           <option value="">Toutes les sessions</option>
-          {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
+          {SESSION_TYPES.map(session => <option key={session} value={session}>{programmeName(session)}</option>)}
         </select>
         <select aria-label="Filtrer l'annuaire par niveau" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white" value={filterLevel} onChange={e => setFilterLevel(e.target.value)}>
           <option value="">Tous les niveaux</option>
@@ -131,7 +131,7 @@ export default function StudentsDirectory() {
         </select>
         <select aria-label="Filtrer l'annuaire par catégorie" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
           <option value="">Toutes catégories</option>
-          {CATS.map(c => <option key={c}>{c}</option>)}
+          {CATS.map(c => <option key={c} value={c}>{ageCategoryLabel(c)}</option>)}
         </select>
         <div className="flex border border-border rounded-xl overflow-hidden bg-white">
           {['grid','list'].map(v => (
@@ -174,7 +174,7 @@ export default function StudentsDirectory() {
                   )}
                 </div>
                 <p className="font-semibold text-foreground text-sm mb-1 truncate">{s.full_name}</p>
-                <p className="text-xs text-muted-foreground mb-3">{s.age_category || 'Catégorie non définie'}</p>
+                <p className="text-xs text-muted-foreground mb-3">{s.age_category ? ageCategoryLabel(s.age_category) : 'Catégorie non définie'}</p>
                 {grp && (
                   <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
                     <BookOpen size={10} className="flex-shrink-0" style={{ color: 'var(--brand)' }} />

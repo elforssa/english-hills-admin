@@ -15,7 +15,7 @@ import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import { getMyMessages, loadTeacherAcademicRows } from '@/lib/portal';
 import { hasCapability } from '@/lib/roleAccess.mjs';
-import { getLevelsForSession } from '@/lib/academicPrograms';
+import { getLevelsForSession, programmeName } from '@/lib/academicPrograms';
 import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
 import { getBrowserClient } from '@/lib/supabase';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
@@ -628,7 +628,7 @@ export default function TeacherPortal() {
                   <span className="text-xs text-muted-foreground">{g.terme}</span>
                 </div>
                 <p className="font-semibold">{g.name}</p>
-                <p className="text-xs text-muted-foreground mt-1">{g.session_type || 'Yearly'} · {g.niveau}</p>
+                <p className="text-xs text-muted-foreground mt-1">{programmeName(g.session_type || 'Yearly')} · {g.niveau}</p>
                 <p className="text-xs text-muted-foreground">{g.jours} {g.horaire}</p>
                 <p className="text-xs text-muted-foreground">{g.salle || '—'}</p>
                 <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">

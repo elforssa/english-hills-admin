@@ -8,7 +8,8 @@ import FormField from '@/components/operational/FormField';
 import { useCrmRead } from '@/lib/crm/queries';
 import { centreDate, centreDateTimeInput } from '@/lib/centreClock.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
-import { CLOSE_KINDS, LOST, NEXT_KINDS, NOT_QUALIFIED, OUR_STEP_PRESETS, REMINDER_PRESETS, STALE_MESSAGE, actionErrorMessage, firstSlotDate, nextActionPayload, prefillFromAction, replaceRules, slotTimes } from '@/lib/crm/presentation.mjs';
+import { CLOSE_KINDS, NEXT_KINDS, OUR_STEP_PRESETS, REMINDER_PRESETS, STALE_MESSAGE, actionErrorMessage, firstSlotDate, nextActionPayload, prefillFromAction, replaceRules, slotTimes } from '@/lib/crm/presentation.mjs';
+import { CLOSE_MENU, CLOSE_REASON_LABELS, NOT_INTERESTED_WHY } from '@/lib/catalogue.mjs';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyFooter';
 import { useCrmCommand } from './useCrmCommand';
 
@@ -21,6 +22,19 @@ const KIND_HELP = {
   awaiting: 'Le contact doit revenir vers nous. Relance par défaut dans 5 jours.',
   enrol: 'Prochaine action : « Finaliser l’inscription », demain.'
 };
+
+// « Clôturer » (§5.4): one reason list, the status derived by the server. « Pas
+// intéressé » always asks why; « Autre raison » and « Autre » need a précision.
+// `menu`: the reasons offered (the appointment outcome offers « Pas intéressé » only).
+export function ClosePicker({ form, setForm, lead, menu = CLOSE_MENU }) {
+  const set = (key, value) => setForm(old => ({ ...old, [key]: value }));
+  const noteNeeded = form.reason === 'other' || (form.reason === 'not_interested' && form.why === 'not_interested');
+  return <>
+    {menu.length > 1 && <FormField label="Motif"><select className={control} required value={form.reason || ''} onChange={e => setForm(old => ({ ...old, reason: e.target.value, why: '' }))}><option value="">Choisir…</option>{menu.map(code => <option key={code} value={code} disabled={code === 'unreachable' && !lead?.unreachable_eligible}>{CLOSE_REASON_LABELS[code]}</option>)}</select></FormField>}
+    {form.reason === 'not_interested' && <FormField label="Pourquoi ?"><select className={control} required value={form.why || ''} onChange={e => set('why', e.target.value)}><option value="">Choisir…</option>{NOT_INTERESTED_WHY.map(code => <option key={code} value={code}>{CLOSE_REASON_LABELS[code]}</option>)}<option value="not_interested">Autre raison</option></select></FormField>}
+    <FormField label={noteNeeded ? 'Précisez' : 'Précision (facultatif)'}><input className={control} maxLength={500} value={form.closeNote || ''} onChange={e => set('closeNote', e.target.value)} /></FormField>
+  </>;
+}
 
 // The picker of « Noter un échange » (what was agreed) and « Changer » (what comes next).
 // `suggestDate` (the create form) proposes the first day with a free slot for an appointment;
@@ -49,8 +63,7 @@ export function NextActionPicker({ form, setForm, current, kinds, lead, hours, l
     {(kind === 'our_step' || kind === 'reminder') && <FormField label="Quand"><select className={control} value={form.preset || ''} onChange={e => set('preset', e.target.value)}><option value="">Choisir…</option>{Object.entries(kind === 'our_step' ? OUR_STEP_PRESETS : REMINDER_PRESETS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}{kind === 'our_step' && <option value="date">À une date précise</option>}</select></FormField>}
     {kind === 'our_step' && form.preset === 'date' && dateField('Date')}
     {kind === 'awaiting' && <>{!form.noRelance && dateField('Relancer le', false, 'Facultatif : sans date, la relance est prévue dans 5 jours.')}<label className="flex min-h-9 items-center gap-2 text-sm"><input type="checkbox" checked={!!form.noRelance} onChange={e => set('noRelance', e.target.checked)} />Sans date de relance</label></>}
-    {CLOSE_KINDS.includes(kind) && <><FormField label="Motif"><select className={control} required value={form.reason || ''} onChange={e => set('reason', e.target.value)}><option value="">Choisir…</option>{Object.entries(kind === 'lost' ? LOST : NOT_QUALIFIED).map(([value, label]) => <option key={value} value={value} disabled={value === 'unreachable' && !lead?.unreachable_eligible}>{label}</option>)}</select></FormField>
-      <FormField label={form.reason === 'other' ? 'Précisez le motif' : 'Précision (facultatif)'}><input className={control} maxLength={500} value={form.closeNote || ''} onChange={e => set('closeNote', e.target.value)} /></FormField></>}
+    {CLOSE_KINDS.includes(kind) && <ClosePicker form={form} setForm={setForm} lead={lead} />}
     {kind && !CLOSE_KINDS.includes(kind) && !['enrol', 'keep', 'none'].includes(kind) && <FormField label="Précisions (facultatif)"><input className={control} maxLength={4000} value={form.instructions || ''} onChange={e => set('instructions', e.target.value)} /></FormField>}
     {current && kind && kind !== 'keep' && <div className="rounded-md bg-amber-50 p-3 text-sm">
       <p>{CLOSE_KINDS.includes(kind) ? 'Annule' : 'Remplace'} : {current.label}</p>
@@ -133,7 +146,7 @@ export default function NextActionDialog({ lead, onClose }) {
     <form noValidate onSubmit={submit} className="space-y-4"><fieldset disabled={command.busy} className="space-y-4">
       {!canBook && <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700" data-testid="book-through-exchange">Pour fixer un rendez-vous au centre, notez l’échange (« Noter un échange » → « On a parlé ») : le prospect devient qualifié.</p>}
       <NextActionPicker form={form} setForm={update} current={seen.action} lead={lead} hours={hours.data}
-        kinds={[...(canBook ? ['center_visit'] : []), 'callback', 'our_step', 'reminder', 'awaiting', 'lost', 'not_qualified']} />
+        kinds={[...(canBook ? ['center_visit'] : []), 'callback', 'our_step', 'reminder', 'awaiting', 'close']} />
     </fieldset><FormFooter error={isRecordConflict(failed) ? null : failed} stale={stale} busy={command.busy} onReload={reload} onCancel={closer.request} /></form>
     {closer.guard}
   </DialogContent></Dialog>;

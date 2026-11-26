@@ -21,24 +21,23 @@ import {
   SESSION_TYPES,
   getLevelsForSession,
   groupMatchesSelection,
+  programmeName,
 } from '@/lib/academicPrograms';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { courseEndedSuffix, isClosedCourse } from '@/lib/academic/courseClose.mjs';
 import { useClosedOnlineGroupIds } from '@/lib/queries';
 import { useAuth } from '@/context/AuthContext';
+import { AGE_CATEGORY_LABELS } from '@/lib/ui/presentation.mjs';
+import { ORIGINS, SELECTABLE_ORIGINS, originLabel } from '@/lib/catalogue.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const inputErrClass = "w-full border border-red-400 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-red-500";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
-const SOURCES = [
-  'Réseaux sociaux (Facebook / Instagram)',
-  'Recherche Google',
-  'Famille / Ami(e)',
-  'Passage devant le centre (walk-in)',
-  'Ancien élève / Réinscription',
-];
+// RWR-r5 §5.4: the learner's origin is the catalogue's origin list (students.origin_code).
+// The old answer (referral_source) is kept as written and shown until D4 maps it.
+const ORIGIN_CODES = ORIGINS.map(o => o.code);
 
 const StudentSchema = z.object({
   full_name:      z.string().trim().min(2, 'Au moins 2 caractères').max(120, 'Trop long (max 120)'),
@@ -49,7 +48,7 @@ const StudentSchema = z.object({
   age_category:   z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
   niveau_cefr:    z.enum(ALL_LEVELS).optional().or(z.literal('')),
   session_type:   z.enum(SESSION_TYPES).optional().or(z.literal('')),
-  referral_source: z.enum(SOURCES).optional().or(z.literal('')),
+  origin_code:    z.enum(ORIGIN_CODES).optional().or(z.literal('')),
   groupe_id:      z.guid().optional().or(z.literal('')),
   photo_url:      z.string().optional().or(z.literal('')),
   notes:          z.string().max(2000, 'Trop long (max 2000)').optional().or(z.literal('')),
@@ -88,7 +87,7 @@ export default function StudentForm() {
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
     niveau_cefr: '', age_category: '', session_type: 'Yearly',
-    referral_source: '', groupe_id: '', photo_url: '', notes: '',
+    origin_code: '', groupe_id: '', photo_url: '', notes: '',
   });
   // EGC: the status follows enrollments and the file group is the database's copy
   // of a membership. Edit never writes them; programme and level follow the group.
@@ -113,7 +112,7 @@ export default function StudentForm() {
               age_category: row.age_category ?? '',
               niveau_cefr:  row.niveau_cefr  ?? '',
               session_type: row.session_type ?? 'Yearly',
-              referral_source: row.referral_source ?? '',
+              origin_code:  row.origin_code ?? '',
               date_naissance: row.date_naissance ?? '',
               telephone:    row.telephone ? formatPhoneFr(row.telephone) : '',
               email:        row.email        ?? '',
@@ -225,7 +224,7 @@ export default function StudentForm() {
       age_category:   fields.age_category   || null,
       niveau_cefr:    fields.niveau_cefr    || null,
       session_type:   fields.session_type   || 'Yearly',
-      referral_source: fields.referral_source || null,
+      origin_code:    fields.origin_code    || null,
       date_naissance: fields.date_naissance || null,
       telephone:      fields.telephone      || null,
       email:          fields.email          || null,
@@ -427,13 +426,13 @@ export default function StudentForm() {
             <label htmlFor="age_category" className={labelClass}>Catégorie d&apos;âge</label>
             <select id="age_category" className={inputClass} value={form.age_category || ''} onChange={e => set('age_category', e.target.value)}>
               <option value="">— Non défini —</option>
-              {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              {AGE_CATEGORIES.map(c => <option key={c} value={c}>{AGE_CATEGORY_LABELS[c]}</option>)}
             </select>
           </div>
           <div>
             <label htmlFor="session_type" className={labelClass}>Session</label>
             <select id="session_type" className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)} disabled={placed}>
-              {SESSION_TYPES.map(s => <option key={s}>{s}</option>)}
+              {SESSION_TYPES.map(s => <option key={s} value={s}>{programmeName(s)}</option>)}
             </select>
           </div>
           <div>
@@ -445,11 +444,13 @@ export default function StudentForm() {
           </div>
           {placed && <p className="col-span-2 -mt-2 text-xs text-muted-foreground">Le programme et le niveau suivent le groupe ; modifiez l’inscription depuis la fiche apprenant.</p>}
           <div className="col-span-2">
-            <label htmlFor="referral_source" className={labelClass}>Comment avez-vous connu le centre ?</label>
-            <select id="referral_source" className={inputClass} value={form.referral_source || ''} onChange={e => set('referral_source', e.target.value)}>
+            <label htmlFor="origin_code" className={labelClass}>Origine</label>
+            <select id="origin_code" className={inputClass} value={form.origin_code || ''} onChange={e => set('origin_code', e.target.value)}>
               <option value="">— Non renseigné —</option>
-              {SOURCES.map(s => <option key={s}>{s}</option>)}
+              {SELECTABLE_ORIGINS.map(o => <option key={o.code} value={o.code}>{o.label}</option>)}
+              {form.origin_code && !SELECTABLE_ORIGINS.some(o => o.code === form.origin_code) && <option value={form.origin_code}>{originLabel(form.origin_code)}</option>}
             </select>
+            {!form.origin_code && form.referral_source && <p className="mt-1 text-xs text-muted-foreground">Ancienne réponse : {form.referral_source}</p>}
           </div>
           {canPlaceAtCreation && <>
           <div>

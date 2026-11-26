@@ -195,7 +195,7 @@ assert.equal(yearCloseHasWork({ to_end: 0, groups_to_mark: 2 }), true, 'a close 
 assert.equal(yearCloseHasWork({ to_end: 3, groups_to_mark: 0 }), true);
 assert.equal(yearCloseHasWork({ to_end: 0, groups_to_mark: 0 }), false);
 assert.equal(yearCloseHasWork(null), false);
-assert.equal(programmeBreakdown({ 'Summer Camp': 1, 'Mise à niveau': 3, Adults: 0 }), 'Mise à niveau 3, Summer Camp 1');
+assert.equal(programmeBreakdown({ 'Summer Camp': 1, 'Mise à niveau': 3, Adults: 0 }), 'Mise à niveau 3, Stage d’été 1');
 assert.equal(programmeBreakdown(null), '');
 
 // ── The director commands' wrappers ───────────────────────────────────────────

@@ -61,7 +61,7 @@ try {
  assert.equal(await drawer().getByRole('button',{name:/^Responsable/}).count(),0,'owner label is not a reassignment control');
  await drawer().getByText('Nouveau',{exact:true}).first().waitFor();
  // Stale hidden selection: a closure picked after « On a parlé », then the result changed.
- await exchange('Téléphone','On a parlé');await pick('Pas intéressé');await dialog().getByLabel('Motif',{exact:true}).waitFor();
+ await exchange('Téléphone','On a parlé');await pick('Clôturer');await dialog().getByLabel('Motif',{exact:true}).waitFor();
  await dialog().getByLabel('Pas de réponse',{exact:true}).check();assert.equal(await dialog().getByLabel('Motif',{exact:true}).count(),0,'the picker and its reason are gone');
  const logged=[];page.on('request',request=>{if(request.url().endsWith('/rpc/crm_log_exchange'))logged.push(request.postDataJSON().p_data);});
  await submit();await toast('Pas de réponse enregistré');await closed();

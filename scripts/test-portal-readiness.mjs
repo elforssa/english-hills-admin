@@ -85,7 +85,7 @@ async function route(actor, path, body, headers = { 'Content-Type': 'application
   return { ok: res.ok, status: res.status, data: await res.json().catch(() => null) };
 }
 
-const STAFF_KEYS = ['notes', 'referral_source', 'photo_consent_at', 'plan_type', 'premium_start_date', 'premium_end_date', 'deleted_at',
+const STAFF_KEYS = ['notes', 'referral_source', 'origin_code', 'photo_consent_at', 'plan_type', 'premium_start_date', 'premium_end_date', 'deleted_at',
   'documents_urls', 'registration_request_id', 'registration_payload_hash', 'consent_at', 'consent_policy_version', 'consent_source',
   'payment_note', 'void_reason', 'voided_by', 'actor_id', 'actor_name', 'email_delivery_status', 'email_request_id', 'email_attempt_count',
   'email_last_attempted_at', 'email_last_error', 'idempotency_key', 'legacy', 'photo_consent', 'created_by', 'legacy_receipt_id',

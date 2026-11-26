@@ -14,7 +14,7 @@ import { ACTIVE_STUDENT_STATUSES, currentSchoolYear } from '@/lib/enrollmentWork
 import { coursesToCloseCount, listCoursesToClose } from '@/lib/academic/courseClose.mjs';
 import { PROGRAMMES_WITHOUT_GROUPS } from '@/lib/programCatalog.mjs';
 import { businessMonthStart, money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
-import { receiptServiceSummary } from '@/lib/receiptPresentation';
+import { receiptServiceDescription, receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
 import { hasCapability } from '@/lib/roleAccess.mjs';
@@ -338,7 +338,7 @@ export default function Dashboard() {
                     <div className="flex-1 min-w-0">
                       {r.student_id ? <ContextLink href={`/students/${r.student_id}`} className="block text-sm font-semibold text-primary truncate hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{r.nom_prenom}</ContextLink> : <p className="text-sm font-semibold text-foreground truncate">{r.nom_prenom}</p>}
                       <Link href={recordHref(`/receipts/${r.id}/print`, '/dashboard')} className="inline-flex min-h-8 items-center text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{r.receipt_number || `#${r.id.slice(-8).toUpperCase()}`}</Link>
-                      <p className="text-xs text-muted-foreground">{receiptServiceSummary(r)} · {r.service_description || 'Reçu historique'} · {r.date}</p>
+                      <p className="text-xs text-muted-foreground">{receiptServiceSummary(r)} · {receiptServiceDescription(r) || 'Reçu historique'} · {r.date}</p>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-sm font-bold text-foreground">{money(receiptAmounts(r).payment)} MAD</p>

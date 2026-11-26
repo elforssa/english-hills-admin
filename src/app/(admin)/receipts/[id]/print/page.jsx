@@ -7,7 +7,8 @@ import Link from 'next/link';
 import { getBrowserClient } from '@/lib/supabase';
 import { RECEIPT_PDF_ERROR, downloadReceiptPDF, printReceiptPDF, showReceiptPdfError } from '@/lib/receiptPdf';
 import { money, receiptAmounts, receiptNumberLabel, receiptStatus } from '@/lib/receiptFinance';
-import { receiptSchoolYear } from '@/lib/receiptPresentation';
+import { receiptSchoolYear, receiptServiceDescription } from '@/lib/receiptPresentation';
+import { programmeName } from '@/lib/programCatalog.mjs';
 import { useAuth } from '@/context/AuthContext';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { toast } from 'sonner';
@@ -100,7 +101,7 @@ export default function ReceiptPrint() {
 
       <div className="receipt-body flex-1 space-y-3 px-7 pb-4 sm:px-9">
         <ReceiptSection title="Apprenant"><div className="grid grid-cols-2 gap-x-5 gap-y-2"><Data label="Nom" value={receipt.nom_prenom} wide /><Data label="Téléphone" value={receipt.telephone} /><Data label="Email" value={receipt.email} /></div></ReceiptSection>
-        <ReceiptSection title="Session"><div className="grid grid-cols-2 gap-x-5 gap-y-2"><Data label="Session" value={receipt.session_type || (receipt.legacy ? 'Historique' : '')} /><Data label="Année scolaire" value={schoolYear} /><Data label="Niveau" value={receipt.niveau} /><Data label="Service" value={receipt.service_description || (receipt.legacy ? 'Reçu historique' : '')} wide /></div></ReceiptSection>
+        <ReceiptSection title="Session"><div className="grid grid-cols-2 gap-x-5 gap-y-2"><Data label="Session" value={programmeName(receipt.session_type) || (receipt.legacy ? 'Historique' : '')} /><Data label="Année scolaire" value={schoolYear} /><Data label="Niveau" value={receipt.niveau} /><Data label="Service" value={receiptServiceDescription(receipt)} wide /></div></ReceiptSection>
         <ReceiptSection title="Paiement"><div className="overflow-hidden rounded-xl border border-slate-200"><Row label="Prix brut convenu" value={`${money(amounts.gross)} MAD`} />{amounts.discount > 0 && <Row label="Remise" value={`−${money(amounts.discount)} MAD`} />}<Row label="Prix net" value={`${money(amounts.net)} MAD`} strong /><Row label="Payé avant ce reçu" value={`${money(amounts.paidBefore)} MAD`} /><Row label="Montant payé aujourd’hui" value={`${money(amounts.payment)} MAD`} emphasis="paid" /><Row label="Solde restant" value={`${money(amounts.balance)} MAD`} emphasis={amounts.balance > 0 ? 'due' : 'settled'} /></div><div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-600">{receipt.mode_paiement && <span><b>Mode :</b> {receipt.mode_paiement}</span>}{receipt.transaction_reference && <span className="break-all"><b>Référence :</b> {receipt.transaction_reference}</span>}</div></ReceiptSection>
         <div className="grid break-inside-avoid grid-cols-2 gap-10 pt-3 text-[9px] font-bold uppercase tracking-wide text-slate-400"><div><p>Signature du responsable</p><div className="mt-7 border-b border-slate-300" /></div><div className="text-right"><p>Cachet du centre</p><div className="mt-7 border-b border-slate-300" /></div></div>
       </div>

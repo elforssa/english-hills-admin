@@ -7,6 +7,8 @@
 import Link from 'next/link';
 import { AlertTriangle, CalendarClock, CircleDollarSign, Link2, Plus } from 'lucide-react';
 import { DUPLICATE_REASON, balanceLine, duplicateLine, mad, reservedElsewhere } from '@/lib/finance/paymentPanel.mjs';
+import { serviceLine } from '@/lib/programCatalog.mjs';
+import { enrollmentLabel } from '@/lib/ui/presentation.mjs';
 
 // currentLeadId: in a prospect's wizard, that prospect's own reservation stays selectable.
 // newPressed: whether « Nouvelle … » is the explicit choice (default: nothing else chosen).
@@ -21,8 +23,8 @@ export function OpenBalanceChooser({ rows = [], value = '', onChange, newLabel =
       return <div key={row.id} className={`rounded-2xl border p-3 ${selected ? 'border-primary bg-primary/[0.05] ring-2 ring-primary/20' : 'bg-white'}`} data-balance-id={row.id}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-black text-slate-900">{row.service_description}</p>
-            <p className="text-xs text-muted-foreground">{balanceLine(row)}{row.enrollment_id ? ` · inscription ${row.enrollment_status || ''}`.trimEnd() : ' · sans inscription'}</p>
+            <p className="font-black text-slate-900">{serviceLine(row.service_description)}</p>
+            <p className="text-xs text-muted-foreground">{balanceLine(row)}{row.enrollment_id ? ` · inscription ${row.enrollment_status ? enrollmentLabel(row.enrollment_status).toLowerCase() : ''}`.trimEnd() : ' · sans inscription'}</p>
             {!compact && <p className="mt-1 text-xs text-slate-600">Prix net {mad(row.net_amount)} · déjà payé {mad(row.paid_amount)}{row.due_date ? ` · échéance ${String(row.due_date).split('-').reverse().join('/')}` : ''}</p>}
             {reserved && <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-amber-800"><CalendarClock size={13} /> Réservé pour un prospect : encaissez depuis sa fiche CRM pour confirmer l’inscription.</p>}
           </div>

@@ -21,6 +21,8 @@ import { courseEndedSuffix } from '@/lib/academic/courseClose.mjs';
 import { DuplicateReceiptPanel, OpenBalanceChooser } from '@/components/finance/PaymentPanel';
 import { COMMITMENT_CHOICE, PAYMENT_REQUIRED, fetchDuplicates, mad, paymentAmounts, paymentErrors, selectableCommitments, unlinkedCommitments } from '@/lib/finance/paymentPanel.mjs';
 import { formatPhoneFr } from '@/lib/phone.mjs';
+import { cataloguePrice } from '@/lib/catalogue.mjs';
+import { useCatalogue } from '@/lib/useCatalogue';
 import { Pager, ReadState } from './CrmShared';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyFooter';
 const input = 'min-h-11 w-full rounded-md border bg-white px-3 py-2 text-sm';
@@ -120,6 +122,20 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
   const levels = getLevelsForSession(form.session, form.level);
   const linking = form.mode === 'link' && !!form.enrollment;
   const isBlocked = !!blocked && (blocked.intent === null || blocked.intent === JSON.stringify(form));
+  // §5.4 (owner decision 2026-11-26): the catalogue price of the programme and year
+  // pre-fills « Prix brut convenu », still editable; a value typed by hand is kept.
+  const catalogue = useCatalogue();
+  const prefilled = useRef('');
+  useEffect(() => {
+    if (frozen) return;
+    const price = cataloguePrice(catalogue.data, form.session, form.year);
+    const next = price != null ? String(price) : '';
+    setForm(f => {
+      if ((f.gross !== '' && f.gross !== prefilled.current) || f.gross === next) return f;
+      prefilled.current = next;
+      return { ...f, gross: next };
+    });
+  }, [catalogue.data, form.session, form.year, frozen]);
   // Desk-guard preview, as the receipt form shows it.
   const gross = amount(form.gross), discount = amount(form.discount), paid = amount(form.amount);
   const reserving = form.reserve && !commitment && !form.enrollment;

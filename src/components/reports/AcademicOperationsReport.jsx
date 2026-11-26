@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { academicOperationsData } from '@/lib/reportData.mjs';
 import { useClosedOnlineGroupIds } from '@/lib/queries';
-import { SESSION_TYPES } from '@/lib/academicPrograms';
+import { SESSION_TYPES, programmeName } from '@/lib/academicPrograms';
 
 function Metric({ icon: Icon, label, value, note, tone = 'slate' }) {
   const tones = {
@@ -85,7 +85,7 @@ export default function AcademicOperationsReport({
             Session
             <select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)} className="mt-1 block min-w-52 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-foreground focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary">
               <option value="">Toutes les sessions</option>
-              {SESSION_TYPES.map((session) => <option key={session} value={session}>{session}</option>)}
+              {SESSION_TYPES.map((session) => <option key={session} value={session}>{programmeName(session)}</option>)}
             </select>
           </label>
         </div>
@@ -113,7 +113,7 @@ export default function AcademicOperationsReport({
               <tbody className="divide-y divide-border">
                 {data.sessionRows.map((row) => (
                   <tr key={row.sessionType}>
-                    <td className="px-4 py-3 font-semibold">{row.sessionType}</td><td className="px-3 py-3 text-right">{row.groups}</td><td className="px-3 py-3 text-right">{row.assigned}/{row.groups}</td><td className="px-3 py-3 text-right">{row.students}</td><td className="px-4 py-3 text-right font-semibold">{row.capacity ? `${Math.round((row.occupied / row.capacity) * 100)}%` : '—'}</td>
+                    <td className="px-4 py-3 font-semibold">{programmeName(row.sessionType)}</td><td className="px-3 py-3 text-right">{row.groups}</td><td className="px-3 py-3 text-right">{row.assigned}/{row.groups}</td><td className="px-3 py-3 text-right">{row.students}</td><td className="px-4 py-3 text-right font-semibold">{row.capacity ? `${Math.round((row.occupied / row.capacity) * 100)}%` : '—'}</td>
                   </tr>
                 ))}
                 {!data.sessionRows.length && <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Aucune donnée académique.</td></tr>}

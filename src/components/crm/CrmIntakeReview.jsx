@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useCrmRead, useCrmRefresh, crmRpc } from '@/lib/crm/queries';
 import { retryKey } from '@/lib/crm/presentation.mjs';
+import { programmeLabel } from '@/lib/ui/presentation.mjs';
 import { formatPhoneFr } from '@/lib/phone.mjs';
 import { Pager } from './CrmShared';
 
@@ -40,7 +41,7 @@ function ReviewItem({ item, onDone }) {
       <dl className="grid gap-1">{item.answers.map(a => <div key={a.key}><dt className="inline text-slate-500">{a.label} : </dt><dd className="inline">{Array.isArray(a.display_value ?? a.value) ? (a.display_value ?? a.value).join(', ') : typeof (a.display_value ?? a.value) === 'boolean' ? (a.display_value ?? a.value) ? 'Oui' : 'Non' : String(a.display_value ?? a.value ?? '')}</dd></div>)}</dl>
       <label className="block">Après vérification avec le contact<select aria-label="Décision pour la demande" className="mt-1 block h-11 w-full rounded-md border bg-white px-3" value={action} onChange={e => setAction(e.target.value)}>
         <option value="new">Créer un nouveau contact et prospect</option>
-        {item.candidates.map(c => <option key={c.id} value={c.id}>Rattacher à {c.learner_name || c.contact_name} · {c.program || 'Programme à préciser'} · {c.contact_name}</option>)}
+        {item.candidates.map(c => <option key={c.id} value={c.id}>Rattacher à {c.learner_name || c.contact_name} · {programmeLabel(c.program)} · {c.contact_name}</option>)}
         {item.contact_candidates?.map(c => <option key={c.id} value={`contact:${c.id}`}>Nouveau prospect pour {c.name}</option>)}
         <option value="reject">Écarter cette demande invalide</option>
       </select></label>

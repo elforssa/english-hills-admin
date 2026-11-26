@@ -1,6 +1,7 @@
 import { centreDateTimeInput, centreFormatter, centreInstant, CENTRE_UTC_OFFSET_MINUTES } from '../centreClock.mjs';
 import { isRecordConflict } from '../conflictErrors.mjs';
 import { PEOPLE_MESSAGES } from '../people.mjs';
+import { CATALOGUE_MESSAGES, CLOSE_REASON_LABELS, closeChoice, closeReasonLabel } from '../catalogue.mjs';
 
 export const STATUS = {
   NEW: 'Nouveau',
@@ -114,24 +115,13 @@ export const OUTCOMES = {
   spoke_with_contact: 'Conversation avec le contact',
   wrong_number: 'Mauvais numéro'
 };
-export const LOST = {
-  unreachable: 'Injoignable',
-  not_interested: 'Pas intéressé',
-  price: 'Prix',
-  schedule: 'Horaires',
-  location: 'Localisation',
-  chose_competitor: 'Autre centre choisi',
-  postponed: 'Projet reporté',
-  other: 'Autre'
-};
-export const NOT_QUALIFIED = {
-  age_not_suitable: 'Âge non adapté',
-  program_not_suitable: 'Programme non adapté',
-  invalid_spam: 'Invalide / indésirable',
-  duplicate: 'Doublon',
-  outside_scope: 'Hors périmètre',
-  other: 'Autre'
-};
+// RWR-r5 §5.4 (migration 140): one close-reason list (src/lib/catalogue.mjs); the
+// status is derived from the reason. These two maps keep the reasons each status
+// accepts (crm_leads_closure), with the catalogue labels.
+const closeLabels = codes => Object.fromEntries(codes.map(code => [code, CLOSE_REASON_LABELS[code]]));
+export const LOST = closeLabels(['unreachable', 'not_interested', 'price', 'schedule', 'location', 'chose_competitor', 'postponed', 'duplicate', 'other']);
+export const NOT_QUALIFIED = closeLabels(['age_not_suitable', 'program_not_suitable', 'invalid_spam', 'duplicate', 'outside_scope', 'wrong_number', 'other']);
+export { closeReasonLabel };
 export const EVENTS = {
   enrollment_started: 'Inscription commencée',
   lead_converted: 'Inscription confirmée',
@@ -203,6 +193,7 @@ export function casablancaInstant(value) {
 }
 export function commandError(error) {
   if (PEOPLE_MESSAGES[error?.hint]) return PEOPLE_MESSAGES[error.hint];
+  if (CATALOGUE_MESSAGES[error?.hint]) return CATALOGUE_MESSAGES[error.hint];
   if (isRecordConflict(error)) return 'Ce prospect a changé depuis son ouverture. Les informations sont actualisées. Vérifiez puis réessayez.';
   if (error?.code === '42501') return 'Vous n’avez pas accès à cette action.';
   const message = error?.message || '';
@@ -358,10 +349,9 @@ export const NEXT_KINDS = {
   reminder: 'Rappel pour l’équipe',
   awaiting: 'En attente du prospect',
   enrol: 'Inscrire maintenant',
-  lost: 'Pas intéressé',
-  not_qualified: 'Pas pour nous'
+  close: 'Clôturer'
 };
-export const CLOSE_KINDS = ['lost', 'not_qualified'];
+export const CLOSE_KINDS = ['close'];
 export const OUR_STEP_PRESETS = { tomorrow: 'Demain', in_2_days: 'Dans 2 jours', in_3_days: 'Dans 3 jours', next_week: 'Dans une semaine' };
 export const APPOINTMENT_OUTCOMES = { came_enrolled: 'Venu · s’inscrit', came_will_return: 'Venu · reviendra', came_not_interested: 'Venu · pas intéressé', no_show: 'Absent' };
 export const COMMAND_LABELS = {
@@ -426,11 +416,7 @@ export function nextActionPayload(form, current) {
   const kind = form?.kind;
   if (!NEXT_KINDS[kind]) throw new Error('Choisissez la prochaine action.');
   if (kind === 'keep') return 'keep';
-  if (CLOSE_KINDS.includes(kind)) {
-    if (!form.reason) throw new Error('Choisissez le motif.');
-    if (form.reason === 'other' && !form.closeNote?.trim()) throw new Error('Précisez le motif « Autre ».');
-    return { close: { status: kind === 'lost' ? 'LOST' : 'NOT_QUALIFIED', reason: form.reason, ...(form.closeNote?.trim() ? { note: form.closeNote.trim() } : {}) } };
-  }
+  if (CLOSE_KINDS.includes(kind)) return { close: closeChoice(form) };
   if (kind === 'enrol') return { enrol: form.date ? { due_at: centreInstant(`${form.date}T00:00`) } : { due_preset: 'tomorrow' } };
   const at = () => {
     if (!form.date || !form.time) throw new Error('Choisissez la date et l’heure.');
@@ -490,6 +476,7 @@ export function placementStatusOptions(test) {
 export function actionErrorMessage(error) {
   if (error instanceof Error && !error.code && /^(Choisissez|Cochez|Indiquez|Précisez|Saisissez)/.test(error.message)) return error.message;
   if (PEOPLE_MESSAGES[error?.hint]) return PEOPLE_MESSAGES[error.hint];
+  if (CATALOGUE_MESSAGES[error?.hint]) return CATALOGUE_MESSAGES[error.hint];
   if (isRecordConflict(error)) return STALE_MESSAGE;
   return HINT_MESSAGES[error?.hint] || commandError(error);
 }

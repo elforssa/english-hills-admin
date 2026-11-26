@@ -3,7 +3,7 @@
 // hints and thin wrappers over the director commands. The client is injected so the
 // node tests run this code. « Today » is the centre's business date (ADR-014).
 import { centreDate } from '../centreClock.mjs';
-import { COURSE_DATE_PROGRAMMES, isOnlineSessionType } from '../programCatalog.mjs';
+import { COURSE_DATE_PROGRAMMES, isOnlineSessionType, programmeName } from '../programCatalog.mjs';
 import { isSchoolYear } from '../enrollmentWorkflow.mjs';
 
 export { COURSE_DATE_PROGRAMMES };
@@ -181,7 +181,7 @@ export function yearCloseHasWork(preview) {
 // A by-programme count ({ "Mise à niveau": 3, "Summer Camp": 1 }) as « Mise à niveau 3, Summer Camp 1 ».
 export function programmeBreakdown(byProgramme) {
   return Object.entries(byProgramme || {}).filter(([, n]) => Number(n) > 0)
-    .sort(([a], [b]) => a.localeCompare(b, 'fr')).map(([programme, n]) => `${programme} ${Number(n)}`).join(', ');
+    .sort(([a], [b]) => a.localeCompare(b, 'fr')).map(([programme, n]) => `${programmeName(programme)} ${Number(n)}`).join(', ');
 }
 
 const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;

@@ -1,6 +1,7 @@
 import { centreParts } from './centreClock.mjs';
 import { isRecordConflict } from './conflictErrors.mjs';
 import { formatPhoneFr } from './phone.mjs';
+import { programmeName, serviceLine } from './programCatalog.mjs';
 
 export const SCHOOL_YEAR_START_MONTH = 9;
 const schoolDateParts = centreParts();
@@ -31,7 +32,7 @@ export function receiptSchoolYear(receipt) {
 }
 
 export function receiptServiceSummary(receipt) {
-  const parts = [receipt?.session_type || 'Historique'];
+  const parts = [programmeName(receipt?.session_type) || 'Historique'];
   const year = receiptSchoolYear(receipt);
   if (year) parts.push(year);
   return parts.join(' · ');
@@ -57,5 +58,5 @@ export function paymentErrorMessage(error) {
 }
 
 export function receiptServiceDescription(receipt) {
-  return receipt?.service_description || (receipt?.legacy || receipt?.is_legacy ? 'Reçu historique' : '');
+  return serviceLine(receipt?.service_description) || (receipt?.legacy || receipt?.is_legacy ? 'Reçu historique' : '');
 }

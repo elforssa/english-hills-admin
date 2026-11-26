@@ -7,7 +7,8 @@ import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { currentSchoolYear, groupMemberIds, isMembership, schoolYearOfGroup } from '@/lib/enrollmentWorkflow.mjs';
 import { eapReason, egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
-import { groupMatchesEnrollment } from '@/lib/academicPrograms';
+import { groupMatchesEnrollment, programmeName } from '@/lib/academicPrograms';
+import { dossierLabel } from '@/lib/ui/presentation.mjs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
@@ -360,7 +361,7 @@ export default function GroupDetail() {
                     </td>
                     {canManage && <td className="px-4 py-3 text-muted-foreground">{s.telephone ? formatPhoneFr(s.telephone) : '—'}</td>}
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{dossierLabel(s.status)}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {canPlace && (
@@ -440,7 +441,7 @@ export default function GroupDetail() {
                       <UserPlus size={14} className="mr-2 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{s.full_name}</span>
                       <span className="shrink-0 text-xs text-muted-foreground ml-2">
-                        {memberOfOtherProgramme(s) ? 'déjà dans un autre programme' : `${s.session_type || 'Yearly'} · ${s.niveau_cefr || 'NIV à définir'}`}
+                        {memberOfOtherProgramme(s) ? 'déjà dans un autre programme' : `${programmeName(s.session_type || 'Yearly')} · ${s.niveau_cefr || 'NIV à définir'}`}
                         {!matchingPending(s).length && ' · sans inscription payée'}
                       </span>
                     </CommandItem>

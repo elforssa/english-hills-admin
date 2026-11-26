@@ -10,6 +10,7 @@
 // closed, secret present or not — never its value —, last event received, refused writes
 // since the deploy), and « Minutes connectées » shows the month's minutes per course
 // (online_usage_month) to compare with Zoom's usage report. Never attendance.
+import { programmeName } from '@/lib/programCatalog.mjs';
 import { centreMonth, formatCentre } from '@/lib/centreClock.mjs';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -135,21 +136,21 @@ export default function OnlineCourses() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Cours en ligne</h1>
-          <p className="text-sm text-muted-foreground">Groupes au programme « Online » ou « Online One-to-One ».</p>
+          <p className="text-sm text-muted-foreground">Groupes au programme « Cours en ligne » ou « Cours individuel en ligne ».</p>
         </div>
         <Button asChild variant="outline"><Link href="/groups"><Plus /> Nouveau groupe en ligne</Link></Button>
       </div>
       {management && <StatusLine />}
       {courses.isPending && <p className="text-sm text-muted-foreground">Chargement…</p>}
       {courses.isError && <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{onlineErrorText(courses.error)}</p>}
-      {courses.data?.length === 0 && <p className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">Aucun groupe en ligne. Créez un groupe avec le programme « Online » depuis Groupes & niveaux.</p>}
+      {courses.data?.length === 0 && <p className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">Aucun groupe en ligne. Créez un groupe avec le programme « Cours en ligne » depuis Groupes & niveaux.</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         {(courses.data || []).map(item => (
           <Link key={item.group_id} href={`/online/${item.group_id}`} className="block rounded-xl border bg-card p-4 transition hover:border-primary">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="flex items-center gap-2 font-semibold"><Video size={16} aria-hidden /> {item.name}</p>
-                <p className="text-sm text-muted-foreground">{item.session_type} · {item.niveau}{item.jours ? ` · ${item.jours}` : ''}{item.horaire ? ` ${item.horaire}` : ''}</p>
+                <p className="text-sm text-muted-foreground">{programmeName(item.session_type)} · {item.niveau}{item.jours ? ` · ${item.jours}` : ''}{item.horaire ? ` ${item.horaire}` : ''}</p>
               </div>
               <span className={`rounded px-2 py-0.5 text-xs ${item.course ? ONLINE_COURSE_STATUS_COLORS[item.course.status] : 'bg-slate-100 text-slate-700'}`}>
                 {item.course ? STATUS[item.course.status] : 'Fiche à créer'}

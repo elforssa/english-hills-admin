@@ -4,6 +4,8 @@
 // dated lessons with this-only / following edits, cancellations, substitutes, guests,
 // consent, attendance and join evidence. Management-only actions are hidden from the
 // receptionist and refused by the database for any other caller.
+import { programmeName } from '@/lib/programCatalog.mjs';
+import { enrollmentLabel } from '@/lib/ui/presentation.mjs';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -253,7 +255,7 @@ export default function OnlineCourse() {
         <Link href="/online" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft size={15} /> Cours en ligne</Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold">{g.name}</h1>
-          <span className="text-sm text-muted-foreground">{g.session_type} · {g.niveau}</span>
+          <span className="text-sm text-muted-foreground">{programmeName(g.session_type)} · {g.niveau}</span>
           {c && <span className={`rounded px-2 py-0.5 text-xs ${ONLINE_COURSE_STATUS_COLORS[c.status]}`}>{COURSE_STATUS[c.status]}</span>}
         </div>
       </div>
@@ -322,7 +324,7 @@ export default function OnlineCourse() {
             <div key={s.enrollment_id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <Link href={`/students/${s.student_id}`} className="font-medium hover:underline">{s.full_name}</Link>
-                <span className={`rounded px-2 py-0.5 text-xs ${ENROLLMENT_STATUS_COLORS[s.enrollment_status] || ''}`}>{s.enrollment_status}</span>
+                <span className={`rounded px-2 py-0.5 text-xs ${ENROLLMENT_STATUS_COLORS[s.enrollment_status] || ''}`}>{enrollmentLabel(s.enrollment_status)}</span>
                 {s.unpaid && <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800">Impayé</span>}
                 {child && (s.has_consent ? <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">Consentement vidéo</span>
                   : <span className="rounded bg-amber-50 px-2 py-0.5 text-xs text-amber-900">Consentement manquant</span>)}

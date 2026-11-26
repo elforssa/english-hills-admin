@@ -4,10 +4,8 @@
 // A1 owns 1, 3, 6, 7, 8, 10, 11; script 0 (the T7 one-tap) is run as well. C1 (payments, §6.1)
 // owns 2 (walk-in who pays now, one flow) and 9 (partial payment, then the balance). B1 (people,
 // §5.1–5.3) owns 4 and 5, brings 3 to its ≤ 6 target (« C'est la même personne ») and 8 to
-// « corrected in 3 ». Script 8's close variant stays at the A1 count the owner accepted on
-// 2026-11-22 (plan, implementation record): 4, its close-in-2 target in B2 (close reasons, §5.4).
-// The suite fails above that ceiling and logs « ACCEPTED A1 COUNT » with the later target so the
-// gap stays visible.
+// « corrected in 3 ». B2 (catalogues, §5.4) brings script 8's close variant to its target of 2:
+// « Mauvais numéro » closes as « Non qualifié », motif « Mauvais numéro », by default.
 // Invariant 9 (same next action on card, Tâches row, drawer and calendar) is checked in script 1.
 // Synthetic staff, prospects, learners and payments only, removed in finally. No external requests.
 import assert from 'node:assert/strict';
@@ -53,7 +51,7 @@ function script(name, target, from) {
     check: (locator, label) => step(label, () => locator.check()),
     done(ceiling = target, reason = '') {
       assert(n <= ceiling, `${name}: ${n} actions, ceiling ${ceiling} (${steps.join(' → ')})`);
-      if (n > target) { gaps.push(`${name}: ${n} > ${target} — ${reason}`); console.log(`ACCEPTED A1 COUNT ${name}: ${n} actions (later target ≤ ${target}; ${reason}) from ${from}: ${steps.join(' → ')}`); }
+      if (n > target) { gaps.push(`${name}: ${n} > ${target} — ${reason}`); console.log(`ACCEPTED COUNT ${name}: ${n} actions (target ≤ ${target}; ${reason}) from ${from}: ${steps.join(' → ')}`); }
       else console.log(`PASS day script ${name}: ${n} actions (target ≤ ${target}) from ${from}: ${steps.join(' → ')}`);
     }
   };
@@ -149,7 +147,7 @@ try {
   await s2.fill(dialog().getByLabel('Nom du contact', { exact: true }), 'Jour 2 paie maintenant', 'contact');
   await s2.fill(dialog().getByLabel('Téléphone', { exact: true }), phone(), 'phone');
   await s2.fill(dialog().getByLabel('Nom de l’apprenant', { exact: true }), learner2, 'learner');
-  await s2.select(dialog().getByLabel('Origine', { exact: true }), 'Visite au centre', 'Origine : Visite au centre');
+  await s2.select(dialog().getByLabel('Canal', { exact: true }), 'Visite au centre', 'Canal : Visite au centre');
   await s2.check(dialog().getByLabel('Inscrire maintenant', { exact: true }), 'Inscrire maintenant');
   await s2.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
   await toast('Prospect créé');
@@ -182,7 +180,7 @@ try {
   await s3.fill(dialog().getByLabel('Téléphone', { exact: true }), phone(), 'phone');
   // B1 (§5.3): « C'est la même personne » is ticked while the learner field is empty.
   assert.equal(await dialog().getByLabel('C’est la même personne', { exact: true }).isChecked(), true, '« C’est la même personne » ticked by default');
-  await s3.select(dialog().getByLabel('Origine', { exact: true }), 'Visite au centre', 'Origine : Visite au centre');
+  await s3.select(dialog().getByLabel('Canal', { exact: true }), 'Visite au centre', 'Canal : Visite au centre');
   await s3.check(dialog().getByLabel('En attente du prospect', { exact: true }), 'En attente du prospect');
   assert.equal(await dialog().getByLabel('Relancer le', { exact: true }).inputValue(), '', 'no date is forced');
   await s3.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
@@ -308,19 +306,19 @@ try {
   assert.deepEqual(openRows(fixedLead).map(r => r.type), ['contact_attempt'], 'calling starts again on the new number: one action');
   assert.equal(sql(`select count(*) from public.crm_activities where lead_id=${q(fixedLead)} and is_primary and details->>'summary' like 'Mauvais numéro · numéro corrigé%'`), '1', 'one history entry');
 
-  // 8 — Wrong number, closed (A1 ceiling 4; close in 2 is B2).
+  // 8 — Wrong number, closed in 2 (B2, §5.4): the default after « Mauvais numéro » is the close.
   phase = 'script 8';
   const wrong = intake(reception.id, 'Jour 8 mauvais numéro');
   await openDrawer(wrong);
   const s8 = script('8 wrong number (close)', 2, 'the open drawer');
   await s8.click(panel().getByRole('button', { name: 'Mauvais numéro', exact: true }), 'Mauvais numéro');
   await dialog().getByRole('heading', { name: 'Noter un échange' }).waitFor();
-  await s8.check(dialog().getByLabel('Pas pour nous', { exact: true }), 'Pas pour nous');
-  await s8.select(dialog().getByLabel('Motif', { exact: true }), 'invalid_spam', 'Motif');
+  assert.equal(await dialog().getByLabel('Clôturer', { exact: true }).isChecked(), true, 'the close is the default');
+  assert.equal(await dialog().getByLabel('Motif', { exact: true }).inputValue(), 'wrong_number', 'motif « Mauvais numéro » by default');
   await s8.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
   await toast('Prospect clôturé'); await closed('Noter un échange');
-  s8.done(4, 'accepted for A1; close in 2 in B2 with the close-reason list (§5.4)');
-  assert.equal(status(wrong), 'NOT_QUALIFIED', 'closed as not qualified');
+  s8.done();
+  assert.equal(sql(`select status||':'||closure_reason from public.crm_leads where id=${q(wrong)}`), 'NOT_QUALIFIED:wrong_number', 'closed as not qualified, reason « Mauvais numéro »');
   assert.equal(openRows(wrong).length, 0, 'a closed prospect has no next action');
 
   // 9 — Partial payment, then the balance (C1, ≤ 4): « Encaisser » opens on the oldest open balance.
@@ -351,11 +349,14 @@ try {
   await openDrawer(closing);
   const s10 = script('10 close', 3, 'the open drawer');
   await s10.click(drawer().getByRole('button', { name: 'Autres actions', exact: true }), 'Autres actions');
-  await s10.click(page.getByRole('menuitem', { name: 'Clôturer comme perdu', exact: true }), 'Clôturer comme perdu');
+  await s10.click(page.getByRole('menuitem', { name: 'Clôturer le prospect', exact: true }), 'Clôturer le prospect');
+  // B2 (§5.4): one close form whose « Motif » is always chosen (no silent default reason), so
+  // the close is 4, one above the A1 target of 3; a reason with no « Pourquoi ? » is used.
+  await s10.select(dialog().getByLabel('Motif', { exact: true }), 'duplicate', 'Motif : Doublon');
   await s10.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
-  await toast('Enregistré'); await closed('Clôturer comme perdu');
-  s10.done();
-  assert.equal(status(closing), 'LOST');
+  await toast('Enregistré'); await closed('Clôturer le prospect');
+  s10.done(4, 'B2: the close asks its reason (§5.4); owner acceptance requested in the PR B2 handoff');
+  assert.equal(sql(`select status||':'||closure_reason from public.crm_leads where id=${q(closing)}`), 'LOST:duplicate', 'a duplicate closes LOST (§5.4)');
   assert.equal(sql(`select count(*) from public.placement_tests where crm_lead_id=${q(closing)} and status='Planifié'`), '0', 'no planned test left behind');
   await drawer().getByRole('button', { name: 'Rouvrir le prospect', exact: true }).waitFor();
   const s10b = script('10 reopen', 3, 'the open drawer');
@@ -422,7 +423,7 @@ try {
   console.log('PASS day script 11: B refused with « rechargez », reloads and saves once; default views split the work');
 
   assert.deepEqual(errors, [], 'no browser errors');
-  console.log(`PASS reception day scripts 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11${gaps.length ? ` — accepted A1 counts (owner, 2026-11-22): ${gaps.join('; ')}` : ''}`);
+  console.log(`PASS reception day scripts 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11${gaps.length ? ` — counts above target: ${gaps.join('; ')}` : ''}`);
 } catch (error) {
   console.error(phase, error.message);
   if (page) {

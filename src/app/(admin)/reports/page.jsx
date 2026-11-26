@@ -30,6 +30,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { getTeacherOperations } from '@/lib/teacher-directory';
+import { dossierLabel } from '@/lib/ui/presentation.mjs';
 import {
   attendanceSeries as toAttendanceSeries, attendanceTotals as toAttendanceTotals, loadAcademicSources, reportYears,
 } from '@/lib/reportData.mjs';
@@ -176,7 +177,8 @@ export default function ReportsPage() {
   const payrollChart = useMemo(() => payrollByTeacher.slice(0, 12), [payrollByTeacher]);
 
   // ── student status mix — useful sanity check on the active pipeline ──
-  const studentMix = useMemo(() => (mixQuery.data || []).map(row => ({ name: row.status, value: Number(row.n) })), [mixQuery.data]);
+  // RWR-r5 §5.4: the stored learner status reads in French (« Inscrit », not « Enrolled »).
+  const studentMix = useMemo(() => (mixQuery.data || []).map(row => ({ name: dossierLabel(row.status), value: Number(row.n) })), [mixQuery.data]);
 
   const studentMixColors = [COLORS.success, COLORS.teal, COLORS.warning, COLORS.purple, '#94a3b8'];
 
