@@ -40,9 +40,16 @@ export default function ReceiptCorrection() {
     if (!confirm('Annuler ce paiement ? Le reçu original restera visible. Le montant de ce paiement redeviendra dû. Pour une entrée créée par erreur, utilisez Supprimer le reçu.')) return;
     sending.current = true; setSaving(true);
     if (request.current?.reason !== reason.trim()) request.current = { key: crypto.randomUUID(), reason: reason.trim() };
-    const { data, error } = await getBrowserClient().rpc('void_financial_receipt', {
-      p_receipt_id: id, p_reason: request.current.reason, p_idempotency_key: request.current.key,
-    }).finally(() => { sending.current = false; });
+    // The Supabase query builder is thenable but has no .finally(): release the lock with try/finally.
+    let result;
+    try {
+      result = await getBrowserClient().rpc('void_financial_receipt', {
+        p_receipt_id: id, p_reason: request.current.reason, p_idempotency_key: request.current.key,
+      });
+    } finally {
+      sending.current = false;
+    }
+    const { data, error } = result;
     if (error) {
       toast.error(correctionErrorMessage(error, 'Annulation non confirmée. Réessayez.')); setSaving(false);
       // ADR-009: a conflict reloads the record (and a new request key) so the notice below reflects the current state.
