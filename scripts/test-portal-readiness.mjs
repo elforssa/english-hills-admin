@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomInt, randomUUID, randomBytes } from 'node:crypto';
 import { createServerClient } from '@supabase/ssr';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { CROSS_ORIGIN_ERROR, CONTENT_TYPE_ERROR } from '../src/lib/http/requestOrigin.mjs';
@@ -101,7 +101,10 @@ try {
   const teacher = await makeUser('teacher'), teacher2 = await makeUser('teacher', 'teacher2');
   const parent = await makeUser('parent'), unlinked = await makeUser('parent', 'unlinked'), student = await makeUser('student');
   const pending = await makeUser('pending');
-  const phones = { childA: '0611' + run.slice(-6), childB: '0622' + run.slice(-6), adult: '0633' + run.slice(-6), teacher: '0644' + run.slice(-6) };
+  // Invented digits only: since migration 139 (RWR-r5 B1) a student phone must be a valid number,
+  // stored in E.164, so the leak checks below look for both forms.
+  const digits = String(randomInt(100000, 1000000));
+  const phones = { childA: '0611' + digits, childB: '0622' + digits, adult: '0633' + digits, teacher: '0644' + digits };
   const otherFamily = `${run}-other-family@example.invalid`, placeholder = `${run}-placeholder@example.invalid`;
   sql(`begin;
     insert into public.app_config(key, value, label) values ('portal_office_profile_id', '${office.id}', 'Accueil portail ${run}');
@@ -160,7 +163,7 @@ try {
   ok(await rpc(parent, 'portal_send_message', { p_recipient_key: 'teacher:' + ids.t1, p_subject: run, p_body: 'Question du parent.' }));
   ok(await rpc(teacher, 'portal_send_message', { p_recipient_key: 'parent:' + ids.childA, p_subject: run, p_body: 'Réponse.' }));
   const contacts = [parent.email, unlinked.email, student.email, teacher.email, teacher2.email, office.email, otherFamily, placeholder,
-    ...Object.values(phones)];
+    ...Object.values(phones), ...Object.values(phones).map(p => '+212' + p.slice(1))];
   const responses = {
     parent: [await rpc(parent, 'portal_my_learners'), await rpc(parent, 'portal_learner_record', { p_student_id: ids.childA }),
       await rpc(parent, 'portal_message_recipients'), await rpc(parent, 'portal_my_messages', { p_box: 'inbox' }),

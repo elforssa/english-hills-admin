@@ -21,7 +21,7 @@ const fixturePlugin = { name: 'navigation-context-fixture', setup(b) {
         : args.path === 'next/link'
         ? "import React from 'react'; export default function Link({ href, children, ...props }) { return React.createElement('a', { href, ...props }, children); }"
         : args.path === 'next/navigation'
-          ? 'export const usePathname = () => globalThis.__navFixture.path; export const useSearchParams = () => new URLSearchParams(globalThis.__navFixture.search);'
+          ? 'export const usePathname = () => globalThis.__navFixture.path; export const useSearchParams = () => new URLSearchParams(globalThis.__navFixture.search); export const useRouter = () => ({ push() {}, replace() {} });'
           : 'export const useAuth = () => ({ role: globalThis.__navFixture.role });',
       loader: 'js', resolveDir: root,
     }));

@@ -10,6 +10,7 @@ import { recordHref } from '@/lib/navigation.mjs';
 import { useAuth } from '@/context/AuthContext';
 import { getTeacherOperations } from '@/lib/teacher-directory';
 import { hasCapability } from '@/lib/roleAccess.mjs';
+import { formatPhoneFr } from '@/lib/phone.mjs';
 
 export default function Teachers() {
   const { role } = useAuth();
@@ -79,7 +80,7 @@ function TeachersForRole({ role }) {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">{t.email || '—'}</p>
-              <p className="text-xs text-muted-foreground">{t.telephone || '—'}</p>
+              <p className="text-xs text-muted-foreground">{t.telephone ? formatPhoneFr(t.telephone) : '—'}</p>
               {t.niveaux_autorises?.length > 0 && (
                 <div className="flex gap-1 mt-3 flex-wrap">
                   {t.niveaux_autorises.map(n => (

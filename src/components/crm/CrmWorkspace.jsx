@@ -130,7 +130,7 @@ export default function CrmWorkspace({
   </section>}
 
   {selected && <LazyOverlay key={`${selected}:${initialAction || "detail"}`} loader={leadDetailSheet} kind="lead" onClose={() => selectLead(null)} onRestoreFocus={restoreLeadFocus}>
-    {LeadDetailSheet => <LeadDetailSheet leadId={selected} initialAction={initialAction} initialTask={initialTask} onRestoreFocus={restoreLeadFocus} onClose={() => selectLead(null)} />}
+    {LeadDetailSheet => <LeadDetailSheet leadId={selected} initialAction={initialAction} initialTask={initialTask} onRestoreFocus={restoreLeadFocus} onClose={() => selectLead(null)} onOpenLead={openLead} />}
   </LazyOverlay>}
   {manual && <LazyOverlay loader={crmActionDialog} kind="form" onClose={() => setManual(false)} onRestoreFocus={() => manualOrigin.current?.focus()}>
     {CrmActionDialog => <CrmActionDialog action="manual" returnFocusRef={manualOrigin} onClose={() => setManual(false)} onCreated={(id, enrol) => {

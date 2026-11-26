@@ -159,7 +159,7 @@ select pg_temp.ok(pg_temp.touched(format($q$update public.authorized_adults set 
 select pg_temp.ok(pg_temp.touched(format($q$delete from public.authorized_adults where id = %L$q$, pg_temp.id(501))) = 1,
   'item 4: she removes an adult');
 select pg_temp.act(4);
-select pg_temp.refused(format($q$insert into public.authorized_adults(student_id, full_name, telephone, relation) values (%L, 'x', '1', 'Autre')$q$,
+select pg_temp.refused(format($q$insert into public.authorized_adults(student_id, full_name, telephone, relation) values (%L, 'x', '0612340162', 'Autre')$q$,
   pg_temp.id(300)), '42501', null, 'item 4: teacher refused');
 select pg_temp.owner();
 

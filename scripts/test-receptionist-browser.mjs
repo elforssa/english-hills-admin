@@ -579,8 +579,9 @@ try {
   await page.getByText('Cette fiche a été modifiée entre-temps. Les informations sont actualisées : vérifiez puis recommencez.').waitFor();
   assert(Date.now() - staleStart < 5000, 'conflict shown at once');
   assert.equal(await page.getByText('Student unavailable or stale').count(), 0);
-  await page.waitForFunction(() => [...document.querySelectorAll('input')].some(input => input.value === '0600000222'));
-  assert.equal(await page.getByRole('textbox', { name: 'Téléphone' }).inputValue(), '0600000222', 'record reloaded');
+  // RWR-r5 B1 (§5.1): a changed telephone is stored in E.164, so the reloaded record shows it so.
+  await page.waitForFunction(() => [...document.querySelectorAll('input')].some(input => input.value === '06 00 00 02 22'));
+  assert.equal(await page.getByRole('textbox', { name: 'Téléphone' }).inputValue(), '06 00 00 02 22', 'record reloaded (stored E.164, shown in the national form)');
   assert(page.url().endsWith(`/students/${readyStudent}/edit`));
   console.log('PASS stale receptionist edit: HTTP 409 PT409 at once, French conflict text, latest record reloaded');
   // Items 2 and 3: source and e-mail of an unplaced learner, saved and the e-mail change logged.
@@ -646,10 +647,11 @@ try {
   await page.getByRole('button', { name: 'Modifier RPW Adulte un' }).click();
   await page.getByRole('form', { name: 'Modifier RPW Adulte un' }).getByLabel('Téléphone').fill('0611111401');
   await page.getByRole('form', { name: 'Modifier RPW Adulte un' }).getByRole('button', { name: 'Enregistrer' }).click();
-  await page.getByText('Parent · 0611111401').waitFor();
+  // RWR-r5 B1 (§5.1): stored in E.164, shown « 06 11 11 14 01 ».
+  await page.getByText('Parent · 06 11 11 14 01').waitFor();
   await page.getByRole('button', { name: 'Retirer RPW Adulte deux' }).click();
   await page.getByText('RPW Adulte deux', { exact: true }).waitFor({ state: 'detached' });
-  assert.equal(sql(`select string_agg(full_name||':'||telephone, ',') from public.authorized_adults where student_id='${youngStudent}'`), 'RPW Adulte un:0611111401');
+  assert.equal(sql(`select string_agg(full_name||':'||telephone, ',') from public.authorized_adults where student_id='${youngStudent}'`), 'RPW Adulte un:+212611111401');
   // Item 5: « Sortie des jeunes », recorded under her name; no edit or delete control.
   await page.goto(app + '/dismissal');
   await page.getByRole('heading', { name: 'Sortie des jeunes apprenants' }).waitFor();

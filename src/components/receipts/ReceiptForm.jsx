@@ -16,6 +16,8 @@ import { groupSeatsLabel, loadGroupChoices } from '@/lib/receiptGroupChoices.mjs
 import { courseEndedSuffix } from '@/lib/academic/courseClose.mjs';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { checkPhone, formatPhoneFr } from '@/lib/phone.mjs';
+import { usePeopleGate } from '@/components/people/usePeopleGate';
 import { AlertCircle, ChevronRight, CircleDollarSign, LoaderCircle, Mail, Search, UserPlus, Users, X } from 'lucide-react';
 
 const SEARCH_PAGE_SIZE = 20;
@@ -29,6 +31,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const initialCharge = useRef(null);
   if (!initialCharge.current) initialCharge.current = createInitialChargeCoordinator(initialData.student_id, initialData.charge_id);
   const studentLookupVersion = useRef(0);
+  // The selected learner's phone as stored (an old one may be malformed): sent back as is
+  // when « Mettre à jour les contacts » leaves it unchanged (review of #217).
+  const storedPhone = useRef('');
   const searchGate = useRef(null);
   if (!searchGate.current) searchGate.current = createLatestRequestGate();
   const [mode, setMode] = useState('existing');
@@ -52,6 +57,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const [enrollmentsError, setEnrollmentsError] = useState('');
   const [duplicateMatches, setDuplicateMatches] = useState([]);
   const [duplicateWarning, setDuplicateWarning] = useState('');
+  // RWR-r5 §5.2: « Nouvel apprenant » passes the duplicate gate before the payment.
+  const people = usePeopleGate();
   const [previousAttempt, setPreviousAttempt] = useState(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   // §6.1: possible duplicates found before saving; nothing is saved until « C’est un autre paiement ».
@@ -103,18 +110,17 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     }
     const timer = setTimeout(async () => {
       setSearchState('loading'); setSearchError('');
-      const safe = term.replace(/[,%()]/g, ' ');
       try {
-        const { data, error, count } = await getBrowserClient().from('students')
-          .select(studentColumns, { count: 'exact' }).is('deleted_at', null)
-          .or(`full_name.ilike.%${safe}%,telephone.ilike.%${safe}%,email.ilike.%${safe}%,parent_email.ilike.%${safe}%`)
-          .order('full_name').range(0, searchLimit - 1);
+        // §5.1: the phone matches in any format from 6 digits (search_desk_students, 139);
+        // the receptionist's row rules apply (security invoker). Merged files are hidden.
+        const { data: found, error } = await getBrowserClient().rpc('search_desk_students', { p_query: term, p_limit: Math.min(searchLimit, 50) });
         if (!searchGate.current.isCurrent(version)) return;
         if (error) {
           setStudents([]); setSearchTotal(0); setSearchError(error.message || 'Recherche indisponible.'); setSearchState('error');
           return;
         }
-        setStudents(data || []); setSearchTotal(count || 0); setSearchState((data || []).length ? 'results' : 'empty');
+        const data = found?.rows || [];
+        setStudents(data); setSearchTotal(found?.total || 0); setSearchState(data.length ? 'results' : 'empty');
       } catch (error) {
         if (!searchGate.current.isCurrent(version)) return;
         setStudents([]); setSearchTotal(0); setSearchError(error?.message || 'Recherche indisponible.'); setSearchState('error');
@@ -202,9 +208,10 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     searchGate.current.invalidate(); initialCharge.current.selectStudent(student.id, { fromInitialLink });
     setMode('existing'); setStudents([]); setSearch(student.full_name || ''); setSearchState('idle');
     setDuplicateMatches([]); setDuplicateWarning(''); setDuplicates([]);
+    storedPhone.current = student.telephone || '';
     setForm((current) => ({
       ...current, ...emptyStudent, ...emptyChargeTerms(), enrollment_id: '', student_id: student.id, student_name: student.full_name || '',
-      phone: student.telephone || '', student_email: student.email || '', parent_email: student.parent_email || '',
+      phone: student.telephone ? formatPhoneFr(student.telephone) : '', student_email: student.email || '', parent_email: student.parent_email || '',
       payment_amount: '', transaction_reference: '', note: '', update_contacts: false,
       request_email: false, email_recipient: student.parent_email || student.email || '',
     }));
@@ -266,6 +273,10 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   // unless the enrollment being paid is already in a group.
   const groupOffered = Boolean(groupSession && form.level && form.school_year) && !targetEnrollment?.group_id;
 
+  // An unchanged stored phone is sent back as stored (review of #217): read by submit and
+  // by « C’est un autre paiement », which saves after the duplicate panel.
+  const phoneUnchanged = () => mode !== 'new' && !!form.student_id && !!storedPhone.current
+    && form.phone.trim() === formatPhoneFr(storedPhone.current);
   const submit = async (event) => {
     event.preventDefault();
     if (submitting.current) return;
@@ -293,6 +304,20 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     // OD-2 = A: « Réserver sans paiement » is a charge with a due date.
     if (reserving && !form.due_date) return toast.error('Indiquez la date d’échéance pour réserver sans paiement.');
     if (reserving && form.due_date < today) return toast.error('L’échéance ne peut pas être dans le passé.');
+    // An unchanged stored phone is not re-checked: the server keeps it as it is, so only
+    // the e-mail (or nothing) changes.
+    const unchangedPhone = phoneUnchanged();
+    if (mode === 'new' || (form.student_id && form.update_contacts && !unchangedPhone)) {
+      const phone = checkPhone(form.phone);
+      if (!phone.ok) return toast.error(`Téléphone : ${phone.error}.`);
+    }
+    if (mode === 'new') {
+      submitting.current = true;
+      try {
+        if (!(await people.check({ phone: form.phone, name: form.student_name.trim() }))) return toast.error('Cette personne existe peut-être déjà : répondez pour chaque fiche (ou sélectionnez le dossier existant), puis enregistrez.');
+      } catch { return toast.error('Vérification des doublons impossible. Réessayez.'); }
+      finally { submitting.current = false; }
+    }
     if (todayPayment > 0 && form.student_id) {
       submitting.current = true; setCheckingDuplicate(true);
       try {
@@ -307,13 +332,14 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
 
   // « C’est un autre paiement »: the same submission, after the staff member checked.
   const finish = () => {
+    const unchangedPhone = phoneUnchanged();
     setDuplicates([]);
     if (todayPayment > 0) savePendingPayment(idempotencyKey.current());
-    onSubmit({ ...form, enrollment_id: form.enrollment_id === 'new' ? '' : form.enrollment_id,
+    onSubmit({ ...form, ...(unchangedPhone ? { phone: storedPhone.current } : {}), enrollment_id: form.enrollment_id === 'new' ? '' : form.enrollment_id,
       discount_reason_code: needsDiscountReason ? form.discount_reason_code : '',
       discount_reason: needsDiscountReason && form.discount_reason_code === 'other' ? form.discount_reason.trim() : '',
       service_description: servicePreview, idempotency_key: idempotencyKey.current() },
-    { groupId: confirmsEnrollment && groupOffered ? groupId : '' });
+    { groupId: confirmsEnrollment && groupOffered ? groupId : '', recordPeople: mode === 'new' ? people.record : null });
   };
 
   const input = 'w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:bg-muted disabled:text-muted-foreground';
@@ -342,6 +368,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
         {duplicateMatches.length > 0 && <div className="overflow-hidden rounded-xl border border-amber-200"><p className="bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Dossiers ressemblants — sélectionnez-en un s’il s’agit de la même personne</p>{duplicateMatches.map((student) => <StudentResult key={student.id} student={student} onSelect={() => selectStudent(student)} />)}</div>}
         <div className="grid gap-3 sm:grid-cols-3"><Field label="Téléphone (facultatif)"><input className={input} value={form.phone} onChange={(e) => checkSharedPhone(e.target.value)} /></Field><Field label="Email apprenant (facultatif)"><input type="email" className={input} value={form.student_email} onChange={(e) => set('student_email', e.target.value)} /></Field><Field label="Email parent (facultatif)"><input type="email" className={input} value={form.parent_email} onChange={(e) => set('parent_email', e.target.value)} /></Field></div>
         {duplicateWarning && <p className="text-xs font-medium text-amber-700">{duplicateWarning}</p>}
+        {people.gate}
       </div>}
       {mode === 'existing' && form.student_id && <div className="rounded-2xl border-2 border-primary/20 bg-primary/[0.04] p-4">
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-primary">Apprenant sélectionné</p><p className="mt-1 text-xl font-black">{form.student_name}</p><p className="mt-1 text-sm text-muted-foreground">{[form.phone, form.student_email, form.parent_email].filter(Boolean).join(' · ') || 'Contacts non renseignés'}</p></div><button type="button" onClick={() => resetLearner('existing')} className="rounded-full p-2 hover:bg-white" aria-label="Changer d’apprenant"><X size={17} /></button></div>
@@ -393,7 +420,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
 
 function ModeButton({ active, onClick, icon: Icon, children }) { return <button type="button" role="tab" aria-selected={active} onClick={onClick} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition ${active ? 'bg-white text-primary shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}><Icon size={16} /> {children}</button>; }
 function SearchMessage({ icon: Icon, spin, tone, children }) { return <div className={`mt-3 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'bg-slate-50 text-slate-600'}`}><Icon size={16} className={spin ? 'animate-spin' : ''} />{children}</div>; }
-function StudentResult({ student, onSelect }) { return <button type="button" onClick={onSelect} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-primary/[0.04]"><span className="min-w-0"><b className="block truncate text-sm">{student.full_name}</b><span className="block truncate text-xs text-muted-foreground">{[student.telephone, student.email, student.parent_email].filter(Boolean).join(' · ') || 'Aucun contact'} · {student.status || 'Prospect'}</span></span><ChevronRight size={15} className="shrink-0 text-primary" /></button>; }
+function StudentResult({ student, onSelect }) { return <button type="button" onClick={onSelect} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-primary/[0.04]"><span className="min-w-0"><b className="block truncate text-sm">{student.full_name}</b><span className="block truncate text-xs text-muted-foreground">{[student.telephone ? formatPhoneFr(student.telephone) : null, student.email, student.parent_email].filter(Boolean).join(' · ') || 'Aucun contact'} · {student.status || 'Prospect'}</span></span><ChevronRight size={15} className="shrink-0 text-primary" /></button>; }
 function Step({ number, title, subtitle, children }) { return <section className="overflow-visible rounded-2xl border bg-card shadow-sm"><div className="flex items-center gap-3 border-b px-5 py-4"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-black text-white">{number}</span><div><h2 className="font-black">{title}</h2><p className="text-xs text-muted-foreground">{subtitle}</p></div></div><div className="p-5">{children}</div></section>; }
 function Field({ label, children }) { return <label className="block text-xs font-bold text-slate-600"><span className="mb-1.5 block">{label}</span>{children}</label>; }
 function Amount({ label, value, accent, warning }) { return <div className={`${accent ? 'bg-primary text-white' : warning ? 'bg-rose-50 text-rose-800' : 'bg-white'} p-3 text-center`}><p className="text-[10px] font-bold uppercase tracking-wide opacity-70">{label}</p><p className="mt-1 text-base font-black">{money(value)} MAD</p></div>; }

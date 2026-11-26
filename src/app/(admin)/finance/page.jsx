@@ -7,6 +7,8 @@ import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Download
 import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import { financeExportRows, localBusinessDate, money } from '@/lib/receiptFinance';
+import { receiptPhone } from '@/lib/receiptPresentation';
+import { telHref } from '@/lib/phone.mjs';
 import { toast } from 'sonner';
 import PersonLink from '@/components/PersonLink';
 import FinanceReviewQueue from '@/components/finance/FinanceReviewQueue';
@@ -188,11 +190,11 @@ export default function Finance() {
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm text-foreground truncate"><PersonLink id={r.student_id}>{r.nom_prenom}</PersonLink></p>
                       <p className="text-xs text-muted-foreground mt-0.5">{r.session_type} · {r.service_description}{r.due_date ? ` · échéance ${r.due_date}` : ''}</p>
-                      {r.telephone && (
-                        <a href={`tel:${r.telephone}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mt-0.5">
-                          <Phone size={11} /> {r.telephone}
+                      {r.telephone && (telHref(r.telephone)
+                        ? <a href={telHref(r.telephone)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mt-0.5">
+                          <Phone size={11} /> {receiptPhone(r)}
                         </a>
-                      )}
+                        : <span className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-0.5"><Phone size={11} /> {receiptPhone(r)}</span>)}
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <div className="text-right">

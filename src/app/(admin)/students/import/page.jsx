@@ -29,6 +29,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { parseCsv } from '@/utils/parseCsv';
 import { getBrowserClient } from '@/lib/supabase';
 import { createStudentOnce } from '@/lib/studentCreate.mjs';
+import { checkPhone } from '@/lib/phone.mjs';
+import { strongMatches } from '@/lib/people.mjs';
 import { IDENTICAL_FILE_WARNING, IMPORT_FINISHED, csvLine, failedLines, importFailureReason, importFinished, rowIdentities, rowStatus, rowsToSend } from '@/lib/studentImport.mjs';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
@@ -134,6 +136,9 @@ function validateRows(rawRows) {
         if (v === '' || v === undefined) continue;
         data[k] = v;
       }
+      // §5.1 (139): an invalid or placeholder phone is a row error, never stored.
+      const phone = checkPhone(data.telephone);
+      if (!phone.ok) return { idx, ok: false, data: row, errors: [`telephone: ${phone.error}`] };
       // D3-A: Enrolled/Trial rows import as Prospect; an enrollment confirms them.
       const requested = data.status;
       data.status = importedStudentStatus(requested);
@@ -148,8 +153,8 @@ function validateRows(rawRows) {
 
 const SAMPLE_CSV =
   'full_name,email,parent_email,telephone,session_type,niveau_cefr,age_category,status\n' +
-  'Amal El Idrissi,amal@example.com,parent@example.com,+212600000000,Yearly,Junior 3,Teens (13-17),Enrolled\n' +
-  'Yassine Bennani,,parent2@example.com,+212611111111,Adults,Beginning 2,Adults (18+),Trial\n';
+  'Amal El Idrissi,amal@example.com,parent@example.com,+212612345670,Yearly,Junior 3,Teens (13-17),Enrolled\n' +
+  'Yassine Bennani,,parent2@example.com,+212612345671,Adults,Beginning 2,Adults (18+),Trial\n';
 
 export default function StudentImportPage() {
   const [csvText, setCsvText]     = useState('');
@@ -159,6 +164,9 @@ export default function StudentImportPage() {
   const [identity, setIdentity]   = useState(null);
   const [statuses, setStatuses]   = useState({});
   const fileRef = useRef(null);
+  // §5.2 dry run: strong matches per line (same phone, or same name and birth date).
+  // A line with matches is created only with an explicit « Créer quand même ».
+  const [dryRun, setDryRun] = useState(null), [checking, setChecking] = useState(false), [choices, setChoices] = useState({});
 
   const queryClient = useQueryClient();
 
@@ -177,6 +185,8 @@ export default function StudentImportPage() {
   useEffect(() => {
     setStatuses({});
     setIdentity(null);
+    setDryRun(null);
+    setChoices({});
     if (!parsed?.rows) return undefined;
     let active = true;
     rowIdentities(csvText, parsed.rows).then(ids => { if (active) setIdentity({ text: csvText, ids }); })
@@ -208,9 +218,29 @@ export default function StudentImportPage() {
     reader.readAsText(file, 'utf-8');
   }
 
+  async function checkDuplicates() {
+    if (!parsed?.rows) return;
+    setChecking(true);
+    const client = getBrowserClient();
+    const found = {};
+    try {
+      for (const row of parsed.rows.filter(r => r.ok)) {
+        const { data, error } = await client.rpc('find_people', { p_query: '', p_phone: row.data.telephone || null,
+          p_name: row.data.full_name || null, p_birth: row.data.date_naissance || null, p_limit: 5 });
+        if (error) throw error;
+        const strong = strongMatches(data);
+        if (strong.length) found[csvLine(row)] = strong;
+      }
+      setDryRun({ text: csvText, found });
+    } catch { toast.error('Vérification des doublons impossible. Réessayez.'); }
+    finally { setChecking(false); }
+  }
+  const checked = dryRun?.text === csvText;
+  const held = line => checked && dryRun.found[line] && choices[line] !== 'create';
+
   async function handleImport() {
-    if (!parsed?.rows || stats.valid === 0 || !ready || finished) return;
-    const pending = rowsToSend(parsed.rows, statuses);
+    if (!parsed?.rows || stats.valid === 0 || !ready || finished || !checked) return;
+    const pending = rowsToSend(parsed.rows, statuses).filter(row => !held(csvLine(row)));
     const client = getBrowserClient();
     setImporting(true);
     setProgress({ done: 0, total: pending.length, failed: 0 });
@@ -224,6 +254,11 @@ export default function StudentImportPage() {
       const line = csvLine(row);
       try {
         next[line] = rowStatus(await createStudentOnce(client, identity.ids[line], row.data));
+        // The explicit « Créer quand même » is recorded as « Personne différente ».
+        if (next[line].state === 'imported' && dryRun.found[line]) {
+          await client.rpc('record_person_match_decisions', { p_subject_kind: 'student', p_subject_id: identity.ids[line],
+            p_decisions: dryRun.found[line].map(m => ({ kind: m.kind, id: m.id, decision: 'different_people' })) });
+        }
       } catch (error) {
         next[line] = { state: 'failed', reason: importFailureReason(error) };
       }
@@ -365,6 +400,7 @@ export default function StudentImportPage() {
                         <th className="text-left px-3 py-2">Niveau</th>
                         <th className="text-left px-3 py-2">Catégorie</th>
                         <th className="text-left px-3 py-2">Statut</th>
+                        <th className="text-left px-3 py-2">Doublons</th>
                         <th className="text-left px-3 py-2">État</th>
                       </tr>
                     </thead>
@@ -377,6 +413,10 @@ export default function StudentImportPage() {
                           <td className="px-3 py-1.5">{r.data.niveau_cefr || '—'}</td>
                           <td className="px-3 py-1.5">{r.data.age_category || '—'}</td>
                           <td className="px-3 py-1.5">{r.data.status || '—'}</td>
+                          <td className="px-3 py-1.5">{!r.ok || !checked ? '—' : dryRun.found[csvLine(r)] ? <span className="block space-y-1">
+                            <span className="block text-amber-800">{dryRun.found[csvLine(r)].map(m => m.name).join(', ')}</span>
+                            <select aria-label={`Ligne ${csvLine(r)} : doublon possible`} className="rounded border px-1 py-0.5" value={choices[csvLine(r)] || ''} onChange={e => setChoices(c => ({ ...c, [csvLine(r)]: e.target.value }))}>
+                              <option value="">Ne pas créer</option><option value="create">Créer quand même (personne différente)</option></select></span> : 'Aucun'}</td>
                           <td className="px-3 py-1.5">
                             {!r.ok
                               ? <span className="text-red-700" title={r.errors?.join(' · ')}>{r.errors?.[0]}</span>
@@ -394,6 +434,7 @@ export default function StudentImportPage() {
               </div>
 
               <p className="text-xs text-muted-foreground">{IDENTICAL_FILE_WARNING}</p>
+              <p role="status" className="text-xs text-muted-foreground">{checked ? `${Object.keys(dryRun.found).length} ligne(s) avec un doublon possible : elles ne sont créées qu’avec « Créer quand même ».` : 'Vérifiez les doublons avant d’importer : le même téléphone, ou le même nom et la même date de naissance.'}</p>
 
               {failures.length > 0 && !importing && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-3 text-xs text-red-700">
@@ -427,8 +468,15 @@ export default function StudentImportPage() {
                   Annuler
                 </Link>
                 <button
+                  onClick={checkDuplicates}
+                  disabled={importing || checking || stats.valid === 0}
+                  className="px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50"
+                >
+                  {checking ? 'Vérification…' : checked ? 'Vérifier à nouveau' : 'Vérifier les doublons'}
+                </button>
+                <button
                   onClick={handleImport}
-                  disabled={importing || stats.valid === 0 || !ready || finished}
+                  disabled={importing || stats.valid === 0 || !ready || finished || !checked}
                   className="px-5 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:opacity-50"
                 >
                   {importing ? 'Import…' : finished ? IMPORT_FINISHED

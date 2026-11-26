@@ -19,6 +19,7 @@ import { useClosedOnlineGroupIds } from '@/lib/queries';
 import { queryClientInstance } from '@/lib/query-client';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { countFreeSeats } from '@/lib/receiptGroupChoices.mjs';
+import { formatPhoneFr } from '@/lib/phone.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -171,7 +172,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
           {selectedStudent && (
             <div className="p-2.5 bg-blue-50 rounded-md text-xs text-blue-800 space-y-1">
               <div className="flex items-center gap-1.5 font-semibold"><User size={12} className="shrink-0" /> {selectedStudent.full_name}</div>
-              {selectedStudent.telephone && <div className="flex items-center gap-1.5"><Phone size={12} className="shrink-0" /> {selectedStudent.telephone}</div>}
+              {selectedStudent.telephone && <div className="flex items-center gap-1.5"><Phone size={12} className="shrink-0" /> {formatPhoneFr(selectedStudent.telephone)}</div>}
               {selectedStudent.email && <div className="flex items-center gap-1.5"><Mail size={12} className="shrink-0" /> {selectedStudent.email}</div>}
               {selectedStudent.age_category && <div className="flex items-center gap-1.5"><User size={12} className="shrink-0" /> {selectedStudent.age_category}</div>}
               {!form.session_type && <div className="flex items-center gap-1.5"><Calendar size={12} className="shrink-0" /> Session du dossier&nbsp;: {selectedStudent.session_type || 'Yearly'}</div>}

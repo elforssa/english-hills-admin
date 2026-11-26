@@ -10,8 +10,12 @@ import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyF
 import { NextActionPicker } from './NextActionDialog';
 import { NEXT_KINDS, nextActionPayload, STALE_MESSAGE, STATUS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, REMINDER_PRESETS, CONVERSATION_OUTCOMES, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, noteRequired as requiresNote } from '@/lib/crm/presentation.mjs';
 import { CONFLICT_CODE, isRecordConflict } from '@/lib/conflictErrors.mjs';
+import { checkPhone, formatPhoneFr } from '@/lib/phone.mjs';
+import { acknowledgedMatches, allAnswered, duplicateMatches, personHref } from '@/lib/people.mjs';
+import DuplicateGate from '@/components/people/DuplicateGate';
 const titles = {
   manual: 'Ajouter un prospect',
+  sibling: 'Ajouter un enfant',
   call: 'Enregistrer le résultat de l’appel',
   conversation: 'Enregistrer un échange',
   whatsapp: 'Suivi WhatsApp',
@@ -54,6 +58,7 @@ export default function CrmActionDialog({
   action,
   lead,
   task,
+  contact,
   onClose,
   onCreated,
   onCandidate,
@@ -75,6 +80,14 @@ export default function CrmActionDialog({
     channel: 'phone'
   });
   const [first, setFirst] = useState({ kind: 'none' });
+  // « Ajouter un enfant » (§5.3): a new learner on an existing contact, reused as it is.
+  const sibling = action === 'manual' && !!contact?.id;
+  // « C'est la même personne » (§5.3): ticked while the learner field is empty; typing a
+  // learner name unticks it. The learner is then the contact (contact_kind adult_learner).
+  const [sameChoice, setSameChoice] = useState(null);
+  const samePerson = action === 'manual' && !sibling && (sameChoice ?? !(values.learner || '').trim());
+  // §5.2 duplicate gate: the server's matches, and one answer for each.
+  const [matches, setMatches] = useState(null), [answers, setAnswers] = useState({});
   // A walk-in has always spoken with us: no « Pas encore parlé », the agreed next
   // action is chosen now and no « Premier contact » is created (§4.8, review of #208).
   const walkIn = action === 'manual' && values.source === 'Visite au centre';
@@ -128,18 +141,28 @@ export default function CrmActionDialog({
   const text = (key, label, required = false, type = 'text', maxLength = 200) => <Field label={label}><input className={inputClass} type={type} maxLength={maxLength} required={required} value={values[key] || ''} onChange={e => set(key, e.target.value)} /></Field>;
   const select = (key, label, options) => <Field label={label}><select required className={inputClass} value={values[key]} onChange={e => set(key, e.target.value)}>{!values[key] && <option value="">Choisir explicitement…</option>}{Object.entries(options).map(([value, label]) => <option key={value} value={value} disabled={key === 'reason' && value === 'unreachable' && !lead?.unreachable_eligible}>{label}</option>)}</select></Field>;
   function payload() {
-    if (action === 'manual') return ['crm_create_manual_lead', {
-      display_name: values.name.trim(),
-      learner_name: values.learner.trim(),
-      learner_age: values.age ? Number(values.age) : null,
-      phone: values.phone || null,
-      whatsapp: values.whatsapp || null,
-      email: values.email || null,
-      program_interest_text: values.program || null,
-      source_label: `Manuel · ${values.source}`,
-      contact_kind: 'unknown',
-      ...(FIRST_CHANNEL[values.source] && firstForm.kind !== 'none' ? { first_exchange: { channel: FIRST_CHANNEL[values.source], next: nextActionPayload(firstForm, null) } } : {})
-    }];
+    if (action === 'manual') {
+      for (const key of sibling ? [] : ['phone', 'whatsapp']) {
+        const checked = checkPhone(values[key]);
+        if (!checked.ok) throw new Error(`Saisissez un numéro valide (${key === 'phone' ? 'téléphone' : 'WhatsApp'}) : ${checked.error}.`);
+      }
+      if (matches?.length && !allAnswered(matches, answers)) throw new Error('Choisissez une réponse pour chaque fiche existante.');
+      return ['crm_create_prospect', {
+        ...(sibling ? { contact_id: contact.id } : {
+          display_name: values.name.trim(),
+          phone: values.phone?.trim() || null,
+          whatsapp: values.whatsapp?.trim() || null,
+          email: values.email?.trim() || null,
+          ...(samePerson ? { same_person: true } : { contact_kind: 'unknown' })
+        }),
+        ...(samePerson ? {} : { learner_name: values.learner.trim() }),
+        learner_age: values.age ? Number(values.age) : null,
+        program_interest_text: values.program || null,
+        source_label: `Manuel · ${values.source}`,
+        ...(matches?.length ? { acknowledged_matches: acknowledgedMatches(matches, answers) } : {}),
+        ...(FIRST_CHANNEL[values.source] && firstForm.kind !== 'none' ? { first_exchange: { channel: FIRST_CHANNEL[values.source], next: nextActionPayload(firstForm, null) } } : {})
+      }];
+    }
     const data = {
       lead_id: lead.id,
       expected_version: expected.lead
@@ -191,7 +214,7 @@ export default function CrmActionDialog({
     setBusy(true);
     setError('');
     try {
-      const intent = JSON.stringify([action, values, task?.id, action === 'manual' ? firstForm : null, expected]);
+      const intent = JSON.stringify([action, values, task?.id, action === 'manual' ? [firstForm, samePerson, answers] : null, expected]);
       // An uncertain response may have committed. Preserve its exact payload even
       // if a background refresh has since advanced the lead/task versions.
       if (request.current?.intent !== intent) {
@@ -229,6 +252,15 @@ export default function CrmActionDialog({
       else if (action === 'manual') { toast.success('Prospect créé'); onCreated(saved.lead.id, firstForm.kind === 'enrol'); }
       else { toast.success('Enregistré'); onClose(); }
     } catch (err) {
+      const found = action === 'manual' ? duplicateMatches(err) : null;
+      if (found) {
+        // Nothing was created: the gate lists the matches; the next save sends the answers.
+        request.current = null;
+        setMatches(found);
+        setAnswers(old => Object.fromEntries(Object.entries(old).filter(([key]) => found.some(m => `${m.kind}:${m.id}` === key))));
+        setError(found.length ? 'Cette personne existe peut-être déjà : répondez pour chaque fiche, puis enregistrez.' : 'Doublon possible : vérifiez la recherche avant de créer.');
+        return;
+      }
       if (isRecordConflict(err)) {
         setError('');
         setReloaded(null);
@@ -237,7 +269,7 @@ export default function CrmActionDialog({
       } else if (['22023', '42501'].includes(err?.code)) {
         request.current = null;
       }
-      if (!isRecordConflict(err)) setError(err instanceof Error && !err.code && /^Choisissez|^Cette heure/.test(err.message) ? err.message : err?.hint === 'crm_create.walk_in_exchange_required' ? 'Une visite au centre s’enregistre avec ce qui a été convenu : choisissez la prochaine action.' : commandError(err));
+      if (!isRecordConflict(err)) setError(err instanceof Error && !err.code && /^Choisissez|^Cette heure|^Saisissez/.test(err.message) ? err.message : err?.hint === 'crm_create.walk_in_exchange_required' ? 'Une visite au centre s’enregistre avec ce qui a été convenu : choisissez la prochaine action.' : commandError(err));
     } finally {
       locked.current = false;
       setBusy(false);
@@ -249,24 +281,28 @@ export default function CrmActionDialog({
       if (busy) e.preventDefault();
     }} onEscapeKeyDown={e => {
       if (busy) e.preventDefault();
-    }}><DialogHeader><DialogTitle>{titles[action]}</DialogTitle><DialogDescription>{action === 'manual' ? 'Un contact, un apprenant, une prochaine conversation.' : lead?.contact_name}</DialogDescription></DialogHeader>
+    }}><DialogHeader><DialogTitle>{titles[sibling ? 'sibling' : action]}</DialogTitle><DialogDescription>{sibling ? `Nouvel apprenant pour ${contact.display_name || 'ce contact'} : même téléphone, prochaine action à part.` : action === 'manual' ? 'Un contact, un apprenant, une prochaine conversation.' : lead?.contact_name}</DialogDescription></DialogHeader>
  {result ? <div className="space-y-4" role="status"><p className="font-medium">{action === 'manual' ? 'Nouveau prospect créé.' : 'Action enregistrée.'} {STATUS[result.lead.status]}</p>{result.open_tasks?.[0] && <div className="rounded-lg bg-blue-50 p-4 text-sm"><p className="font-medium">Prochaine action · {result.next_action?.label || taskTitle(resultNextTask || result.open_tasks[0])}</p>{SCHEDULE_KINDS[resultNextTask?.schedule_kind] && <p className="mt-1 text-xs font-medium text-blue-900">{SCHEDULE_KINDS[resultNextTask.schedule_kind]}</p>}<p className="mt-1">{scheduledLabel(resultNextTask)}</p><p className="mt-2 text-xs text-slate-500">{resultNextTask?.local_date ? 'Horaire confirmé par le calendrier de suivi.' : 'Consultez la fiche pour confirmer l’horaire.'}</p></div>}{result.unreachable_eligible && <p className="text-sm">{result.failed_attempts} appels infructueux. Vous pouvez prévoir un autre appel ou clôturer comme injoignable depuis la fiche.</p>}
   {action === 'manual' && result.contact_candidates?.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm"><p className="font-medium">Contact existant possible</p><p className="my-2">Le nouveau prospect est déjà créé. Aucun contact n’a été fusionné. Ouvrir un contact existant ne rattache pas cette demande à son dossier.</p>{result.contact_candidates.map(candidate => <div key={candidate.id} className="mt-3"><p>{candidate.display_name}</p><Button variant="link" className="px-0" onClick={() => onCandidate(candidate.id)}>Ouvrir les prospects existants</Button></div>)}</div>}
 
   <Button disabled={busy} onClick={() => action === 'manual' ? onCreated(result.lead.id, firstForm.kind === 'enrol') : onClose()}>{action === 'manual' ? 'Continuer avec le nouveau prospect' : 'Terminé'}</Button>
  </div> : <form onSubmit={submit} className="space-y-4"><fieldset disabled={busy} className="space-y-4">
-  {action === 'manual' && <>{text('name', 'Nom du contact', true)}{text('phone', 'Téléphone', false, 'tel')}{text('whatsapp', 'WhatsApp (si différent)', false, 'tel')}<div className="grid grid-cols-[2fr_1fr] gap-3">{text('learner', 'Nom de l’apprenant', true)}<Field label="Âge"><input className={inputClass} type="number" min="0" max="120" value={values.age || ''} onChange={e => set('age', e.target.value)} /></Field></div>{text('program', 'Programme / intérêt')}{select('source', 'Origine', {
+  {action === 'manual' && <>{sibling ? <p className="rounded-lg bg-slate-50 p-3 text-sm">Contact : <span className="font-medium">{contact.display_name}</span>{contact.phone_masked ? ` · ${contact.phone_masked}` : ''}</p> : <>{text('name', 'Nom du contact', true)}{text('phone', 'Téléphone', false, 'tel')}{text('whatsapp', 'WhatsApp (si différent)', false, 'tel')}</>}
+   <div className="grid grid-cols-[2fr_1fr] gap-3"><Field label="Nom de l’apprenant" help={samePerson ? 'Vide : l’apprenant est le contact.' : undefined}><input className={inputClass} maxLength={200} required={!samePerson} value={values.learner || ''} onChange={e => { set('learner', e.target.value); setSameChoice(null); }} /></Field><Field label="Âge"><input className={inputClass} type="number" min="0" max="120" value={values.age || ''} onChange={e => set('age', e.target.value)} /></Field></div>
+   {!sibling && <label className="flex min-h-9 items-center gap-2 text-sm"><input type="checkbox" checked={samePerson} onChange={e => { setSameChoice(e.target.checked); if (e.target.checked) set('learner', ''); }} />C’est la même personne</label>}
+   {text('program', 'Programme / intérêt')}{select('source', 'Origine', {
               'Téléphone': 'Téléphone',
               'Visite au centre': 'Visite au centre',
               WhatsApp: 'WhatsApp',
               Recommandation: 'Recommandation',
               Autre: 'Autre'
-            })}<details><summary className="cursor-pointer text-sm text-slate-500">Ajouter un e-mail</summary><div className="mt-3">{text('email', 'E-mail', false, 'email', 254)}</div></details>
+            })}{!sibling && <details><summary className="cursor-pointer text-sm text-slate-500">Ajouter un e-mail</summary><div className="mt-3">{text('email', 'E-mail', false, 'email', 254)}</div></details>}
+  {matches && <DuplicateGate matches={matches} answers={answers} onAnswer={(key, value) => { setError(''); setAnswers(old => ({ ...old, [key]: value })); }} onOpen={m => { if (m.kind === 'prospect' && onCreated) { onCreated(m.id); } else { window.location.assign(personHref(m)); } }} />}
   {FIRST_CHANNEL[values.source] && <section aria-label="Premier échange" className="space-y-2 rounded-lg border bg-slate-50 p-4"><h3 className="text-sm font-semibold">Premier échange</h3><p className="text-xs text-slate-600">{walkIn ? 'Le visiteur est au centre : choisissez ce qui est convenu avec lui.' : 'Vous parlez avec le contact maintenant ? Choisissez ce qui est convenu. Sinon, un « Premier contact » est prévu.'}</p>
    <NextActionPicker form={firstForm} setForm={value => { setError(''); setFirst(typeof value === 'function' ? old => value(walkIn && old.kind === 'none' ? { ...old, kind: '' } : old) : value); }} current={null} lead={null} hours={hours.data} kinds={firstKinds} labels={FIRST_LABELS} suggestDate /></section>}</>}
-  {action === 'call' && <><p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}</p><Button type="button" variant="outline" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { setError('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button>{links.tel && <a className="hidden min-h-11 items-center rounded-md border px-4 text-sm font-medium max-sm:[@media(pointer:coarse)]:inline-flex" href={links.tel}>Appeler {lead.phone}</a>}<p className="text-xs text-slate-500">Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.</p>{select('outcome', 'Résultat de l’appel', OUTCOMES)}{!links.tel && <p className="text-sm text-slate-600">Aucun numéro valide pour lancer l’appel. Vous pouvez enregistrer un échange déjà effectué.</p>}</>}
-  {action === 'conversation' && <>{select('channel', 'Canal de la conversation', {phone:'Téléphone',whatsapp:'WhatsApp',in_person:'Au centre'})}{values.channel === 'whatsapp' && <p className="break-all text-sm">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>}</>}
-  {action === 'whatsapp' && <><p className="break-all text-sm font-medium">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>{links.whatsapp && <a data-touch-target className="inline-flex min-h-9 items-center rounded-md border px-4 text-sm font-medium" href={links.whatsapp} target="_blank" rel="noopener noreferrer">Ouvrir WhatsApp</a>}<p className="text-xs text-slate-500">Ouvrir WhatsApp n’enregistre aucun envoi.</p>{!links.whatsapp && <p className="text-sm text-slate-600">Aucun numéro WhatsApp valide. Vous pouvez enregistrer un échange déjà effectué.</p>}{select('kind', 'Que souhaitez-vous enregistrer ?', {
+  {action === 'call' && <><p className="break-all text-sm">{lead.phone ? formatPhoneFr(lead.phone) : 'Téléphone à préciser'}</p><Button type="button" variant="outline" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { setError('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button>{links.tel && <a className="hidden min-h-11 items-center rounded-md border px-4 text-sm font-medium max-sm:[@media(pointer:coarse)]:inline-flex" href={links.tel}>Appeler {formatPhoneFr(lead.phone)}</a>}<p className="text-xs text-slate-500">Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.</p>{select('outcome', 'Résultat de l’appel', OUTCOMES)}{!links.tel && <p className="text-sm text-slate-600">Aucun numéro valide pour lancer l’appel. Vous pouvez enregistrer un échange déjà effectué.</p>}</>}
+  {action === 'conversation' && <>{select('channel', 'Canal de la conversation', {phone:'Téléphone',whatsapp:'WhatsApp',in_person:'Au centre'})}{values.channel === 'whatsapp' && <p className="break-all text-sm">WhatsApp : {links.whatsapp ? formatPhoneFr(`+${links.whatsapp.split('/').at(-1)}`) : 'Indisponible'}</p>}</>}
+  {action === 'whatsapp' && <><p className="break-all text-sm font-medium">WhatsApp : {links.whatsapp ? formatPhoneFr(`+${links.whatsapp.split('/').at(-1)}`) : 'Indisponible'}</p>{links.whatsapp && <a data-touch-target className="inline-flex min-h-9 items-center rounded-md border px-4 text-sm font-medium" href={links.whatsapp} target="_blank" rel="noopener noreferrer">Ouvrir WhatsApp</a>}<p className="text-xs text-slate-500">Ouvrir WhatsApp n’enregistre aucun envoi.</p>{!links.whatsapp && <p className="text-sm text-slate-600">Aucun numéro WhatsApp valide. Vous pouvez enregistrer un échange déjà effectué.</p>}{select('kind', 'Que souhaitez-vous enregistrer ?', {
               whatsapp_sent: 'Message envoyé',
               meaningful_whatsapp_conversation: 'Conversation réelle avec le contact'
             })}</>}

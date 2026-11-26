@@ -9,6 +9,15 @@ create function pg_temp.actor(i int) returns void language plpgsql as $$ begin p
 select pg_temp.actor(1);
 select crm_create_followup_policy(gen_random_uuid(),'{"weekly_hours":{"1":[["10:00","20:00"]],"2":[["10:00","20:00"]],"3":[["10:00","20:00"]],"4":[["10:00","20:00"]],"5":[["10:00","20:00"]],"6":[["10:00","20:00"]],"7":[]}}');
 create temp table fx(k text primary key,v jsonb);
+-- Weekday-independent test date (as scripts/lib/centre-days.mjs for the Node suites): the
+-- first centre date from `from_day` on which hh:mm is inside the current opening hours.
+-- « current_date+2 » at 10:30 was the closed Sunday whenever the suite ran on a Friday.
+create function pg_temp.open_day(from_day date,hhmm text) returns date language sql as $$
+ select d from (select from_day+n d from generate_series(0,30) n) x
+ where crm_security.window_at(crm_security.current_policy_id(),'opening',(d+hhmm::time) at time zone public.centre_utc_offset())
+       =(d+hhmm::time) at time zone public.centre_utc_offset()
+ order by d limit 1
+$$;
 insert into fx values('meta',crm_save_meta_connection('{"connection_key":"phase11-meta","page_id":"110001","api_version":"v99.0"}'));
 insert into fx values('mm',crm_publish_meta_form_mapping((select (v->>'id')::uuid from fx where k='meta'),'{"form_key":"110002","field_map":{},"effective_from":"2020-01-01Z"}'));
 create function pg_temp.conn() returns uuid language sql as $$ select (v->>'id')::uuid from fx where k='meta' $$;
@@ -69,7 +78,7 @@ end $$;
 -- Placement counts use distinct linked tests, not timeline edit count.
 select pg_temp.act('qualify_lead',pg_temp.lead('lead2'),jsonb_build_object('conversation_channel','phone','note','Placement','qualification_step','placement_test','next_task',jsonb_build_object('task_type','confirm_placement_test','due_at',now()+interval '1 day')));
 do $$ declare l uuid:=pg_temp.lead('lead2');p uuid;r jsonb;begin
- r:=crm_book_placement_test(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'date_test',current_date+2,'heure','10:30','examinateur','Fixture','task_id',(select id from crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' limit 1),'expected_task_version',(select version from crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' limit 1)));
+ r:=crm_book_placement_test(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'date_test',pg_temp.open_day((now() at time zone public.centre_utc_offset())::date+2,'10:30'),'heure','10:30','examinateur','Fixture','task_id',(select id from crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' limit 1),'expected_task_version',(select version from crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' limit 1)));
  p:=(r->'placement'->>'id')::uuid;
  update placement_tests set status='Résultat saisi',niveau_recommande='A2',score=72 where id=p;
  update placement_tests set notes='Edited result' where id=p;

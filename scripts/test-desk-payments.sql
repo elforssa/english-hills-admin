@@ -71,10 +71,11 @@ select pg_temp.act(1);
 select crm_create_followup_policy(gen_random_uuid(), '{"weekly_hours":{"1":[["00:00","23:59"]],"2":[["00:00","23:59"]],"3":[["00:00","23:59"]],"4":[["00:00","23:59"]],"5":[["00:00","23:59"]],"6":[["00:00","23:59"]],"7":[["00:00","23:59"]]}}');
 select pg_temp.owner();
 
--- A qualified lead with an open « Finaliser l'inscription » task, created by reception.
+-- A qualified lead with an open « Finaliser l'inscription » task, created by reception
+-- through « Ajouter un prospect » (crm_create_prospect, 139; each phone is distinct).
 create function pg_temp.lead(n integer) returns uuid language plpgsql as $$ declare l uuid; begin
   perform pg_temp.act(3);
-  l := (public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'DP contact ' || n,
+  l := (public.crm_create_prospect(gen_random_uuid(), jsonb_build_object('display_name', 'DP contact ' || n,
     'learner_name', 'DP child ' || n, 'phone', '06' || lpad((72000000 + n)::text, 8, '0'), 'source_label', 'Phone'))->'lead'->>'id')::uuid;
   perform public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),
     'channel', 'phone', 'result', 'spoke', 'note', 'x',
@@ -347,7 +348,7 @@ select pg_temp.refused(format('delete from public.crm_charge_reservations where 
   '42501', 'eap.reservation_append_only', 'append-only (delete)');
 -- A NEW lead (not qualified) cannot reserve.
 select pg_temp.act(3);
-select pg_temp.put('l_new', public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'DP contact 9',
+select pg_temp.put('l_new', public.crm_create_prospect(gen_random_uuid(), jsonb_build_object('display_name', 'DP contact 9',
   'learner_name', 'DP child 9', 'phone', '0672000009', 'source_label', 'Phone'))->'lead'->'id');
 select pg_temp.refused(format('select public.crm_reserve_without_payment(gen_random_uuid(), %L)', pg_temp.reserve_new(pg_temp.uid_of('l_new'), 9)),
   '22023', 'crm_enrollment.lead_not_qualified', 'new lead');
@@ -611,6 +612,60 @@ select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(680), jsonb_build_object('ses
 select pg_temp.owner();
 select pg_temp.ok((select enrollment_id from public.charges where id = (pg_temp.get('x80')->>'charge_id')::uuid) = pg_temp.uid_of('e80')
   and (select enrollment_id is null from public.charges where id = (pg_temp.get('n80')->>'charge_id')::uuid), 'chosen enrollment passes; the commitment stays open');
+
+-- ── 139 (RWR-r5 B1, rebased onto this 138): merges and the payment rules ─────
+-- (a) « Réserver sans paiement » gives a new learner the contact's number in E.164, or
+--     none when the contact's stored number is a placeholder (B1's phone rule refuses it).
+select pg_temp.put('l900', to_jsonb(pg_temp.lead(900)));
+select pg_temp.act(3);
+select pg_temp.put('r900', public.crm_reserve_without_payment(gen_random_uuid(), pg_temp.reserve_new(pg_temp.uid_of('l900'), 900)));
+select pg_temp.owner();
+select pg_temp.ok((select telephone from public.students where id = (pg_temp.get('r900')->'student'->>'id')::uuid) = '+212672000900',
+  'reservation: the new learner''s phone is stored in E.164');
+select pg_temp.act(3);
+select pg_temp.put('l902', public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'DP contact 902',
+  'learner_name', 'DP child 902', 'phone', '06 00 00 00 00', 'source_label', 'Phone'))->'lead'->'id');
+select public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', pg_temp.uid_of('l902'), 'expected_version', pg_temp.ver(pg_temp.uid_of('l902')),
+  'channel', 'phone', 'result', 'spoke', 'note', 'x', 'next', jsonb_build_object('enrol', jsonb_build_object('due_at', now() + interval '1 day'))));
+select pg_temp.put('r902', public.crm_reserve_without_payment(gen_random_uuid(), pg_temp.reserve_new(pg_temp.uid_of('l902'), 902)));
+select pg_temp.owner();
+select pg_temp.ok((select telephone is null from public.students where id = (pg_temp.get('r902')->'student'->>'id')::uuid),
+  'reservation: a placeholder contact number gives the new learner no phone (no refusal)');
+-- (b) A student merge is refused while the merged-away file has an open reservation
+--     (and its balance); the preview and the D5 plan say so.
+insert into public.students(id, full_name, status, session_type) values (pg_temp.id(901), 'DP kept 901', 'Prospect', 'Yearly');
+select pg_temp.act(1);
+select pg_temp.ok((public.student_merge_preview((pg_temp.get('r900')->'student'->>'id')::uuid, pg_temp.id(901))->>'source_open_reservations')::int = 1
+  and public.student_merge_preview((pg_temp.get('r900')->'student'->>'id')::uuid, pg_temp.id(901))->>'refusal' = 'people.merge_source_balance',
+  'student merge preview: an open reservation refuses');
+select pg_temp.refused(format('select public.merge_students(%L, %L)', pg_temp.get('r900')->'student'->>'id', pg_temp.id(901)),
+  '22023', 'people.merge_source_balance', 'student merge with an open reservation');
+select pg_temp.owner();
+-- (c) A merged file takes no charge, payment or reservation; the no-second-charge rule
+--     (NF-4) reads the kept file's merge set: a fully discounted unlinked commitment of
+--     the merged-away file (no balance, so the merge is allowed) blocks a second one.
+insert into public.students(id, full_name, status, session_type) values
+  (pg_temp.id(910), 'DP merged away 910', 'Prospect', 'Yearly'), (pg_temp.id(911), 'DP kept 911', 'Prospect', 'Yearly');
+insert into public.charges(student_id, session_type, school_year, service_description, plan_type, gross_amount, discount_amount, created_by)
+  values (pg_temp.id(910), 'Yearly', '2026/2027', 'Yearly · 2026/2027', 'Standard', 700, 700, pg_temp.id(1));
+select pg_temp.act(1);
+select public.merge_students(pg_temp.id(910), pg_temp.id(911));
+select pg_temp.act(3);
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(910), jsonb_build_object('session_type', 'Other', 'school_year', '2026/2027',
+  'service_description', 'Livre synthétique', 'gross_amount', 100)), '22023', 'eap.student_merged', 'Encaisser on a merged file');
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(911), jsonb_build_object('session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 500)),
+  '22023', 'eap.unlinked_commitment_exists', 'Encaisser: NF-4 over the merge set');
+select pg_temp.put('l911', to_jsonb(pg_temp.lead(911)));
+select pg_temp.act(3);
+select pg_temp.refused(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.enrol_existing(pg_temp.uid_of('l911'), pg_temp.id(911),
+  jsonb_build_object('gross_amount', 3000, 'payment_amount', 500, 'payment_method', 'Espèces', 'payment_date', public.business_date()))),
+  '22023', 'eap.unlinked_commitment_exists', 'Inscrire et encaisser: NF-4 over the merge set');
+select pg_temp.refused(format('select public.crm_reserve_without_payment(gen_random_uuid(), %L)', pg_temp.reserve_new(pg_temp.uid_of('l911'), 911,
+  jsonb_build_object('student_choice', 'existing', 'student_id', pg_temp.id(910)))), '22023', 'eap.student_merged', 'reservation on a merged file');
+select pg_temp.refused(format('select public.crm_reserve_without_payment(gen_random_uuid(), %L)', pg_temp.reserve_new(pg_temp.uid_of('l911'), 911,
+  jsonb_build_object('student_choice', 'existing', 'student_id', pg_temp.id(911)))), '22023', 'eap.unlinked_commitment_exists', 'reservation: NF-4 over the merge set');
+select pg_temp.owner();
+select pg_temp.ok(pg_temp.n_charges(pg_temp.id(910)) = 1 and pg_temp.n_charges(pg_temp.id(911)) = 0, 'no charge written by the refusals');
 
 set constraints all immediate;
 rollback;

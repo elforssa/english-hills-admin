@@ -12,6 +12,7 @@ import { safeReturnTo } from '@/lib/navigation.mjs';
 import { useAuth } from '@/context/AuthContext';
 import { getTeacherOperations } from '@/lib/teacher-directory';
 import { hasCapability } from '@/lib/roleAccess.mjs';
+import { formatPhoneFr } from '@/lib/phone.mjs';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { queryClientInstance } from '@/lib/query-client';
 
@@ -47,7 +48,7 @@ function TeacherProfileForRole({ role }) {
   if (!teacher || teacher.deleted_at) return <div className="p-8"><p>Enseignant introuvable ou archivé.</p><button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/teachers'))} className="min-h-10 text-primary underline">Retour</button></div>;
 
   const fields = [
-    ['Email', teacher.email], ['Téléphone', teacher.telephone],
+    ['Email', teacher.email], ['Téléphone', teacher.telephone ? formatPhoneFr(teacher.telephone) : teacher.telephone],
     ...(seesPay ? [['Type de contrat', teacher.contract_type || 'À compléter']] : []),
     ['Niveaux autorisés', teacher.niveaux_autorises?.join(', ')],
     ['Certifications', teacher.certifications?.join(', ')],

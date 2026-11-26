@@ -63,7 +63,7 @@ let phone = 72600000 + Math.floor(Math.random() * 90000);
 function qualifiedLead(n) {
   phone += 1;
   return sql(`${as(reception)}
-create temp table l as select (crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name','RID contact ${tag} ${n}',
+create temp table l as select (crm_create_prospect(gen_random_uuid(), jsonb_build_object('display_name','RID contact ${tag} ${n}',
   'learner_name','RID child ${tag} ${n}','phone','06${phone}','source_label','Phone'))->'lead'->>'id')::uuid id;
 select crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id',(select id from l),'expected_version',(select version from crm_leads where id=(select id from l)),
   'channel','phone','result','spoke','note','RID','next',jsonb_build_object('enrol',jsonb_build_object('due_at',${openSlotSql(1, '10:00', 'calling')}))));

@@ -1,4 +1,5 @@
 'use client';
+import { phoneSearchKey } from '@/lib/phone.mjs';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
@@ -23,7 +24,10 @@ export default function LegacyPlacementEditor({ id,onClose,onSave }) {
       const studentQuery=sb.from('students').select('id,full_name,session_type,niveau_cefr,parent_email,email').is('deleted_at',null).order('full_name').order('id').range(studentPage*25,studentPage*25+25);
       // CDC (D4): a closed course is never offered; the group already chosen stays shown.
       const groupQuery=sb.from('groups').select('id,name,session_type,niveau').is('closed_at',null).order('name').order('id').range(groupPage*25,groupPage*25+25);
-      if(studentSearch)studentQuery.ilike('full_name',`%${studentSearch}%`);
+      studentQuery.is('merged_into_student_id',null);
+      // §5.1 (139): from 6 digits the search is a phone in any format.
+      if(studentSearch&&phoneSearchKey(studentSearch)){const found=await sb.rpc('search_desk_students',{p_query:studentSearch,p_limit:50});if(found.error)throw found.error;studentQuery.in('id',(found.data?.rows||[]).map(r=>r.id).concat(['00000000-0000-0000-0000-000000000000']));}
+      else if(studentSearch)studentQuery.ilike('full_name',`%${studentSearch}%`);
       if(groupSearch)groupQuery.ilike('name',`%${groupSearch}%`);
       const results=await Promise.all([studentQuery,groupQuery,
         detail.data.student_id ? sb.from('students').select('id,full_name,session_type,niveau_cefr,parent_email,email').eq('id',detail.data.student_id).maybeSingle() : Promise.resolve({data:null}),

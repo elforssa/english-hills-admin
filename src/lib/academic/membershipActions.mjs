@@ -66,6 +66,8 @@ export const EAP_REASON_TEXT = {
   // The 138 payment guards: a reserved commitment is collected only from its prospect's card.
   reservation_collect_on_prospect: 'Cet engagement est réservé pour un prospect : encaissez-le depuis la fiche du prospect avec « Inscrire et encaisser ».',
   reservation_append_only: 'Une réservation ne se modifie pas et ne se supprime pas.',
+  // RWR-r5 B1 (migration 139): a file merged into another takes no charge, payment or reservation.
+  student_merged: 'Ce dossier a été fusionné dans un autre : encaissez sur le dossier conservé.',
 };
 
 export function eapReason(hint) {

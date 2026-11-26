@@ -26,6 +26,7 @@ import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { courseDatesLabel, courseFinished, fetchClosedOnlineGroupIds, formatCourseDate, isClosedCourse, reopenCourse, reopenCourseMessage } from '@/lib/academic/courseClose.mjs';
 import { isOnlineSessionType } from '@/lib/academicPrograms';
 import CloseCourseDialog from '@/components/groups/CloseCourseDialog';
+import { formatPhoneFr } from '@/lib/phone.mjs';
 
 const chunks = (values, size = 100) => Array.from({ length: Math.ceil(values.length / size) }, (_, i) => values.slice(i * size, (i + 1) * size));
 
@@ -357,7 +358,7 @@ export default function GroupDetail() {
                     <td className="px-4 py-3">
                       {group.niveau ? <span className="inline-block whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold text-white bg-primary">{group.niveau}</span> : '—'}
                     </td>
-                    {canManage && <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>}
+                    {canManage && <td className="px-4 py-3 text-muted-foreground">{s.telephone ? formatPhoneFr(s.telephone) : '—'}</td>}
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
                     </td>
@@ -431,7 +432,8 @@ export default function GroupDetail() {
                   {available.map(s => (
                     <CommandItem
                       key={s.id}
-                      value={`${s.full_name} ${s.telephone || ''}`}
+                      // Search text (not shown): the stored E.164 plus the national form, so « 06 12… » still finds the learner (B1).
+                      value={`${s.full_name} ${s.telephone || ''} ${s.telephone ? `${formatPhoneFr(s.telephone)} ${formatPhoneFr(s.telephone).replace(/ /g, '')}` : ''}`}
                       onSelect={() => addToGroup(s)}
                       disabled={busyId === s.id || (full && !canOverride) || (!canPlaceWithout && !matchingPending(s).length)}
                     >

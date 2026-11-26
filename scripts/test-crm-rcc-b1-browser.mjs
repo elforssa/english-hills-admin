@@ -13,6 +13,7 @@ import { cancelledFetches, ORIGIN_REFUSED } from './lib/webkit-cancelled-fetch.m
 import { openDaySql } from './lib/centre-days.mjs';
 import { BAND_QUERIES, COMMAND_LABELS, historySummary, resolveBand, EVENTS } from '../src/lib/crm/presentation.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
+import { formatPhoneFr } from '../src/lib/phone.mjs';
 assertLocalFeatureBranch();
 process.on('unhandledRejection',error=>{console.error('unhandled',error?.message);});
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
@@ -423,7 +424,7 @@ try {
     assert.equal(m.coarse,touch,`${phase}: pointer emulation asserted first`);
     await openExchange();
     const link=top().getByRole('link',{name:/^Appeler/});const expected=m.coarse&&!m.sm;assert.equal(await link.count(),expected?1:0,`${phase}: tel: link ${expected?'present':'absent'}`);
-    for(const text of ['Copier le numéro'])await top().getByRole('button',{name:text,exact:true}).waitFor();await top().getByText(detail(fresh[3]).phone).first().waitFor();
+    for(const text of ['Copier le numéro'])await top().getByRole('button',{name:text,exact:true}).waitFor();await top().getByText(formatPhoneFr(detail(fresh[3]).phone)).first().waitFor();
     if(expected){assert.match(await link.getAttribute('href'),/^tel:\+212/);const count=sql(`select count(*) from public.crm_activities where lead_id='${fresh[3]}'`);await link.evaluate(node=>node.addEventListener('click',e=>e.preventDefault(),{once:true}));await link.click();await settle();assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${fresh[3]}'`),count,'launching the call records nothing');}
     await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await closeDrawer();
    }

@@ -17,6 +17,9 @@ import LeadPlacementSection from './LeadPlacementSection';
 import LeadEnrollmentSection from './LeadEnrollmentSection';
 import CrmEnrollmentDialog from './CrmEnrollmentDialog';
 import PlacementTestModal from '@/components/placement/PlacementTestModal';
+import ProspectEditDialog from './ProspectEditDialog';
+import LeadPeopleSection from './LeadPeopleSection';
+import { formatPhoneFr, maskPhone } from '@/lib/phone.mjs';
 import { useGuardedLayer, useNestedLayerEscapeGuard } from './useNestedLayerEscapeGuard';
 const inquiryLabel = inquiry => `${inquiry?.source_label || CHANNEL_LABELS[inquiry?.channel] || 'Origine non précisée'} · ${dateLabel(inquiry?.occurred_at)}`;
 const sameInquiry = (a, b) => JSON.stringify([a?.source_label, a?.channel, a?.occurred_at]) === JSON.stringify([b?.source_label, b?.channel, b?.occurred_at]);
@@ -42,7 +45,8 @@ export default function LeadDetailSheet({
   initialAction,
   initialTask,
   onClose,
-  onRestoreFocus
+  onRestoreFocus,
+  onOpenLead
 }) {
   const moreRef = useRef(null), menuAction = useRef(null);
   const [enrolling, setEnrolling] = useState(false);
@@ -100,7 +104,7 @@ export default function LeadDetailSheet({
   }}><SheetContent onEscapeKeyDown={guard.onEscapeKeyDown} onCloseAutoFocus={event => { event.preventDefault(); onRestoreFocus?.(); }} className="operational flex w-full max-w-full flex-col gap-0 overflow-hidden break-words p-0 sm:max-w-[620px] sm:rounded-l-overlay motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none motion-reduce:transition-none">
  <div data-drawer-header className="shrink-0 border-b px-4 pb-3 pr-14 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pr-14 sm:pt-5"><SheetHeader className="space-y-1 text-left"><SheetTitle>{lead?.contact_name || 'Prospect'}</SheetTitle><SheetDescription>{lead ? `${lead.learner_name || 'Apprenant à préciser'}${lead.learner_age != null ? ` · ${lead.learner_age} ans` : ''} · ${programmeLabel(lead.program)}` : 'Historique et prochaines étapes'}</SheetDescription></SheetHeader>
   {lead && <><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"><LifecycleBadge status={lead.status} /><span className="text-xs text-muted-foreground">Responsable : {lead.owner_id ? lead.owner_display_label || 'Responsable indisponible' : 'Non attribué'}</span></div>
-  <p className="mt-1 break-words text-xs text-muted-foreground"><span className="break-all">Tél. {lead.phone || 'Non précisé'}</span> · <span className="break-all">WhatsApp {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</span>{lead.contact.email && <> · <span className="break-all">{lead.contact.email}</span></>}</p></>}
+  <p className="mt-1 break-words text-xs text-muted-foreground"><span className="break-all">Tél. {lead.phone ? formatPhoneFr(lead.phone) : 'Non précisé'}</span> · <span className="break-all">WhatsApp {links.whatsapp ? formatPhoneFr(`+${links.whatsapp.split('/').at(-1)}`) : 'Indisponible'}</span>{lead.contact.email && <> · <span className="break-all">{lead.contact.email}</span></>}</p></>}
  </div>
  <div data-drawer-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
  <ReadState query={detail} empty="Ce prospect n’est plus disponible.">{lead && <div className="space-y-6">
@@ -109,6 +113,7 @@ export default function LeadDetailSheet({
    <NextActionPanel lead={lead} onExchange={initial => open('exchange', null, initial)} onChange={() => open('change')} onUnreachable={() => open('unreachable')} />
    <section aria-label="Autres actions" className="flex flex-wrap gap-2"><DropdownMenu open={more.open} onOpenChange={more.onOpenChange}><DropdownMenuTrigger asChild><Button ref={moreRef} variant="outline" className="min-h-9"><MoreHorizontal size={17} className="mr-2" />Autres actions</Button></DropdownMenuTrigger><DropdownMenuContent align="end" onCloseAutoFocus={() => { const next = menuAction.current; menuAction.current = null; if (next) setAction(next); }}><DropdownMenuItem onSelect={() => openFromMenu('lost')}>Clôturer comme perdu</DropdownMenuItem><DropdownMenuItem onSelect={() => openFromMenu('notQualified')}>Clôturer comme non qualifié</DropdownMenuItem><DropdownMenuItem onSelect={() => openFromMenu('reassign')}>Attribuer un responsable</DropdownMenuItem>{lead.next_action && <DropdownMenuItem onSelect={() => openFromMenu('reassign', lead.open_tasks?.find(t => t.id === lead.next_action.id) || lead.next_action)}>Réattribuer la prochaine action</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu></section>
   </>}
+  <LeadPeopleSection lead={lead} onEdit={() => open('edit')} onAddChild={() => open('sibling')} onOpenLead={onOpenLead} />
   {(lead.closure_reason || ['LOST', 'NOT_QUALIFIED'].includes(lead.status)) && <section className="space-y-3">{lead.closure_reason && <p className="text-sm text-slate-600">{LOST[lead.closure_reason] || NOT_QUALIFIED[lead.closure_reason] || 'Clôturé'}{lead.closure_note ? ` · ${lead.closure_note}` : ''}</p>}{['LOST', 'NOT_QUALIFIED'].includes(lead.status) && <Button onClick={() => open('reopen')}>Rouvrir le prospect</Button>}</section>}
   <section aria-labelledby={`${historyId}-demande`} className="space-y-3 border-t pt-4"><h3 id={`${historyId}-demande`} className="text-base leading-6 font-semibold">Demande</h3>
    <dl className="text-sm"><div><dt className="inline text-muted-foreground">Origine du prospect · </dt><dd className="inline break-words">{lead.source_label || 'Origine à préciser'}</dd></div></dl>
@@ -125,7 +130,9 @@ export default function LeadDetailSheet({
  </div>
  {action?.name === 'exchange' && lead && <ExchangeDialog key={`exchange:${JSON.stringify(action.initial)}`} lead={lead} initial={action.initial} onClose={() => setAction(null)} />}
  {action?.name === 'change' && lead && <NextActionDialog lead={lead} onClose={() => setAction(null)} />}
- {action && !['exchange', 'change'].includes(action.name) && lead && <CrmActionDialog key={`${action.name}:${action.task?.id || ''}`} action={action.name} lead={lead} task={action.task} onClose={() => setAction(null)} returnFocusRef={moreRef} />}
+ {action?.name === 'edit' && lead && <ProspectEditDialog lead={lead} onClose={() => setAction(null)} />}
+ {action?.name === 'sibling' && lead && <CrmActionDialog action="manual" contact={{ id: lead.contact_id || lead.contact?.id, display_name: lead.contact_name, phone_masked: maskPhone(lead.contact?.phone) }} onClose={() => setAction(null)} onCreated={id => { setAction(null); onOpenLead?.(id); }} returnFocusRef={moreRef} />}
+ {action && !['exchange', 'change', 'edit', 'sibling'].includes(action.name) && lead && <CrmActionDialog key={`${action.name}:${action.task?.id || ''}`} action={action.name} lead={lead} task={action.task} onClose={() => setAction(null)} returnFocusRef={moreRef} />}
  {placement !== undefined && lead && <PlacementTestModal key={placement?.id || 'booking'} test={placement} crmLead={lead} onSave={() => setPlacement(undefined)} onClose={() => setPlacement(undefined)} />}
  {enrolling && lead && <CrmEnrollmentDialog lead={lead} onClose={() => setEnrolling(false)} />}
  </SheetContent></Sheet>;

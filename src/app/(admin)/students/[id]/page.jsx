@@ -33,6 +33,8 @@ import { isOpenEnrollment } from '@/lib/enrollmentWorkflow.mjs';
 import { endLearner, membershipErrorMessage, reopenEnrollment } from '@/lib/academic/membershipActions.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { invalidateAfterFinance, invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import StudentMergeEntry from '@/components/people/StudentMergeEntry';
+import { formatPhoneFr } from '@/lib/phone.mjs';
 
 // Module scope keeps section DOM stable across renders (a focused row survives).
 const Section = ({ title, children }) => (
@@ -121,6 +123,7 @@ function StudentDetail() {
   const [loadedScope, setLoadedScope] = useState(null);
   const scope = `${user?.id}:${role}:${id}`;
   const [reload, setReload] = useState(0);
+  const [mergedFrom, setMergedFrom] = useState([]);
   // CRM Continuer: highlight and focus the linked enrollment once loaded.
   const linkedEnrollment = enrollmentParam(useSearchParams()?.get('enrollment'));
   const [highlightedEnrollmentId, setHighlightedEnrollmentId] = useState(null);
@@ -130,17 +133,27 @@ function StudentDetail() {
     if (!id) return;
     let active = true;
     setLoading(true); setLoadError(false);
-    Promise.all([
+    // OD-8 « link, don't move » (migration 139): a merged duplicate keeps its own
+    // enrollments, charges, receipts, attendance and assessments; the kept file reads
+    // them through its merge set (itself plus every file merged into it).
+    getBrowserClient().rpc('student_merge_set', { p_student: id }).then(({ data, error }) => {
+      if (error) throw error;
+      const ids = Array.isArray(data) && data.length ? data : [id];
+      return Promise.all([
       entities.Student.filter({ id }),
-      entities.Receipt.filter({ student_id: id }),
-      entities.Attendance.filter({ student_id: id }),
-      entities.Assessment.filter({ student_id: id }),
+      entities.Receipt.filter({ student_id: ids }),
+      entities.Attendance.filter({ student_id: ids }),
+      entities.Assessment.filter({ student_id: ids }),
       entities.AuthorizedAdult.filter({ student_id: id }),
-      getBrowserClient().from('charge_balances').select('*').eq('student_id', id),
-      entities.Enrollment.filterAll({ student_id: id }, '-created_at'),
+      getBrowserClient().from('charge_balances').select('*').in('student_id', ids),
+      entities.Enrollment.filterAll({ student_id: ids }, '-created_at'),
       entities.Group.listAll('name'),
-    ]).then(([s, p, a, as_, adults, chargeResult, enrollmentRows, groupRows]) => {
+      ids.length > 1 ? entities.Student.filter({ id: ids.filter(x => x !== id) }) : [],
+    ]); }).then(([s, p, a, as_, adults, chargeResult, enrollmentRows, groupRows, mergedRows]) => {
       if (!active) return;
+      // Opening a merged file goes to the file it was merged into.
+      if (s[0]?.merged_into_student_id) { router.replace(`/students/${s[0].merged_into_student_id}`); return; }
+      setMergedFrom(mergedRows || []);
       if (chargeResult.error) throw chargeResult.error;
       if (!Array.isArray(chargeResult.data)) throw new Error('Unavailable balance read');
       setLoadedScope(scope);
@@ -155,7 +168,7 @@ function StudentDetail() {
     }).catch(() => { if (active) setLoadError(true); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [id, reload, scope]);
+  }, [id, reload, scope, router]);
 
   const handleDelete = async () => {
     if (!confirm('Archiver cet apprenant ? Ses inscriptions actives seront terminées (« Dossier archivé ») ; son historique et ses paiements sont conservés. La direction peut restaurer le dossier.')) return;
@@ -220,6 +233,7 @@ function StudentDetail() {
     <PageFrame width="detail" className="break-words">
       <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`${PILL_CLASS} ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span></div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{hasCapability(role, 'canEndLearner') && <Button variant="outline" onClick={() => setLeaver(true)}>Ancien apprenant</Button>}{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
       <ReadState state={loading ? 'refreshing' : loadError ? 'stale' : 'ready'} onRetry={loadError ? () => setReload(value=>value+1) : undefined}>
+      {(isManagement || mergedFrom.length > 0) && <div className="mb-4">{isManagement ? <StudentMergeEntry student={student} mergedFrom={mergedFrom} onChanged={() => setReload(value => value + 1)} /> : <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm" data-testid="merged-from">Fiches fusionnées ici : {mergedFrom.map(m => m.full_name).join(', ')}. Leur historique s’affiche sur cette fiche.</p>}</div>}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
           { label: 'Niveau', value: student.niveau_cefr || '—' },
@@ -264,7 +278,7 @@ function StudentDetail() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           {[
             ['Date de naissance', student.date_naissance],
-            ['Téléphone', student.telephone],
+            ['Téléphone', student.telephone ? formatPhoneFr(student.telephone) : null],
             ['Email', student.email],
             ['Catégorie', student.age_category],
             ['Programme du dossier', <ProgrammePill key="programme" sessionType={student.session_type} />],

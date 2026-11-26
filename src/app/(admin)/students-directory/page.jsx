@@ -1,5 +1,6 @@
 'use client';
 
+import { formatPhoneFr, phoneKey, phoneSearchKey } from '@/lib/phone.mjs';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
@@ -73,9 +74,13 @@ export default function StudentsDirectory() {
 
   const groupName = (gid) => groups.find(g => g.id === gid)?.name;
 
+  // §5.1 (139): a phone matches in any format from 6 digits; merged files are hidden.
+  const phoneQuery = phoneSearchKey(search);
   const filtered = students.filter(s => {
+    if (s.merged_into_student_id) return false;
     const q = search.toLowerCase();
-    const matchSearch = !search || s.full_name?.toLowerCase().includes(q) || s.email?.toLowerCase().includes(q) || s.telephone?.includes(search);
+    const matchSearch = !search || s.full_name?.toLowerCase().includes(q) || s.email?.toLowerCase().includes(q) || s.telephone?.includes(search)
+      || (!!phoneQuery && !!phoneKey(s.telephone)?.includes(phoneQuery));
     const matchStatus = !filterStatus || s.status === filterStatus;
     const matchCat = !filterCat || s.age_category === filterCat;
     const matchSession = !filterSession || (s.session_type || 'Yearly') === filterSession;
@@ -180,7 +185,7 @@ export default function StudentsDirectory() {
                   {s.telephone && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
                       <Phone size={10} className="flex-shrink-0" />
-                      {s.telephone}
+                      {formatPhoneFr(s.telephone)}
                     </p>
                   )}
                   {s.email && (
@@ -230,7 +235,7 @@ export default function StudentsDirectory() {
                       {s.niveau_cefr ? <span className="text-xs font-bold text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: lvlColor }}>{s.niveau_cefr}</span> : '—'}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">{grp || '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">{s.telephone || '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">{s.telephone ? formatPhoneFr(s.telephone) : '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">{s.email || '—'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sc.bg}`}>

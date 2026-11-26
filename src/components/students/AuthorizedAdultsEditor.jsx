@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
+import { checkPhone, formatPhoneFr } from '@/lib/phone.mjs';
+import { peopleMessage } from '@/lib/people.mjs';
 
 // RPW-r2 item 4: pick-up adults (« Sortie des jeunes » lists them), editable by every
 // staff role that holds manage_authorized_adults; read-only otherwise.
@@ -15,6 +17,8 @@ const empty = { full_name: '', telephone: '', relation: 'Parent' };
 export function adultErrorMessage(error) {
   const text = `${error?.message || ''} ${error?.details || ''}`;
   // A delete sets the dismissal history's adult to null, which that history refuses.
+  // RWR-r5 B1: « Numéro invalide » / « Numéro fictif : laissez vide » from the phone rule.
+  if (peopleMessage(error)) return peopleMessage(error);
   if (/immutable/i.test(text)) return 'Cet adulte figure dans l’historique des sorties : modifiez sa fiche au lieu de la supprimer.';
   if (error?.code === '42501') return 'Action non autorisée pour votre rôle.';
   if (error?.code === '23514') return 'Vérifiez le nom, le téléphone et la relation.';
@@ -40,6 +44,10 @@ export default function AuthorizedAdultsEditor({ studentId, adults, canEdit, onC
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const valid = v => v.full_name.trim().length >= 2 && v.telephone.trim().length > 0 && ADULT_RELATIONS.includes(v.relation);
+  // The phone rule of every write path (RWR-r5 §5.1); the database checks it too.
+  const phoneError = v => checkPhone(v.telephone).error;
+  // Shown in the national form (B1); an unchanged number is sent back exactly as stored.
+  const unchangedPhone = v => (v.telephone.trim() === formatPhoneFr(v.stored) ? { ...v, telephone: v.stored } : v);
   const clean = v => ({ full_name: v.full_name.trim(), telephone: v.telephone.trim(), relation: v.relation });
 
   const run = async (action, success) => {
@@ -54,12 +62,14 @@ export default function AuthorizedAdultsEditor({ studentId, adults, canEdit, onC
   const add = async (event) => {
     event.preventDefault();
     if (!valid(draft)) { toast.error('Indiquez le nom, le téléphone et la relation.'); return; }
+    if (phoneError(draft)) { toast.error(phoneError(draft)); return; }
     if (await run(t => t.insert({ ...clean(draft), student_id: studentId }), 'Adulte ajouté')) { setDraft(empty); setAdding(false); }
   };
   const save = async (event) => {
     event.preventDefault();
     if (!valid(editing)) { toast.error('Indiquez le nom, le téléphone et la relation.'); return; }
-    if (await run(t => t.update(clean(editing)).eq('id', editing.id).eq('student_id', studentId), 'Adulte mis à jour')) setEditing(null);
+    if (phoneError(editing)) { toast.error(phoneError(editing)); return; }
+    if (await run(t => t.update(clean(unchangedPhone(editing))).eq('id', editing.id).eq('student_id', studentId), 'Adulte mis à jour')) setEditing(null);
   };
   const remove = async (adult) => {
     if (!confirm(`Retirer ${adult.full_name} des adultes autorisés au retrait ?`)) return;
@@ -77,10 +87,10 @@ export default function AuthorizedAdultsEditor({ studentId, adults, canEdit, onC
       : <div key={a.id} data-adult-row className="flex items-center justify-between gap-3 p-3 bg-muted/40 rounded-md text-sm">
           <div>
             <p className="font-medium">{a.full_name}</p>
-            <p className="text-xs text-muted-foreground">{a.relation} · {a.telephone}</p>
+            <p className="text-xs text-muted-foreground">{a.relation} · {formatPhoneFr(a.telephone)}</p>
           </div>
           {canEdit && <div className="flex items-center gap-1">
-            <Button type="button" size="sm" variant="ghost" aria-label={`Modifier ${a.full_name}`} onClick={() => setEditing({ id: a.id, full_name: a.full_name || '', telephone: a.telephone || '', relation: a.relation || 'Parent' })}><Pencil size={14} /></Button>
+            <Button type="button" size="sm" variant="ghost" aria-label={`Modifier ${a.full_name}`} onClick={() => setEditing({ id: a.id, full_name: a.full_name || '', telephone: a.telephone ? formatPhoneFr(a.telephone) : '', relation: a.relation || 'Parent', stored: a.telephone || '' })}><Pencil size={14} /></Button>
             <Button type="button" size="sm" variant="ghost" aria-label={`Retirer ${a.full_name}`} disabled={saving} onClick={() => remove(a)}><Trash2 size={14} /></Button>
           </div>}
         </div>)}
