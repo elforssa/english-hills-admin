@@ -481,6 +481,8 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
     assert.match(page, /\{LAST_PAYMENT_NOTICE\}/, path);
     assert.match(page, /correctionErrorMessage\(/, path);
     assert.match(page, /isRecordConflict\((error|failure)\)/, `${path}: a conflict reloads the record`);
+    // The Supabase query builder has no .finally(): chaining it throws and the void never runs.
+    assert.doesNotMatch(page, /\.rpc\([^;]*?\)\s*\.finally\(/, `${path}: no .finally() on a Supabase query builder`);
   }
   const financePageE2 = await readFile(new URL('../src/app/(admin)/finance/page.jsx', import.meta.url), 'utf8');
   assert.match(financePageE2, /\{role === 'director' && <FinanceReviewQueue \/>\}/);
