@@ -1,8 +1,7 @@
 -- RWR-r5 PR B1 — people: one phone rule, one people search, duplicates, merges (M-B1).
+-- Migration 139: rebased onto PR C1 (138_desk_payments, #216) on 2026-11-26 (owner).
 -- Plan: docs/architecture/plans/receptionist-workflow.md §5.1–5.3, §7 invariants 6
 -- and 7, §8 (PR B1), §10 (M-B1, D3, D5), as amended in its B1 implementation record.
---
--- PROVISIONAL NUMBER: renumber if main moves before merge.
 --
 -- What it does:
 --  * phones (§5.1): public.phone_e164, phone_key, phone_is_placeholder, phone_mask,
@@ -37,13 +36,57 @@
 --  * enrollment learner candidates (crm_security.student_candidates, body from 084)
 --    no longer offer a student merged into another file;
 --  * set_next_action accepts the cause 'merge' (no next action, « Prospect
---    fusionné »); bodies otherwise verbatim from 137;
+--    fusionné »); body otherwise verbatim from 138 (C1's, with its « Encaisser
+--    l'acompte » block);
+--  * C1 (138) integration: a student merge is refused while the merged-away file has
+--    an open balance or an open reservation; a prospect merge is refused while the
+--    merged prospect has an open reservation; a merged file takes no new charge,
+--    payment or reservation; the no-second-charge rule (NF-4) reads the learner's
+--    merge set; « Réserver sans paiement » gives a new learner the contact's number
+--    in E.164 (section 9b);
 --  * data steps D3 (phones) and D5 (student merges): functions only, NOT run.
 --    They are not granted to any API role; the release operator runs them with
 --    the owner's separate approval.
 --
 -- Unchanged: the one-action rule, its index and the 137 triggers; every other
 -- function, grant and policy. No existing row is written by this migration.
+
+-- ---------------------------------------------------------------------------
+-- 0. Precondition: migration 138 (C1) is applied and every function 139 re-creates
+--    is still the body 138 left live (plan stop condition: a cumulative function
+--    that differs). set_next_action, create_charge_payment, crm_enroll_and_collect
+--    and crm_reserve_without_payment are C1's 138 bodies; the others are unchanged
+--    since 137 (normalize_phone since 080).
+-- ---------------------------------------------------------------------------
+do $$
+declare f record;
+begin
+  if to_regclass('public.crm_charge_reservations') is null then
+    raise exception 'Migration 139: needs migration 138 (desk payments)' using errcode = '55000';
+  end if;
+  for f in select * from jsonb_each_text(jsonb_build_object(
+      'crm_security.set_next_action(public.crm_leads,jsonb,text,text)', '1ae03220d7994df923c94e049c820c46',
+      'public.create_charge_payment(jsonb)', 'c99f48d7ddebd1d902786f822383d465',
+      'public.crm_enroll_and_collect(uuid,jsonb)', 'bb0f6ceaec1188d34543fe04a76e417c',
+      'public.crm_reserve_without_payment(uuid,jsonb)', '4d2968350d9d5164b74168867f2d524e',
+      'crm_security.command(text,uuid,jsonb)', '6de2fe6bf7d33b2da53566368edda52e',
+      'crm_security.opportunity_ids(text,text,uuid,text,uuid,text,text,text,text,timestamp with time zone)', '462267206c15cec6ad947772e5c29d92',
+      'crm_security.normalize_phone(text)', 'c6518a6a742a315a8ea2a8b755513a71',
+      'crm_security.student_candidates(uuid,text,date)', 'b735813b437f690a102d516c992185c7',
+      'public.crm_get_timeline(uuid,jsonb,integer,boolean)', '20a3e43f610ee1cb24b2c6109ea363c4',
+      'public.crm_get_work_queue(text,text,uuid,text,uuid,jsonb,integer)', '38adaf382ab48067f83411d8e35a178d',
+      'public.crm_get_workspace_detail(uuid)', '6b42f4cb2797eb8bd2d0f2fb4e8746f6',
+      'public.crm_search_leads(text,text,uuid,integer,integer)', '977cf9e47018609d11caaa26d3ea022d',
+      'public.crm_start_enrollment(uuid,jsonb)', 'f57387d6eced14cb23a53680373f16b6',
+      'public.save_receptionist_student(uuid,timestamp with time zone,jsonb)', 'b5aa2ebeb0d43ac76a0836ca4b08d1b2',
+      'public.search_students_page(text,text,text,text,text,boolean,text,text,integer,integer,text,text)', '94ddf4240a7e922dd86c5fb226cf81eb')) loop
+    if to_regprocedure(f.key) is null
+       or (select md5(prosrc) from pg_proc where oid = to_regprocedure(f.key)) is distinct from f.value then
+      raise exception 'Migration 139: % differs from the body 138 left live; rebuild 139 on the live definition', f.key
+        using errcode = '55000';
+    end if;
+  end loop;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 1. Phones (§5.1). Keep in step with src/lib/phone.mjs.
@@ -158,7 +201,7 @@ create index authorized_adults_phone_key_idx on public.authorized_adults (public
 -- 2. Identity tables (§5.2, §5.3).
 -- ---------------------------------------------------------------------------
 -- The restore file keeps these additive tables, columns, checks and indexes (and
--- their rows), so each is created only if absent: 138 can be applied again after
+-- their rows), so each is created only if absent: 139 can be applied again after
 -- its restore (review of #217).
 create table if not exists public.person_match_decisions (
  id uuid primary key default gen_random_uuid(),
@@ -467,6 +510,14 @@ begin
  select * into na from public.crm_tasks where id=crm_security.next_action_id(src.id);
  if na.task_type in ('center_visit','enrollment_followup') or exists(select 1 from public.placement_tests where crm_lead_id=src.id and status='Planifié') then
   raise exception 'Move or cancel the appointment of the merged prospect first' using errcode='22023',hint='people.merge_source_appointment'; end if;
+ -- 139: an open reservation of the merged prospect (138, C1: a live charge without an
+ -- enrollment, prospect not closed) is collected on that prospect only (« Inscrire et
+ -- encaisser »), whatever its next action now is; a closed prospect's is an ordinary
+ -- commitment of its learner.
+ if exists(select 1 from public.crm_charge_reservations r join public.charges c on c.id=r.charge_id
+   where r.lead_id=src.id and c.voided_at is null and c.enrollment_id is null)
+  and src.enrollment_id is null and src.status not in ('LOST','NOT_QUALIFIED') then
+  raise exception 'Collect or void the reservation of the merged prospect first' using errcode='22023',hint='people.merge_source_reservation'; end if;
  ckey:='command:'||actor||':merge_prospects:'||p_request_key;
  perform set_config('eh.crm_command_key',ckey,true);
  perform crm_security.set_next_action(src,jsonb_build_object('none',true,'reason','Prospect fusionné'),'merge',ckey||':cancel');
@@ -553,12 +604,18 @@ set search_path = pg_catalog, pg_temp as $$
    -- the payment paths read the charge's own student, so it must be settled first.
    (select coalesce(sum(b.balance),0) from (select c.gross_amount-c.discount_amount-coalesce((select sum(r.montant_paye) from public.receipts r
      where r.charge_id=c.id and r.voided_at is null and r.deleted_at is null),0) balance
-    from public.charges c where c.student_id=p_source and c.voided_at is null) b where b.balance>0) source_balance)
+    from public.charges c where c.student_id=p_source and c.voided_at is null) b where b.balance>0) source_balance,
+   -- An open reservation (138, C1) of the merged-away file: collected only through
+   -- « Inscrire et encaisser » on its prospect, which reads the charge's own student.
+   (select count(*) from public.crm_charge_reservations r join public.charges c on c.id=r.charge_id
+     join public.crm_leads l on l.id=r.lead_id
+    where c.student_id=p_source and c.voided_at is null and l.merged_into_lead_id is null and l.enrollment_id is null
+     and l.status not in ('CONVERTED','LOST','NOT_QUALIFIED')) source_reservations)
  select jsonb_build_object(
   'source_id',p_source,'target_id',p_target,
   'source_name',(select full_name from src),'target_name',(select full_name from tgt),
   'source_live',source_live,'target_live',target_live,'source_portal',source_portal,'target_portal',target_portal,
-  'source_open_balance',source_balance,
+  'source_open_balance',source_balance,'source_open_reservations',source_reservations,
   'family_links',(select count(*) from public.family_links where student_id=p_source and status in ('active','pending')),
   'authorized_adults',(select count(*) from public.authorized_adults where student_id=p_source),
   'prospects',(select count(*) from public.crm_leads l where l.student_id=p_source and l.enrollment_id is null
@@ -572,7 +629,7 @@ set search_path = pg_catalog, pg_temp as $$
    when (select merged_into_student_id from src) is not null or (select merged_into_student_id from tgt) is not null then 'people.merge_already'
    when source_live and target_live then 'people.merge_both_live'
    when source_live then 'people.merge_direction'
-   when source_balance>0 then 'people.merge_source_balance'
+   when source_balance>0 or source_reservations>0 then 'people.merge_source_balance'
    when source_portal and target_portal then 'people.merge_both_portal'
   end)
  from live
@@ -793,8 +850,9 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 9. Re-created functions. Each body is the live 137 body with the 138 lines
---    marked « 138 »; the prior bodies are in scripts/rollback/138_people_identity_restore.sql.
+-- 9. Re-created functions. Each body is the live 138 body (section 0) with the 139 lines
+--    marked « 139 »; the prior bodies are in
+--    scripts/rollback/139_people_identity_restore.sql.
 -- ---------------------------------------------------------------------------
 -- set_next_action: the cause 'merge' (no next action, « Prospect fusionné »).
 CREATE OR REPLACE FUNCTION crm_security.set_next_action(l crm_leads, spec jsonb, cause text, source text)
@@ -1063,6 +1121,18 @@ begin
     case when spec ? 'test_notes' then nullif(btrim(spec->>'test_notes'),'') else notes end);
   end if;
  end if;
+ -- C1 (138, owner decision 2026-11-25): an « Encaisser l'acompte » action moved
+ -- to another enrolment action (« Changer » to a new date, an exchange that keeps
+ -- the enrolment step) while its reservation is still open — a live charge without
+ -- an enrollment — keeps the marker its label reads (source kind « enrollment »,
+ -- source key « reservation:… »). A different kind of action, a close or the
+ -- payment (conversion) ends it.
+ if typ='enrollment_followup' and not (spec ? '_key') and cur.id is not null and cur.task_type='enrollment_followup'
+  and cur.source_kind='enrollment' and cur.source_key like 'reservation:%'
+  and exists(select 1 from public.crm_charge_reservations r join public.charges c on c.id=r.charge_id
+   where r.lead_id=l.id and c.voided_at is null and c.enrollment_id is null) then
+  spec:=spec||jsonb_build_object('_key','reservation:'||l.id||':moved:'||source||':next-action','_kind','enrollment');
+ end if;
  new_id:=crm_security.new_task(l,task_spec,coalesce(spec->>'_key',source||':next-action'),coalesce(spec->>'_kind','manual'),
   (spec->>'_ordinal')::smallint,spec->>'_event_source',cur.id,
   case when typ in ('center_visit','enrollment_followup') and with_test then carried else (spec->>'_placement_test_id')::uuid end,
@@ -1089,7 +1159,7 @@ declare actor uuid:=auth.uid(); digest text; prior public.crm_command_requests%r
  nested boolean:=coalesce(current_setting('eh.crm_command_key',true),'')<>''; before_label text; after_label text;
  chan text; res text; next_mode text; next_obj jsonb; note text; close_target text; close_reason text; close_note text;
  cause text; qualify_step text; primary_channel text; outcome_code text; x public.placement_tests%rowtype;
- -- 138 (RWR-r5 §5.1–5.3): people identity.
+ -- 139 (RWR-r5 §5.1–5.3): people identity.
  existing public.crm_contacts%rowtype; whatsapp text; matches jsonb; edit jsonb; result_extra jsonb:='{}'::jsonb; edit_label text;
 begin
  if cmd in ('create_manual_lead','create_prospect','resolve_submission') then
@@ -1753,7 +1823,7 @@ begin return query
  and ($2='' or strpos(lower(c.display_name),lower($2))>0 or strpos(lower(coalesce(l.learner_name,'')),lower($2))>0
    or (crm_security.normalize_phone($2) is not null and (c.phone_e164=crm_security.normalize_phone($2) or c.whatsapp_e164=crm_security.normalize_phone($2)))
    or (length(regexp_replace($2,'[^0-9]','','g'))>=3 and strpos(coalesce(c.phone_e164,c.phone_raw,''),regexp_replace($2,'[^0-9]','','g'))>0)
-   -- 138 (§5.1): « 06 12 34 56 », « 00212… », « 212… » find the stored number.
+   -- 139 (§5.1): « 06 12 34 56 », « 00212… », « 212… » find the stored number.
    or (public.phone_search_key($2) is not null and (strpos(coalesce(public.phone_key(c.phone_e164),public.phone_key(c.phone_raw),''),public.phone_search_key($2))>0
      or strpos(coalesce(public.phone_key(c.whatsapp_e164),''),public.phone_search_key($2))>0)))
  and case $1
@@ -1802,7 +1872,7 @@ begin
  and (q='' or strpos(lower(coalesce(c.display_name,'')),lower(q))>0 or strpos(lower(coalesce(l.learner_name,'')),lower(q))>0
  or (canonical is not null and (c.phone_e164=canonical or c.whatsapp_e164=canonical))
  or (length(regexp_replace(q,'[^0-9]','','g'))>=3 and (strpos(coalesce(c.phone_e164,c.phone_raw,''),regexp_replace(q,'[^0-9]','','g'))>0))
- -- 138 (§5.1): phone keys in any format.
+ -- 139 (§5.1): phone keys in any format.
  or (qkey is not null and (strpos(coalesce(public.phone_key(c.phone_e164),public.phone_key(c.phone_raw),''),qkey)>0
   or strpos(coalesce(public.phone_key(c.whatsapp_e164),''),qkey)>0)))
  ), page as(select id,created_at from matching order by created_at desc,id desc limit p_limit offset p_offset)
@@ -1858,10 +1928,10 @@ begin
     and (coalesce(p_plan,'') = '' or coalesce(s.plan_type,'Standard') = p_plan)
     and (coalesce(p_search,'') = '' or pg_catalog.strpos(pg_catalog.lower(coalesce(s.full_name,'')),pg_catalog.lower(p_search)) > 0
       or pg_catalog.strpos(pg_catalog.lower(coalesce(s.email,'')),pg_catalog.lower(p_search)) > 0
-      -- 138 (§5.1): a phone in any format, from 6 significant digits.
+      -- 139 (§5.1): a phone in any format, from 6 significant digits.
       or (public.phone_search_key(p_search) is not null
         and pg_catalog.strpos(coalesce(public.phone_key(s.telephone),''),public.phone_search_key(p_search)) > 0))
-    -- 138 (§5.3): a student merged into another is shown through the one kept.
+    -- 139 (§5.3): a student merged into another is shown through the one kept.
     and s.merged_into_student_id is null
   ), scope as materialized (
     select c.id from candidates c where coalesce(p_payment, '') <> ''
@@ -1936,7 +2006,7 @@ AS $function$ declare result jsonb; begin
  perform crm_security.require_reader(false);
  select crm_security.operational_card(l.id)||jsonb_build_object('contact',jsonb_build_object('display_name',c.display_name,'phone',coalesce(c.phone_e164,c.phone_raw),
  'phone_e164',c.phone_e164,'whatsapp_e164',coalesce(c.whatsapp_e164,c.phone_e164),'email',c.email_normalized,
- -- 138 (§5.3): the edit form and the « numéro à vérifier » flag.
+ -- 139 (§5.3): the edit form and the « numéro à vérifier » flag.
  'id',c.id,'version',c.version,'contact_kind',c.contact_kind,'whatsapp_own',c.whatsapp_e164,
  'phone_needs_review',nullif(btrim(c.phone_raw),'') is not null and c.phone_e164 is null),
  'contact_id',l.contact_id,'lead_version',l.version,'merged_into_lead_id',l.merged_into_lead_id,
@@ -1985,7 +2055,7 @@ begin
  select jsonb_build_object('rows',coalesce((select jsonb_agg(jsonb_build_object('id',a.id,'occurred_at',a.occurred_at,'event_type',a.event_type,'body',a.body,'outcome',a.outcome,
  'channel',a.channel,'is_primary',a.is_primary,'command',a.details->>'command','summary',a.details->>'summary',
  'secondary_count',case when a.is_primary then (select count(*) from public.crm_activities s where s.lead_id=a.lead_id and s.command_key=a.command_key and not s.is_primary) end,
- -- 138 (OD-8): a merged prospect's history is read here, marked with its id.
+ -- 139 (OD-8): a merged prospect's history is read here, marked with its id.
  'merged_from',case when a.lead_id<>p_lead then a.lead_id end,
  'actor_name',coalesce(nullif(p.full_name,''),case when a.actor_kind='user' then 'Équipe accueil' else 'Système' end)) order by a.occurred_at desc,a.id desc) from shown a left join public.profiles p on p.id=a.actor_id),'[]'::jsonb),
  'has_more',(select count(*)>p_limit from page),'next_cursor',case when (select count(*)>p_limit from page) then
@@ -2281,7 +2351,7 @@ begin
  select * into bounds from crm_security.work_boundaries(stamp);
  -- Counts and the selected page share a single statement snapshot; only page IDs
  -- are enriched. A task's assignee never falls back to its lead's owner.
- -- 138 (§5.3, day script 4): one row per contact in each bucket. Siblings (prospects
+ -- 139 (§5.3, day script 4): one row per contact in each bucket. Siblings (prospects
  -- sharing a contact) whose actions fall in the same bucket are grouped on the row of
  -- the earliest; a sibling due in another bucket keeps its own row and count there, so
  -- no action leaves its bucket (review of #217). Every row lists the other siblings
@@ -2348,6 +2418,582 @@ AS $function$
   or (c.email_normalized is not null and c.email_normalized in (lower(s.email),lower(s.parent_email)))
  )
 $function$;
+
+-- ---------------------------------------------------------------------------
+-- 9b. C1 functions (138_desk_payments) re-created from their live 138 bodies (prosrc
+--     md5 checked in section 0) with the 139 lines marked « 139 »; the 138 bodies are
+--     in scripts/rollback/139_people_identity_restore.sql.
+--  * create_charge_payment: a merged file takes no new charge or payment
+--    (eap.student_merged); NF-4 (no second tuition charge next to an unlinked
+--    commitment) reads the learner's merge set.
+--  * crm_enroll_and_collect: NF-4 reads the learner's merge set.
+--  * crm_reserve_without_payment: the new learner gets the contact's number in E.164,
+--    or none (as crm_start_enrollment); a merged file takes no reservation; NF-4 reads
+--    the merge set.
+--  get_open_balances and find_duplicate_receipts are unchanged: a student merge is
+--  refused while the merged-away file has an open balance or an open reservation
+--  (student_merge_check), and a merged file takes no new charge or payment, so the
+--  kept file's own rows are complete.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.create_charge_payment(p_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare
+  v_result jsonb;
+  v_charge public.charges%rowtype;
+  v_enrollment public.enrollments%rowtype;
+  v_requested_id uuid := nullif(p_payload->>'enrollment_id','')::uuid;
+  v_enrollment_id uuid;
+  v_prior_request public.financial_requests%rowtype;
+  v_crm_matches integer;
+  v_matches uuid[];
+  v_year text;
+  v_constraint text;
+  v_free boolean := false;
+  v_lead public.crm_leads%rowtype;
+  v_last_clear timestamptz;
+begin
+  -- Same staff boundary as the inner financial command; never trust caller roles.
+  perform operational_security.require_capability('manage_finance_operations');
+  -- Payments share this lock with other payments, preserving the existing
+  -- financial idempotency/charge serialization. CRM linkage takes it exclusively.
+  if nullif(p_payload->>'student_id','') is not null and not pg_try_advisory_xact_lock_shared(
+    hashtextextended('crm:enrollment-intent:'||(p_payload->>'student_id')::uuid,0)) then
+    raise exception 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.' using errcode='PT409';
+  end if;
+  -- Lock before inner charge/receipt foreign-key reads to avoid lock upgrades
+  -- between simultaneous payments for the same student. Existing locks remain.
+  perform 1 from public.students where id=nullif(p_payload->>'student_id','')::uuid for update;
+  -- 139 (B1, OD-8): a file merged into another takes no new charge or payment; the
+  -- kept file is collected (its merge was refused while this one had a balance).
+  if exists (select 1 from public.students s where s.merged_into_student_id is not null and (
+       s.id = nullif(p_payload->>'student_id','')::uuid
+       or s.id = (select ch.student_id from public.charges ch where ch.id = nullif(p_payload->>'charge_id','')::uuid))) then
+    raise exception 'Ce dossier a été fusionné dans un autre : encaissez sur le dossier conservé.'
+      using errcode = '22023', hint = 'eap.student_merged';
+  end if;
+  -- C1 (RWR-r5 NF-4, owner review of PR #216): « Encaisser » never creates a second
+  -- tuition charge next to a live unlinked commitment of the learner for the same
+  -- programme and year; the payment goes on that commitment. A charge paid onto an
+  -- enrollment the staff chose (enrollment_id, as « Inscrire et encaisser » always
+  -- sends) is a deliberate link and passes; « Autre » and a replay are outside the rule.
+  if nullif(p_payload->>'charge_id','') is null and v_requested_id is null
+     and nullif(p_payload->>'student_id','') is not null
+     and coalesce(nullif(btrim(p_payload->>'session_type'),''), 'Other') <> 'Other'
+     and not exists (select 1 from public.financial_requests
+       where idempotency_key = nullif(p_payload->>'idempotency_key','')::uuid)
+     -- 139 (B1): over the learner's merge set (a file merged into it keeps its own charges).
+     and exists (select 1 from public.charges x where x.student_id = any(public.student_merge_set((p_payload->>'student_id')::uuid))
+       and x.enrollment_id is null and x.voided_at is null and not x.legacy
+       and x.session_type = btrim(p_payload->>'session_type')
+       and x.school_year = nullif(btrim(p_payload->>'school_year'),'')) then
+    raise exception 'Un engagement sans inscription existe déjà pour ce programme et cette année : encaissez sur cet engagement.'
+      using errcode = '22023', hint = 'eap.unlinked_commitment_exists';
+  end if;
+  -- The inner function enforces staff authorization, payment validation and
+  -- idempotency before the wrapper makes any academic changes.
+  v_result := public.create_charge_payment_financial(p_payload);
+  if coalesce((v_result->>'replayed')::boolean, false) then
+    select * into v_prior_request from public.financial_requests
+    where idempotency_key = (p_payload->>'idempotency_key')::uuid;
+    if v_prior_request.requested_enrollment_id is distinct from v_requested_id then
+      raise exception 'Idempotency key conflict: selected enrollment changed.';
+    end if;
+    return v_result;
+  end if;
+  update public.financial_requests set requested_enrollment_id = v_requested_id
+  where idempotency_key = (p_payload->>'idempotency_key')::uuid;
+  if (v_result->>'receipt_id') is null then
+    -- EAP (D2, Q1 = A): a zero payment stays a commitment without an enrollment,
+    -- except when this request created a new tuition charge discounted at 100 %
+    -- with its reason: that agreement confirms the enrollment without a receipt
+    -- (the director sees it in the discounts section of Contrôles).
+    if nullif(p_payload->>'charge_id','') is not null then
+      return v_result;
+    end if;
+    select * into v_charge from public.charges
+    where id = (v_result->>'charge_id')::uuid for update;
+    if v_charge.session_type = 'Other' or v_charge.legacy or v_charge.gross_amount <= 0
+       or v_charge.discount_amount is distinct from v_charge.gross_amount
+       or not exists (select 1 from public.charge_discount_reasons dr where dr.charge_id = v_charge.id) then
+      return v_result;
+    end if;
+    v_free := true;
+  else
+    select * into v_charge from public.charges
+    where id = (v_result->>'charge_id')::uuid for update;
+  end if;
+  if nullif(p_payload->>'student_id','') is null then
+    update public.students set session_type = v_charge.session_type,
+      niveau_cefr = coalesce(v_charge.level, niveau_cefr)
+    where id = v_charge.student_id;
+  end if;
+  -- EGC (D3-A, FIN-10): a receipt no longer sets the learner's status; an Other
+  -- or legacy receipt changes none, a tuition receipt confirms an enrollment.
+  if v_charge.session_type = 'Other' or v_charge.legacy then
+    if v_requested_id is not null then
+      raise exception 'This service cannot be linked to a tuition enrollment.';
+    end if;
+    return v_result || jsonb_build_object('student_enrolled', false);
+  end if;
+
+  -- Lock the student across different charges in the same request period.
+  perform 1 from public.students where id = v_charge.student_id for update;
+  if v_charge.enrollment_id is not null and v_requested_id is not null
+    and v_charge.enrollment_id <> v_requested_id then
+    raise exception 'Charge is already linked to another enrollment.';
+  end if;
+  v_enrollment_id := coalesce(v_charge.enrollment_id, v_requested_id);
+
+  if v_enrollment_id is null then
+    -- Guard only the implicit tuition-enrollment creation branch. Explicit charge
+    -- or request links retain 074 validation. Exceptions roll back the entire
+    -- inner financial transaction, including receipt/event/student side effects.
+    select count(*) into v_crm_matches
+    from public.crm_leads l join public.enrollments e on e.id=l.enrollment_id
+    join public.students s on s.id=e.student_id
+    where e.student_id=v_charge.student_id and s.deleted_at is null
+      and e.status is distinct from 'Rejected' and e.status is distinct from 'Ended' and l.merged_into_lead_id is null
+      and coalesce(e.session_type,s.session_type)=v_charge.session_type
+      -- Unknown year on an old charge cannot establish a distinct intent.
+      and (v_charge.school_year is null or crm_security.enrollment_year(e)=v_charge.school_year);
+    if v_crm_matches>0 then
+      raise exception '%',case when v_crm_matches=1
+        then 'Une inscription CRM existe pour ce programme et cette année. Sélectionnez-la avant d’enregistrer le paiement.'
+        else 'Plusieurs inscriptions CRM correspondent. Sélectionnez explicitement l’inscription à payer.' end
+        using errcode='22023';
+    end if;
+    -- EGC (D-5, I3): reuse the learner's single active enrollment of this
+    -- programme and year that is not CRM-linked. An undated (pre-057) charge
+    -- matches an undated enrollment or one of the current school year, which
+    -- the new or confirmed enrollment receives (I9).
+    v_year := coalesce(v_charge.school_year, academic_security.school_year_on(academic_security.today()));
+    select array_agg(e.id order by e.id) into v_matches from public.enrollments e
+    where e.student_id = v_charge.student_id and e.session_type = v_charge.session_type
+      and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')
+      and (e.school_year = v_charge.school_year
+        or (v_charge.school_year is null and (e.school_year is null or e.school_year = v_year)))
+      and not exists (select 1 from public.crm_leads l where l.enrollment_id = e.id);
+    if cardinality(v_matches) > 1 then
+      raise exception 'Plusieurs inscriptions correspondent. Sélectionnez l’inscription à payer.' using errcode='22023';
+    end if;
+    v_enrollment_id := v_matches[1];
+  end if;
+
+  begin
+  if v_enrollment_id is not null then
+    select * into v_enrollment from public.enrollments
+    where id = v_enrollment_id for update;
+    if not found or v_enrollment.student_id is distinct from v_charge.student_id
+      or v_enrollment.status = 'Rejected'
+      -- An ended enrollment only takes payments on its own charge (an old balance).
+      or (v_enrollment.status = 'Ended' and v_charge.enrollment_id is distinct from v_enrollment.id)
+      or (v_enrollment.session_type is not null
+          and v_enrollment.session_type <> v_charge.session_type)
+      or (v_enrollment.school_year is not null and v_charge.school_year is not null
+          and v_enrollment.school_year <> v_charge.school_year) then
+      raise exception 'Selected enrollment does not match this student, session and school year.';
+    end if;
+    if v_enrollment.status is distinct from 'Ended' then
+      update public.enrollments set
+        session_type = v_charge.session_type,
+        school_year = coalesce(v_charge.school_year, v_enrollment.school_year, crm_security.enrollment_year(v_enrollment)),
+        level = coalesce(v_enrollment.level, v_charge.level),
+        status = case
+          when status in ('Submitted','Under Review') then
+            case when group_id is null then 'Confirmed' else 'Validated' end
+          when status = 'Trial' then 'Validated'
+          else status end
+      where id = v_enrollment_id;
+    end if;
+  else
+    insert into public.enrollments
+      (student_id, status, date_inscription, session_type, school_year, level)
+    values (v_charge.student_id, 'Confirmed',
+            public.business_date(), v_charge.session_type, v_year, v_charge.level)
+    returning id into v_enrollment_id;
+  end if;
+  exception when unique_violation then
+    get stacked diagnostics v_constraint = constraint_name;
+    if v_constraint = 'enrollments_one_active_programme_year' then perform academic_security.duplicate(); end if;
+    raise;
+  end;
+
+  update public.charges set enrollment_id = v_enrollment_id
+  where id = v_charge.id and enrollment_id is distinct from v_enrollment_id;
+  update public.receipts set enrollment_id = v_enrollment_id
+  where id = (v_result->>'receipt_id')::uuid;
+  select * into v_enrollment from public.enrollments where id = v_enrollment_id;
+
+  -- E-2 (P1.4, Q1 = B): this payment is live and linked; clear a review flag only
+  -- when a payment-cancellation review follows the last clear, no review of the
+  -- lead was ever raised for another reason (all time: an enrollment downgrade's
+  -- activity is timestamped at its command start and may predate a later clear),
+  -- and the conversion was not from LOST/NOT_QUALIFIED. Leads are locked last.
+  if not v_free and v_enrollment.status in ('Confirmed','Validated') then
+    for v_lead in select * from public.crm_leads
+      where enrollment_id = v_enrollment_id and merged_into_lead_id is null and conversion_review_required
+      order by id for update
+    loop
+      select max(occurred_at) into v_last_clear from public.crm_activities
+      where lead_id = v_lead.id and event_type = 'conversion_review_cleared';
+      if exists (select 1 from public.crm_activities a where a.lead_id = v_lead.id
+          and a.event_type = 'conversion_review_required' and (v_last_clear is null or a.occurred_at > v_last_clear))
+        and not exists (select 1 from public.crm_activities a where a.lead_id = v_lead.id
+          and a.event_type = 'conversion_review_required' and a.details->>'reason' is distinct from 'payment_voided')
+        and not exists (select 1 from public.crm_activities c where c.id = v_lead.conversion_activity_id
+          and c.from_status in ('LOST','NOT_QUALIFIED')) then
+        insert into public.crm_activities(lead_id, enrollment_id, receipt_id, occurred_at, actor_id, actor_kind,
+          event_type, source_key, body, details)
+        values (v_lead.id, v_enrollment_id, (v_result->>'receipt_id')::uuid, clock_timestamp(), auth.uid(),
+          case when auth.uid() is null then 'system' else 'user' end, 'conversion_review_cleared',
+          'payment-review-cleared:'||(v_result->>'receipt_id'),
+          'Paiement de remplacement enregistré : vérification levée.',
+          jsonb_build_object('receipt_id', v_result->>'receipt_id'));
+        update public.crm_leads set conversion_review_required = false, version = version + 1, updated_at = now()
+        where id = v_lead.id;
+      end if;
+    end loop;
+  end if;
+
+  return v_result || jsonb_build_object('enrollment_id', v_enrollment_id,
+                                       'enrollment_confirmed', v_enrollment.status in ('Confirmed','Validated'),
+                                       'free_enrollment', v_free,
+                                       'group_pending', v_enrollment.status = 'Confirmed' and v_enrollment.group_id is null,
+                                       'student_enrolled', v_enrollment.status in ('Confirmed','Validated'));
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.crm_enroll_and_collect(p_request_key uuid, p_data jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare
+  v_actor uuid := auth.uid();
+  v_enrollment jsonb;
+  v_payment jsonb;
+  v_replayed boolean;
+  v_start jsonb;
+  v_row public.enrollments%rowtype;
+  v_pay jsonb := '{}'::jsonb;
+  v_bytes bytea;
+  v_key uuid;
+  v_gross numeric(12,2);
+  v_discount numeric(12,2);
+  v_amount numeric(12,2);
+  v_free boolean;
+  -- C1
+  v_commitment public.charges%rowtype;
+  v_commitment_id uuid;
+begin
+  perform crm_security.require_reader(false);
+  perform operational_security.require_capability('manage_finance_operations');
+  if p_request_key is null or jsonb_typeof(p_data) is distinct from 'object' or octet_length(p_data::text) > 16000
+     or p_data - array['enrollment','payment'] <> '{}'::jsonb
+     or jsonb_typeof(p_data->'enrollment') is distinct from 'object'
+     or (p_data ? 'payment' and jsonb_typeof(p_data->'payment') is distinct from 'object')
+     or p_data->'enrollment' ?| array['initial_status','group_id']
+     or coalesce(p_data->'payment', '{}'::jsonb) - array['gross_amount','discount_amount','discount_reason_code',
+          'discount_reason','due_date','payment_amount','payment_date','payment_method','transaction_reference',
+          'note','request_email','email_recipient','idempotency_key','student_id','enrollment_id','session_type',
+          'school_year','level','charge_id','new_session'] <> '{}'::jsonb
+     -- C1: « nouvelle session » is an explicit boolean.
+     or (p_data->'payment' ? 'new_session' and jsonb_typeof(p_data->'payment'->'new_session') is distinct from 'boolean') then
+    raise exception 'Valid bounded enrollment request required' using errcode = '22023', hint = 'crm_enrollment.request_invalid';
+  end if;
+  v_enrollment := p_data->'enrollment';
+  v_payment := p_data->'payment';
+  v_commitment_id := nullif(v_payment->>'charge_id', '')::uuid;
+  -- An « Autre » receipt never confirms an enrollment (122): not an enrollment programme here.
+  if v_enrollment->>'session_type' = 'Other' then
+    raise exception 'Choisissez le programme de l’inscription : « Autre » s’encaisse sans inscription.'
+      using errcode = '22023', hint = 'eap.program_not_enrollable';
+  end if;
+  -- (0) The CRM command's own request lock, then the replay test (S4, R1).
+  perform pg_advisory_xact_lock(hashtextextended('crm:request:'||v_actor||':start_enrollment:'||p_request_key, 0));
+  v_replayed := exists (select 1 from public.crm_command_requests where actor_scope = v_actor::text
+    and command_name = 'start_enrollment' and request_key = p_request_key);
+  v_bytes := substring(sha256(convert_to('eap:payment:'||v_actor::text||':'||p_request_key::text, 'UTF8')) from 1 for 16);
+  v_bytes := set_byte(v_bytes, 6, (get_byte(v_bytes, 6) & 15) | 80);
+  v_bytes := set_byte(v_bytes, 8, (get_byte(v_bytes, 8) & 63) | 128);
+  v_key := encode(v_bytes, 'hex')::uuid;
+  -- A replay carries a payment exactly when the first run did: a Q12 link replayed
+  -- with a payment, or a paid request replayed without one, is a payload conflict.
+  if v_replayed and (v_payment is not null) is distinct from
+      exists (select 1 from public.financial_requests where idempotency_key = v_key) then
+    raise exception 'Request key payload conflict' using errcode = '22023', hint = 'crm_enrollment.request_conflict';
+  end if;
+  if not v_replayed and v_payment is not null then
+    v_gross := round(coalesce(nullif(v_payment->>'gross_amount','')::numeric, 0), 2);
+    v_discount := round(coalesce(nullif(v_payment->>'discount_amount','')::numeric, 0), 2);
+    v_amount := round(coalesce(nullif(v_payment->>'payment_amount','')::numeric, 0), 2);
+    -- C1: a payment on an existing commitment always has an amount (its price is stored).
+    if v_amount <= 0 and (v_commitment_id is not null or not (v_gross > 0 and v_discount = v_gross)) then
+      raise exception 'L’inscription se confirme à l’encaissement : saisissez un paiement.'
+        using errcode = '22023', hint = 'eap.payment_required';
+    end if;
+  end if;
+  -- (i) Lead, learner, Confirmed enrollment (or the Q12 link), conversion.
+  v_start := public.crm_start_enrollment(p_request_key, v_enrollment || jsonb_build_object('initial_status', 'Confirmed'));
+  -- An existing enrollment that already has a live charge or receipt is never charged
+  -- again here (first run; the CRM step holds the learner's enrollment lock).
+  if not v_replayed and v_payment is not null and nullif(v_enrollment->>'enrollment_id', '') is not null and (
+      exists (select 1 from public.charges c where c.enrollment_id = (v_start->'enrollment'->>'id')::uuid and c.voided_at is null)
+      or exists (select 1 from public.receipts r where r.enrollment_id = (v_start->'enrollment'->>'id')::uuid
+        and r.voided_at is null and r.deleted_at is null)) then
+    raise exception 'Cette inscription a déjà un montant enregistré : encaissez sur ce montant depuis le reçu, ou rattachez-la si elle est payée.'
+      using errcode = '22023', hint = 'eap.enrollment_already_charged';
+  end if;
+  -- C1 (§6.1, NF-4), first run only; the CRM step holds the learner's enrollment
+  -- lock, which crm_reserve_without_payment takes too.
+  if not v_replayed and v_payment is not null then
+    if v_commitment_id is not null then
+      -- « Encaisser sur cet engagement »: an unlinked live commitment of this
+      -- learner, programme and year, paid and linked to the new enrollment.
+      select * into v_commitment from public.charges where id = v_commitment_id for update;
+      if not found or v_commitment.student_id is distinct from (v_start->'enrollment'->>'student_id')::uuid
+         or v_commitment.voided_at is not null or v_commitment.legacy or v_commitment.enrollment_id is not null
+         or v_commitment.session_type is distinct from v_start->'enrollment'->>'session_type'
+         or v_commitment.school_year is distinct from v_start->'enrollment'->>'school_year' then
+        raise exception 'Cet engagement ne correspond plus à cet apprenant, ce programme et cette année. Les soldes sont actualisés.'
+          using errcode = '22023', hint = 'eap.commitment_unavailable';
+      end if;
+    elsif coalesce((v_payment->>'new_session')::boolean, false) is not true and exists (
+        select 1 from public.charges c
+        -- 139 (B1): over the learner's merge set (a file merged into it keeps its own charges).
+        where c.student_id = any(public.student_merge_set((v_start->'enrollment'->>'student_id')::uuid)) and c.enrollment_id is null
+          and c.voided_at is null and not c.legacy
+          and c.session_type = v_start->'enrollment'->>'session_type'
+          and c.school_year = v_start->'enrollment'->>'school_year') then
+      -- No second charge: the commitment is collected, or « nouvelle session » is explicit.
+      raise exception 'Un engagement sans inscription existe déjà pour ce programme et cette année : encaissez sur cet engagement, ou choisissez « Nouvelle session ».'
+        using errcode = '22023', hint = 'eap.unlinked_commitment_exists';
+    end if;
+  end if;
+  -- (ii) The payment on that enrollment, from the stored enrollment summary so a
+  -- replay sends the same request.
+  if v_payment is not null then
+    v_pay := public.create_charge_payment((v_payment - 'new_session') || jsonb_build_object(
+      'student_id', v_start->'enrollment'->'student_id', 'enrollment_id', v_start->'enrollment'->'id',
+      'session_type', v_start->'enrollment'->'session_type', 'school_year', v_start->'enrollment'->'school_year',
+      'level', v_start->'enrollment'->'level', 'idempotency_key', v_key));
+  end if;
+  select * into v_row from public.enrollments where id = (v_start->'enrollment'->>'id')::uuid;
+  v_free := (v_pay->>'receipt_id') is null and (v_pay->>'charge_id') is not null and exists (
+    select 1 from public.charges c where c.id = (v_pay->>'charge_id')::uuid and c.voided_at is null
+      and c.gross_amount > 0 and c.discount_amount = c.gross_amount);
+  -- (iii) B1 / Q12, first run only.
+  if not v_replayed then
+    if v_payment is not null then
+      if (v_pay->>'receipt_id') is null and not v_free then
+        raise exception 'L’inscription se confirme à l’encaissement : saisissez un paiement.'
+          using errcode = '22023', hint = 'eap.payment_required';
+      end if;
+    elsif not (v_row.status in ('Confirmed','Validated') and (
+        exists (select 1 from public.receipts r where r.voided_at is null and r.deleted_at is null and r.montant_paye > 0
+          and (r.enrollment_id = v_row.id or r.charge_id in (select c.id from public.charges c where c.enrollment_id = v_row.id)))
+        or exists (select 1 from public.charges c where c.enrollment_id = v_row.id and c.voided_at is null
+          and c.gross_amount > 0 and c.discount_amount = c.gross_amount))) then
+      raise exception 'L’inscription se confirme à l’encaissement : saisissez un paiement.'
+        using errcode = '22023', hint = 'eap.payment_required';
+    end if;
+  end if;
+  -- (iv) The lead and its tasks as they are now: the payment may have converted a
+  -- lead linked to a legacy row after the CRM step wrote its result.
+  v_start := v_start || crm_security.result((v_start->'lead'->>'id')::uuid,
+    'enrollment-started:'||(v_start->'lead'->>'id')||':'||v_row.id);
+  if v_start->'enrollment_followup' ? 'id' and not exists (select 1 from public.crm_tasks
+      where id = (v_start->'enrollment_followup'->>'id')::uuid and status = 'open') then
+    v_start := v_start || jsonb_build_object('enrollment_followup', null);
+  end if;
+  return v_start || jsonb_build_object(
+    'enrollment', crm_security.enrollment_summary(v_row),
+    'charge_id', v_pay->'charge_id',
+    'receipt_id', v_pay->'receipt_id',
+    'receipt_number', (select r.receipt_number from public.receipts r where r.id = (v_pay->>'receipt_id')::uuid),
+    'balance', (select to_jsonb(b.balance) from public.charge_balances b where b.id = (v_pay->>'charge_id')::uuid),
+    'free_enrollment', v_free,
+    'replayed_enrollment', v_replayed,
+    'replayed_payment', coalesce((v_pay->>'replayed')::boolean, false));
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.crm_reserve_without_payment(p_request_key uuid, p_data jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare
+  actor uuid := auth.uid(); digest text; prior public.crm_command_requests%rowtype;
+  l public.crm_leads%rowtype; c public.crm_contacts%rowtype; s public.students%rowtype; ch public.charge_balances%rowtype;
+  learner text; birth date; session text; year text; level text;
+  gross numeric(12,2); discount numeric(12,2); due_date date; due timestamptz;
+  bytes bytea; pay_key uuid; pay jsonb; task uuid; ckey text; result jsonb;
+begin
+  perform crm_security.require_reader(false);
+  perform operational_security.require_capability('manage_finance_operations');
+  if p_request_key is null or jsonb_typeof(p_data) is distinct from 'object' or octet_length(p_data::text) > 16000
+     or p_data - array['lead_id','expected_version','student_choice','student_id','learner_name','birth_date',
+       'candidate_review','confirm_new','session_type','school_year','level','gross_amount','discount_amount',
+       'discount_reason_code','discount_reason','due_date'] <> '{}'::jsonb then
+    raise exception 'Valid bounded reservation request required' using errcode = '22023', hint = 'crm_enrollment.request_invalid';
+  end if;
+  -- The same learner lock as enrolment start and « Inscrire et encaisser »: a
+  -- reservation and an enrolment of one learner never interleave (no second charge).
+  begin
+    perform crm_security.lock_enrollment_intent(nullif(p_data->>'student_id','')::uuid);
+  exception when sqlstate 'PT409' then
+    raise exception 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.' using errcode = 'PT409', hint = 'crm_enrollment.enrollment_in_progress';
+  end;
+  digest := encode(sha256(convert_to(p_data::text, 'UTF8')), 'hex');
+  perform pg_advisory_xact_lock(hashtextextended('crm:request:'||actor||':reserve_without_payment:'||p_request_key, 0));
+  select * into prior from public.crm_command_requests where actor_scope = actor::text
+    and command_name = 'reserve_without_payment' and request_key = p_request_key;
+  if found then
+    if prior.payload_hash <> digest then
+      raise exception 'Request key payload conflict' using errcode = '22023', hint = 'crm_enrollment.request_conflict';
+    end if;
+    return prior.result || jsonb_build_object('replayed', true);
+  end if;
+  select * into l from public.crm_leads where id = (p_data->>'lead_id')::uuid for update;
+  if not found or l.merged_into_lead_id is not null then
+    raise exception 'Qualified unlinked lead required' using errcode = '22023', hint = 'crm_enrollment.lead_unavailable'; end if;
+  if l.enrollment_id is not null then
+    raise exception 'Qualified unlinked lead required' using errcode = '22023', hint = 'crm_enrollment.lead_already_enrolled'; end if;
+  if l.status <> 'QUALIFIED' then
+    raise exception 'Qualified unlinked lead required' using errcode = '22023', hint = 'crm_enrollment.lead_not_qualified'; end if;
+  if l.version is distinct from (p_data->>'expected_version')::bigint then
+    raise exception 'Stale lead version; refresh and retry' using errcode = 'PT409', hint = 'crm_enrollment.lead_changed'; end if;
+  select * into strict c from public.crm_contacts where id = l.contact_id;
+  session := p_data->>'session_type'; year := p_data->>'school_year'; level := nullif(p_data->>'level','');
+  if session is null or session <> all(array['Yearly','Adults','Summer Camp','Communication Junior','Communication Adult','One-to-One','Mise à niveau','Online','Online One-to-One']) then
+    raise exception 'Choisissez le programme de la réservation.' using errcode = '22023', hint = 'crm_enrollment.program_invalid'; end if;
+  if year is null or year !~ '^[0-9]{4}/[0-9]{4}$' or right(year,4)::integer <> left(year,4)::integer + 1 then
+    raise exception 'Invalid enrollment program or school year' using errcode = '22023', hint = 'crm_enrollment.school_year_invalid'; end if;
+  if not crm_security.valid_enrollment_level(session, level) then
+    raise exception 'Invalid level for selected program' using errcode = '22023', hint = 'crm_enrollment.level_invalid'; end if;
+  begin
+    gross := round(nullif(p_data->>'gross_amount','')::numeric, 2);
+    discount := round(coalesce(nullif(p_data->>'discount_amount','')::numeric, 0), 2);
+    due_date := nullif(p_data->>'due_date','')::date;
+    birth := nullif(p_data->>'birth_date','')::date;
+  exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow then
+    raise exception 'Invalid reservation fields' using errcode = '22023', hint = 'crm_enrollment.record_rejected';
+  end;
+  -- Something is left to collect: a price above the discount. A 100 % discount
+  -- confirms the enrollment instead (« Inscrire et encaisser »).
+  if gross is null or gross <= 0 or discount < 0 or discount > gross then
+    raise exception 'Indiquez le prix convenu (supérieur à la remise) pour réserver sans paiement.' using errcode = '22023', hint = 'eap.reservation_price_required'; end if;
+  if discount = gross then
+    raise exception 'Une remise de 100 %% confirme l’inscription : utilisez « Inscrire et encaisser ».' using errcode = '22023', hint = 'eap.reservation_free'; end if;
+  if due_date is null or not isfinite(due_date) then
+    raise exception 'Indiquez la date d’échéance de l’acompte.' using errcode = '22023', hint = 'eap.reservation_due_required'; end if;
+  if due_date < public.business_date() or due_date > public.business_date() + 366 then
+    raise exception 'L’échéance doit être entre aujourd’hui et dans un an.' using errcode = '22023', hint = 'eap.reservation_due_invalid'; end if;
+  -- The learner, exactly as enrolment start resolves it (crm_start_enrollment, 136).
+  learner := btrim(p_data->>'learner_name');
+  if p_data->>'student_choice' = 'new' then
+    if l.student_id is not null then raise exception 'Invalid new learner' using errcode = '22023', hint = 'crm_enrollment.learner_already_linked'; end if;
+    if p_data->>'student_id' is not null then raise exception 'Invalid new learner' using errcode = '22023', hint = 'crm_enrollment.request_invalid'; end if;
+    if learner is null or length(learner) not between 2 and 120 then raise exception 'Invalid new learner' using errcode = '22023', hint = 'crm_enrollment.learner_name_invalid'; end if;
+    if not isfinite(birth) then raise exception 'Invalid new learner' using errcode = '22023', hint = 'crm_enrollment.birth_date_invalid'; end if;
+    if birth > public.business_date() then raise exception 'Invalid new learner' using errcode = '22023', hint = 'crm_enrollment.birth_date_future'; end if;
+    perform pg_advisory_xact_lock(hashtextextended('crm:new-student:'||lower(learner), 0));
+    if p_data->>'candidate_review' is distinct from crm_security.candidate_token(l.id, learner, birth) then
+      raise exception 'Student candidates changed; review again' using errcode = 'PT409', hint = 'crm_enrollment.candidates_changed'; end if;
+    if exists (select 1 from crm_security.student_candidates(l.id, learner, birth)) and coalesce((p_data->>'confirm_new')::boolean, false) is not true then
+      raise exception 'Explicit new learner decision required' using errcode = '22023', hint = 'crm_enrollment.new_learner_confirmation_required'; end if;
+    insert into public.students(full_name, date_naissance, telephone, email, parent_email, status, session_type, niveau_cefr, notes)
+    values (learner, birth, crm_security.normalize_phone(coalesce(c.phone_e164, c.phone_raw)), case when c.contact_kind = 'adult_learner' then c.email_normalized end,
+      case when c.contact_kind <> 'adult_learner' then c.email_normalized end, 'Prospect', session, level,
+      case when c.contact_kind <> 'adult_learner' then 'Contact : '||coalesce(c.display_name, 'Non renseigné') end) returning * into s;
+  elsif p_data->>'student_choice' = 'existing' then
+    select * into s from public.students where id = (p_data->>'student_id')::uuid and deleted_at is null for update;
+    if not found then
+      if l.student_id is not null and l.student_id = (p_data->>'student_id')::uuid then
+        raise exception 'Student unavailable or inconsistent' using errcode = '22023', hint = 'crm_enrollment.linked_learner_unavailable'; end if;
+      if l.student_id is not null then raise exception 'Student unavailable or inconsistent' using errcode = '22023', hint = 'crm_enrollment.learner_link_mismatch'; end if;
+      raise exception 'Student unavailable or inconsistent' using errcode = '22023', hint = 'crm_enrollment.learner_unavailable';
+    end if;
+    if l.student_id is not null and l.student_id <> s.id then
+      raise exception 'Student unavailable or inconsistent' using errcode = '22023', hint = 'crm_enrollment.learner_link_mismatch'; end if;
+    -- 139 (B1, OD-8): a merged file takes no reservation; the kept file does.
+    if s.merged_into_student_id is not null then
+      raise exception 'Ce dossier a été fusionné dans un autre : encaissez sur le dossier conservé.'
+        using errcode = '22023', hint = 'eap.student_merged'; end if;
+  else
+    raise exception 'Explicit student choice required' using errcode = '22023', hint = 'crm_enrollment.learner_choice_required';
+  end if;
+  -- One commitment per learner, programme and year; never next to a live enrollment.
+  -- 139 (B1): over the learner's merge set (a file merged into it keeps its own charges).
+  if exists (select 1 from public.charges x where x.student_id = any(public.student_merge_set(s.id)) and x.enrollment_id is null and x.voided_at is null
+      and not x.legacy and x.session_type = session and x.school_year = year) then
+    raise exception 'Un engagement sans inscription existe déjà pour ce programme et cette année : encaissez sur cet engagement.'
+      using errcode = '22023', hint = 'eap.unlinked_commitment_exists'; end if;
+  if exists (select 1 from public.enrollments x where x.student_id = s.id and x.status not in ('Rejected','Ended')
+      and coalesce(x.session_type, s.session_type) = session and crm_security.enrollment_year(x) = year) then
+    raise exception 'Cet apprenant a déjà une inscription pour ce programme et cette année : encaissez sur son inscription.'
+      using errcode = '22023', hint = 'eap.reservation_already_enrolled'; end if;
+  -- The charge, through the financial command (capability, discount reasons,
+  -- financial_requests idempotency and the charge_created event), with no
+  -- payment: no receipt, no enrollment, no conversion.
+  bytes := substring(sha256(convert_to('eap:reservation:'||actor::text||':'||p_request_key::text, 'UTF8')) from 1 for 16);
+  bytes := set_byte(bytes, 6, (get_byte(bytes, 6) & 15) | 80);
+  bytes := set_byte(bytes, 8, (get_byte(bytes, 8) & 63) | 128);
+  pay_key := encode(bytes, 'hex')::uuid;
+  pay := public.create_charge_payment_financial(jsonb_build_object('student_id', s.id, 'session_type', session,
+    'school_year', year, 'level', level, 'gross_amount', gross, 'discount_amount', discount,
+    'discount_reason_code', p_data->>'discount_reason_code', 'discount_reason', p_data->>'discount_reason',
+    'due_date', due_date, 'payment_amount', 0, 'idempotency_key', pay_key));
+  if (pay->>'receipt_id') is not null or (pay->>'charge_id') is null then
+    raise exception 'Reservation must create a charge without payment' using errcode = 'XX000'; end if;
+  insert into public.crm_charge_reservations(lead_id, charge_id, student_id, created_by, request_key)
+  values (l.id, (pay->>'charge_id')::uuid, s.id, actor, p_request_key);
+  -- The prospect is linked to its learner, as enrolment start does; nothing else
+  -- changes on the prospect (no enrollment, no conversion, status unchanged).
+  update public.crm_leads set student_id = s.id, version = version + 1, updated_at = now() where id = l.id returning * into l;
+  -- One history entry for the user action (§4.7); the task events carry its key.
+  ckey := 'reservation:'||l.id||':'||p_request_key;
+  perform set_config('eh.crm_command_key', ckey, true);
+  insert into public.crm_activities(lead_id, occurred_at, actor_id, actor_kind, event_type, source_key, body, command_key, is_primary, details)
+  values (l.id, now(), actor, 'user', 'charge_reserved', ckey, 'Réservé sans paiement : '||
+      to_char(gross - discount, 'FM999G999G990D00')||' MAD à encaisser avant le '||to_char(due_date, 'DD/MM/YYYY')||'.',
+    ckey, true, jsonb_build_object('command', 'reserve_without_payment',
+      'summary', 'Réservé sans paiement → Encaisser l’acompte '||to_char(due_date, 'DD/MM')));
+  -- « Encaisser l'acompte », our step, due on the due date (a reminder: the first
+  -- calling window from that date, never earlier than now). The only writer of
+  -- next actions does the replacement (an enrolment action, so a kept test moves
+  -- with it, §4.8); migration 137's index and deferred triggers check the result.
+  due := greatest(now(), due_date::timestamp at time zone public.centre_utc_offset());
+  task := crm_security.set_next_action(l, jsonb_build_object('task_type', 'enrollment_followup', 'schedule_kind', 'reminder',
+    'due_at', due, 'instructions', 'Encaisser l’acompte',
+    '_key', ckey||':next-action', '_kind', 'enrollment', '_replaced_reason', 'Remplacée par « Encaisser l’acompte »'),
+    'enrollment', ckey);
+  perform set_config('eh.crm_command_key', '', true);
+  select * into ch from public.charge_balances where id = (pay->>'charge_id')::uuid;
+  result := crm_security.result(l.id, ckey) || jsonb_build_object(
+    'charge', jsonb_build_object('id', ch.id, 'student_id', ch.student_id, 'session_type', ch.session_type,
+      'school_year', ch.school_year, 'level', ch.level, 'net_amount', ch.net_amount, 'balance', ch.balance,
+      'due_date', ch.due_date, 'enrollment_id', ch.enrollment_id),
+    'student', jsonb_build_object('id', s.id, 'name', s.full_name),
+    'next_action_id', task, 'replayed', false);
+  insert into public.crm_command_requests(actor_scope, command_name, request_key, payload_hash, result)
+  values (actor::text, 'reserve_without_payment', p_request_key, digest, result);
+  return result;
+exception
+  when deadlock_detected or unique_violation then
+    raise exception 'Concurrent enrollment change; refresh and retry' using errcode = 'PT409', hint = 'crm_enrollment.concurrent_change';
+  when check_violation or not_null_violation then
+    raise exception 'Invalid reservation fields' using errcode = '22023', hint = 'crm_enrollment.record_rejected';
+end $function$
+;
 
 -- ---------------------------------------------------------------------------
 -- 10. Grants. New private helpers: no API role. New public commands and reads:

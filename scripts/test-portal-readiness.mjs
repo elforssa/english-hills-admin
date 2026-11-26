@@ -101,7 +101,7 @@ try {
   const teacher = await makeUser('teacher'), teacher2 = await makeUser('teacher', 'teacher2');
   const parent = await makeUser('parent'), unlinked = await makeUser('parent', 'unlinked'), student = await makeUser('student');
   const pending = await makeUser('pending');
-  // Invented digits only: since migration 138 (RWR-r5 B1) a student phone must be a valid number,
+  // Invented digits only: since migration 139 (RWR-r5 B1) a student phone must be a valid number,
   // stored in E.164, so the leak checks below look for both forms.
   const digits = String(randomInt(100000, 1000000));
   const phones = { childA: '0611' + digits, childB: '0622' + digits, adult: '0633' + digits, teacher: '0644' + digits };

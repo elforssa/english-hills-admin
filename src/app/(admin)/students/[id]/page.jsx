@@ -133,7 +133,7 @@ function StudentDetail() {
     if (!id) return;
     let active = true;
     setLoading(true); setLoadError(false);
-    // OD-8 « link, don't move » (migration 138): a merged duplicate keeps its own
+    // OD-8 « link, don't move » (migration 139): a merged duplicate keeps its own
     // enrollments, charges, receipts, attendance and assessments; the kept file reads
     // them through its merge set (itself plus every file merged into it).
     getBrowserClient().rpc('student_merge_set', { p_student: id }).then(({ data, error }) => {

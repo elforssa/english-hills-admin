@@ -111,7 +111,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     const timer = setTimeout(async () => {
       setSearchState('loading'); setSearchError('');
       try {
-        // §5.1: the phone matches in any format from 6 digits (search_desk_students, 138);
+        // §5.1: the phone matches in any format from 6 digits (search_desk_students, 139);
         // the receptionist's row rules apply (security invoker). Merged files are hidden.
         const { data: found, error } = await getBrowserClient().rpc('search_desk_students', { p_query: term, p_limit: Math.min(searchLimit, 50) });
         if (!searchGate.current.isCurrent(version)) return;

@@ -136,7 +136,7 @@ function validateRows(rawRows) {
         if (v === '' || v === undefined) continue;
         data[k] = v;
       }
-      // §5.1 (138): an invalid or placeholder phone is a row error, never stored.
+      // §5.1 (139): an invalid or placeholder phone is a row error, never stored.
       const phone = checkPhone(data.telephone);
       if (!phone.ok) return { idx, ok: false, data: row, errors: [`telephone: ${phone.error}`] };
       // D3-A: Enrolled/Trial rows import as Prospect; an enrollment confirms them.

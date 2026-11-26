@@ -1,4 +1,4 @@
-// RWR-r5 §5.1 — the one phone normaliser, JS mirror of migration 138's SQL
+// RWR-r5 §5.1 — the one phone normaliser, JS mirror of migration 139's SQL
 // functions public.phone_e164, public.phone_key and public.phone_is_placeholder.
 // Both sides are tested against one fixture file (scripts/fixtures/phone-cases.json):
 // a rule changed here must change in SQL too, or test-phone.mjs / test-phone.sql fail.

@@ -25,7 +25,9 @@ assert(!/trial_requires_group/.test(commands), 'the essai reason is gone from th
 // The wrapper's eap.* refusals come from its latest bodies: crm_start_enrollment (127) and,
 // from migration 138 (RWR-r5 C1), crm_enroll_and_collect, crm_reserve_without_payment and
 // the payment guards. Every one has a French message and a recovery, and nothing else is mapped.
-const desk = readFileSync(new URL('../supabase/migrations/138_desk_payments.sql', import.meta.url), 'utf8');
+// RWR-r5 B1 (139) re-creates three of those bodies and adds eap.student_merged.
+const desk = readFileSync(new URL('../supabase/migrations/138_desk_payments.sql', import.meta.url), 'utf8')
+  + readFileSync(new URL('../supabase/migrations/139_people_identity.sql', import.meta.url), 'utf8');
 const eapHints = new Set([...`${commands}\n${desk}`.matchAll(/hint = 'eap\.([a-z_]+)'/g)].map(m => m[1]));
 assert.deepEqual([...eapHints].sort(), Object.keys(EAP_REASONS).sort(), 'the wrapper\'s eap.* refusals are mapped');
 // The client words are the server's own (a raise doubles its %).

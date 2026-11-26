@@ -25,7 +25,7 @@ export default function LegacyPlacementEditor({ id,onClose,onSave }) {
       // CDC (D4): a closed course is never offered; the group already chosen stays shown.
       const groupQuery=sb.from('groups').select('id,name,session_type,niveau').is('closed_at',null).order('name').order('id').range(groupPage*25,groupPage*25+25);
       studentQuery.is('merged_into_student_id',null);
-      // §5.1 (138): from 6 digits the search is a phone in any format.
+      // §5.1 (139): from 6 digits the search is a phone in any format.
       if(studentSearch&&phoneSearchKey(studentSearch)){const found=await sb.rpc('search_desk_students',{p_query:studentSearch,p_limit:50});if(found.error)throw found.error;studentQuery.in('id',(found.data?.rows||[]).map(r=>r.id).concat(['00000000-0000-0000-0000-000000000000']));}
       else if(studentSearch)studentQuery.ilike('full_name',`%${studentSearch}%`);
       if(groupSearch)groupQuery.ilike('name',`%${groupSearch}%`);

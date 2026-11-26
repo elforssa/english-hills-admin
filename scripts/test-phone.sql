@@ -1,4 +1,4 @@
--- RWR-r5 §5.1 / invariant 6 — migration 138's phone functions against the shared
+-- RWR-r5 §5.1 / invariant 6 — migration 139's phone functions against the shared
 -- fixture (scripts/fixtures/phone-cases.json, also read by test-phone.mjs), the
 -- phone trigger on students and authorized adults, and P-SYS: every system update
 -- of a student whose stored number is bad still succeeds and leaves it unchanged.
@@ -87,7 +87,7 @@ do $$ begin
  raise notice 'PASS trigger: normalised on insert; invalid, placeholder and blank adult refused';
 end $$;
 
--- 4. P-SYS. Rows stored before 138 (the trigger is off only for this seed, as their
+-- 4. P-SYS. Rows stored before 139 (the trigger is off only for this seed, as their
 --    numbers were written before the rule existed).
 alter table public.students disable trigger people_phone_guard;
 insert into public.students(id,full_name,telephone,status,session_type,niveau_cefr) values

@@ -81,7 +81,8 @@ for (const reason of ['paid_enrollment_required', 'placement_reason_required', '
   assert.ok(migration.includes(EAP_REASON_TEXT[reason]), `127 says the same text for eap.${reason}`);
 }
 // RWR-r5 C1 (migration 138): every eap.* hint it raises has its French text, word for word.
-const desk = readFileSync('supabase/migrations/138_desk_payments.sql', 'utf8').replaceAll('%%', '%');
+// RWR-r5 B1 (migration 139) re-creates three of those bodies and adds eap.student_merged.
+const desk = (readFileSync('supabase/migrations/138_desk_payments.sql', 'utf8') + readFileSync('supabase/migrations/139_people_identity.sql', 'utf8')).replaceAll('%%', '%');
 const deskHints = [...new Set([...desk.matchAll(/hint = 'eap\.([a-z_]+)'/g)].map(m => m[1]))];
 assert.ok(deskHints.length >= 12, '138 raises its eap.* refusals');
 for (const reason of deskHints) {

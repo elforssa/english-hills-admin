@@ -73,6 +73,8 @@ export const EAP_REASONS = {
   // re-read; « Nouvelle session » stays available. A reservation is never edited.
   reservation_collect_on_prospect: { message: EAP_REASON_TEXT.reservation_collect_on_prospect, step: 3, field: null, submit: true, recovery: 'balances' },
   reservation_append_only: { message: EAP_REASON_TEXT.reservation_append_only, step: null, field: null, submit: false, recovery: 'escalate' },
+  // RWR-r5 B1 (139): the chosen learner's file was merged into another; choose the kept one.
+  student_merged: { message: EAP_REASON_TEXT.student_merged, step: 1, field: null, submit: true, recovery: 'reselect' },
 };
 export const PAID_LINK_REFUSED_MESSAGE = 'Aucun paiement n’est enregistré pour cette inscription : saisissez le paiement pour la confirmer.';
 // Payment refusals of create_charge_payment (122) carry no hint. The desk guard answers

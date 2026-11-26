@@ -24,14 +24,21 @@
 -- first and sets eh.restore_138_drop_reservations to 'exported' in the session:
 --   \copy (select * from public.crm_charge_reservations) to 'reservations-138.csv' csv header
 --   set eh.restore_138_drop_reservations = 'exported';
--- It also refuses unless migration 138 is applied. The ledger row 138 is removed by
--- the operator wrapper, not here.
+-- It also refuses unless migration 138 is applied, and while migration 139 (PR B1)
+-- is applied: 139's restore runs first. The ledger row 138 is removed by the operator
+-- wrapper, not here.
 begin;
 
 do $$ begin
   if to_regclass('public.crm_charge_reservations') is null
      or to_regprocedure('public.crm_reserve_without_payment(uuid,jsonb)') is null then
     raise exception 'Restore 138: migration 138 is not applied' using errcode = '55000';
+  end if;
+  -- Rollback order (RWR-r5 B1, 2026-11-26): migration 139 rebuilt four of these bodies
+  -- on 138; its own restore runs first and returns them to 138.
+  if to_regprocedure('public.find_people(text,text,text,date,integer)') is not null then
+    raise exception 'Restore 138: migration 139 is applied; run scripts/rollback/139_people_identity_restore.sql first'
+      using errcode = '55000';
   end if;
   if exists (select 1 from public.crm_charge_reservations)
      and coalesce(current_setting('eh.restore_138_drop_reservations', true), '') <> 'exported' then

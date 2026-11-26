@@ -29,7 +29,7 @@ const sql = input => execFileSync('docker', ['exec', '-i', container, 'psql', '-
 const run = 'portal-ui-' + randomUUID().slice(0, 8), password = randomBytes(18).toString('base64url');
 const ids = Object.fromEntries(['teacher', 'group', 'otherGroup', 'child', 'other', 'adult'].map(k => [k, randomUUID()]));
 const users = {};
-// Invented digits only: since migration 138 (RWR-r5 B1) a student phone must be a valid number,
+// Invented digits only: since migration 139 (RWR-r5 B1) a student phone must be a valid number,
 // stored in E.164, so the leak checks look for both forms.
 const digits = String(randomInt(100000, 1000000));
 const phones = { child: '0655' + digits, other: '0666' + digits, adult: '0677' + digits };
@@ -118,7 +118,7 @@ try {
   assert.equal(await teacher.page.getByRole('columnheader', { name: 'Téléphone' }).count(), 0, 'no phone column for a teacher');
   assert.equal(await teacher.page.getByText(phones.child).count(), 0);
   assert.equal(await teacher.page.getByText('+212' + phones.child.slice(1)).count(), 0);
-  // Since 138 a phone is displayed « 06 55 … » (review of #217): no form of it, the display one included.
+  // Since 139 a phone is displayed « 06 55 … » (review of #217): no form of it, the display one included.
   assert.equal(await teacher.page.getByText(formatPhoneFr(phones.child)).count(), 0);
   const teacherGroupText = await teacher.page.locator('body').innerText();
   for (const form of [phones.child, '+212' + phones.child.slice(1), formatPhoneFr(phones.child), phones.child.slice(1)]) {

@@ -272,7 +272,7 @@
   "crm_merge_prospects(p_request_key uuid, p_source uuid, p_target uuid, p_expected_source_version bigint, p_expected_target_version bigint)": {
     "gate": "manual",
     "receptionist": "locked",
-    "md5": "8e647efb16b4378d74291dcfd07cc181"
+    "md5": "1fb577ffa490567a4f20941544c0bde2"
   },
   "crm_publish_lifecycle_policy(p_connection uuid, p_connection_version bigint, p_data jsonb)": {
     "gate": "crm_director",

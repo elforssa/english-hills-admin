@@ -222,7 +222,7 @@ assert.equal(sql("select count(*) from pg_stat_activity where usename = 'authent
 const current = sql(`select to_json(updated_at) #>> '{}' from public.students where id=${q(id('student'))}`);
 const ok = await receptionist.client.rpc('save_receptionist_student', { p_student: id('student'), p_expected_updated_at: current, p_changes: { telephone: '0600000009' } });
 assert.ifError(ok.error);
-// Migration 138 (RWR-r5 B1) stores a student phone in E.164.
+// Migration 139 (RWR-r5 B1) stores a student phone in E.164.
 assert.equal(sql(`select telephone from public.students where id=${q(id('student'))}`), '+212600000009');
 console.log(`PASS quiet period: xact_rollback +${grew} for ${calls} calls, no active authenticator backend, a normal save succeeds afterwards`);
 

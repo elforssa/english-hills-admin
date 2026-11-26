@@ -74,7 +74,7 @@ export default function StudentsDirectory() {
 
   const groupName = (gid) => groups.find(g => g.id === gid)?.name;
 
-  // §5.1 (138): a phone matches in any format from 6 digits; merged files are hidden.
+  // §5.1 (139): a phone matches in any format from 6 digits; merged files are hidden.
   const phoneQuery = phoneSearchKey(search);
   const filtered = students.filter(s => {
     if (s.merged_into_student_id) return false;

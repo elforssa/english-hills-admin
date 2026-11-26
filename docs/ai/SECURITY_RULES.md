@@ -111,16 +111,16 @@ Plan [receptionist permissions](../architecture/plans/receptionist-permissions.m
 - **Screen-only limits (accepted).** Rows she may read through RLS are read whole; a hidden field (for example a receipt's cancellation reason) is hidden by the page, not by the database.
 - **Restore.** `scripts/rollback/131_135_receptionist_permissions_restore.sql` returns every function, policy and trigger 131–135 changed to its 130 definition and drops `messages.channel` in one transaction (re-applying 134 recomputes it); it keeps the new `activity_log` rows (inert history). The R0 export of what it restores is in the owner's backup folder (`2026-11-22-pre-131`). Not used at release. Rehearsed: 135 → restore equals the clean 130 catalogue, and `scripts/test-receptionist-permissions-equivalence-local.mjs` shows every identity's reads and writes back to 130.
 
-### People identity (RWR-r5 PR B1; implemented on a pull request, migration 138 not applied, not merged as of 2026-11-25)
+### People identity (RWR-r5 PR B1; implemented on a pull request, migration 139 not applied, not merged as of 2026-11-26)
 
-Plan [RWR-r5](../architecture/plans/receptionist-workflow.md) §5.1–5.3 and its [B1 implementation record](../architecture/plans/receptionist-workflow.md#implementation-record-pr-b1-m-b1-migration-138). These rules hold once 138 is applied and the pull request is merged.
+Plan [RWR-r5](../architecture/plans/receptionist-workflow.md) §5.1–5.3 and its [B1 implementation record](../architecture/plans/receptionist-workflow.md#implementation-record-pr-b1-m-b1-migration-139). These rules hold once 139 is applied and the pull request is merged.
 
 - **Search and decisions.** `find_people` and `record_person_match_decisions` (definer) check the stored role: admin, director and receptionist only (`42501` otherwise). `search_desk_students` and `student_merge_set` are security invoker: row policies decide what each caller sees.
 - **Merges.** `crm_merge_prospects`, `crm_merge_contacts`, `merge_students`, `unmerge_student` and `student_merge_preview` call `crm_security.require_merger()`: admin and director only. They are classified locked for the receptionist and refused in `test-receptionist-locked-items.sql`. `person_match_decisions` and `student_merge_journal` grant nothing to `anon`, `authenticated` or `service_role`; only the security-definer commands write them.
 - **Data steps.** D3 (`crm_security.d3_*`) and D5 (`d5_plan`, `d5_apply`) are not executable by any API role; the release operator runs them with the owner's separate approval. Neither is run by the migration.
 - **History.** No merge updates an enrollment, charge, receipt, attendance, placement-test or converted-prospect row; links that move are journalled (`student_merge_journal`) and undone by `unmerge_student`.
 - **Phones in history.** « Fiche modifiée » details and the corrected-number entry mask phones.
-- **Restore.** `scripts/rollback/138_people_identity_restore.sql` returns the eleven re-created functions to their 137 bodies, drops every 138 function, the phone triggers and indexes, and keeps the additive tables, columns and rows. It refuses while D3 is unreverted or a student is merged.
+- **Restore.** `scripts/rollback/139_people_identity_restore.sql` returns the fifteen re-created functions to the bodies 138 left live (md5-checked), drops every 139 function, the phone triggers and indexes, and keeps the additive tables, columns and rows. It refuses while D3 is unreverted or a student is merged, and runs before C1's restore (`138_desk_payments_restore.sql` refuses while 139 is applied).
 
 ## Sensitive data and privileged code
 

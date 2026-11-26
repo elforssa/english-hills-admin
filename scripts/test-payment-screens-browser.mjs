@@ -80,7 +80,7 @@ async function openWizard(lead) {
   await dialog().getByText('1 / 3 · Apprenant', { exact: true }).waitFor();
 }
 function qualified(staff, contact, learnerName) {
-  const lead = rpc(staff, 'create_manual_lead', { display_name: contact, learner_name: learnerName, source_label: 'Manuel · Téléphone' }).lead.id;
+  const lead = rpc(staff, 'create_prospect', { display_name: contact, learner_name: learnerName, source_label: 'Manuel · Téléphone' }).lead.id;
   rpc(staff, 'log_exchange', { lead_id: lead, expected_version: version(lead), channel: 'phone', result: 'spoke',
     next: { enrol: { due_at: sql(`select to_json(${openSlotSql(1, '16:00', 'calling')})#>>'{}'`) } } });
   assert.equal(status(lead), 'QUALIFIED');

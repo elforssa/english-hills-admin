@@ -1,5 +1,5 @@
 // RWR-r5 §5.1 / invariant 6 — the JS phone normaliser against the shared fixture.
-// test-phone.sql runs the same file through the SQL functions of migration 138.
+// test-phone.sql runs the same file through the SQL functions of migration 139.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { checkPhone, formatPhoneFr, isPlaceholder, maskPhone, phoneKey, phoneSearchKey, toE164 } from '../src/lib/phone.mjs';

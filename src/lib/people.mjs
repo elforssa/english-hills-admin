@@ -1,4 +1,4 @@
-// People identity (RWR-r5 §5.1–5.3, migration 138): one place for the duplicate
+// People identity (RWR-r5 §5.1–5.3, migration 139): one place for the duplicate
 // gate's payload, the French labels of a match and the server's people.* refusals.
 // Pure module: used by the CRM, student and receipt forms and by the node tests.
 
@@ -38,6 +38,7 @@ export const PEOPLE_MESSAGES = {
   'people.merge_both_portal': 'Les deux apprenants ont un accès au portail : fusion impossible.',
   'people.merge_target_closed': 'La fiche conservée est clôturée alors que l’autre est active : inversez le sens ou rouvrez-la.',
   'people.merge_source_balance': 'Encaissez ou soldez d’abord le solde de ce dossier.',
+  'people.merge_source_reservation': 'La fiche à fusionner a un acompte réservé : encaissez-le (« Inscrire et encaisser ») ou annulez-le d’abord.',
   'people.merge_source_appointment': 'La fiche à fusionner a un rendez-vous, un test prévu ou une inscription en cours : traitez-les d’abord.',
   'people.unmerge_not_merged': 'Cette fiche n’est pas fusionnée.',
   'people.unmerge_changed': 'Les liens ont changé depuis la fusion : annulation impossible sans vérification.'

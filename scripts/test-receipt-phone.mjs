@@ -1,4 +1,4 @@
-// RWR-r5 PR B1 (§5.1): since migration 138 a learner's phone is stored in E.164 and a new
+// RWR-r5 PR B1 (§5.1): since migration 139 a learner's phone is stored in E.164 and a new
 // receipt copies it. Every receipt, list and screen shows the French national form; only a
 // link (tel:, wa.me) uses E.164. Synthetic, invented numbers only.
 //   node scripts/test-receipt-phone.mjs
@@ -14,7 +14,7 @@ const { jsPDF } = jsPDFPackage;
 
 // 1. The printed receipt (PDF and print share buildReceiptPDF).
 const cases = [
-  ['+212612345678', '06 12 34 56 78'],   // a receipt issued after 138
+  ['+212612345678', '06 12 34 56 78'],   // a receipt issued after 139
   ['0612345678', '06 12 34 56 78'],      // an older receipt, typed national form
   ['06 12 34 56 78', '06 12 34 56 78'],
   ['00212612345678', '06 12 34 56 78'],

@@ -267,6 +267,38 @@ do $$ declare s uuid:='a8138000-0000-0000-0000-000000000231'; t uuid:='a8138000-
 end $$;
 \echo PASS student merge: an unpaid charge on the merged-away file refuses; a voided one does not; the kept file may owe
 
+-- 4c. Reservations (138, C1; rebase as 139): an open reservation refuses the student merge
+--     of its learner even without a balance, and the prospect merge of its prospect whatever
+--     its next action; a voided reservation charge does not.
+do $$ declare s uuid:='a8138000-0000-0000-0000-000000000251'; t uuid:='a8138000-0000-0000-0000-000000000252';
+ c uuid:='a8138000-0000-0000-0000-000000000261'; l uuid; l2 uuid; begin
+ perform pg_temp.actor(3);
+ l:=pg_temp.create('{"display_name":"Reserved parent","phone":"0612340861","learner_name":"Reserved child"}');
+ l2:=pg_temp.create('{"display_name":"Reserved parent bis","phone":"0612340862","learner_name":"Reserved child bis"}');
+ perform pg_temp.actor(1);
+ insert into public.students(id,full_name,status,session_type) values(s,'Reserved source','Prospect','Yearly'),(t,'Reserved kept','Prospect','Yearly');
+ -- Fully discounted: no balance, the reservation alone refuses.
+ insert into public.charges(id,student_id,session_type,school_year,service_description,plan_type,gross_amount,discount_amount,created_by)
+  values(c,s,'Yearly','2026/2027','Yearly · 2026/2027','Standard',800,800,'a8138000-0000-0000-0000-000000000002');
+ insert into public.crm_charge_reservations(lead_id,charge_id,student_id,created_by,request_key) values(l,c,s,'a8138000-0000-0000-0000-000000000003',gen_random_uuid());
+ perform pg_temp.ok((public.student_merge_preview(s,t)->>'source_open_balance')::numeric=0
+  and (public.student_merge_preview(s,t)->>'source_open_reservations')::int=1
+  and public.student_merge_preview(s,t)->>'refusal'='people.merge_source_balance','an open reservation refuses the student merge without a balance');
+ perform pg_temp.denied(format('select public.merge_students(%L,%L)',s,t),'22023','people.merge_source_balance');
+ perform pg_temp.ok(crm_security.d5_plan(jsonb_build_array(jsonb_build_object('source',s,'target',t)))->0->>'refusal'='people.merge_source_balance','D5 plan reports it');
+ -- The reserving prospect's next action is a call (not an enrolment action): refused all the same.
+ perform pg_temp.ok((select task_type from public.crm_tasks where id=crm_security.next_action_id(l))<>'enrollment_followup','next action is not the enrolment step');
+ perform pg_temp.denied(format('select pg_temp.merge(%L,%L)',l,l2),'22023','people.merge_source_reservation');
+ -- The other way round, the reserving prospect is the one kept: allowed.
+ perform pg_temp.merge(l2,l);
+ perform pg_temp.ok((select merged_into_lead_id from public.crm_leads where id=l2)=l,'merge into the reserving prospect');
+ -- A voided reservation charge is no longer an open reservation.
+ update public.charges set voided_at=now(),voided_by='a8138000-0000-0000-0000-000000000002',void_reason='Synthetic void' where id=c;
+ perform pg_temp.ok(public.student_merge_preview(s,t)->>'refusal' is null,'voided: the student merge is allowed');
+ perform public.merge_students(s,t);
+end $$;
+\echo PASS reservations: an open one refuses the student merge (no balance needed) and the prospect merge (any next action); a voided one does not
+
 -- 5. D3 and D5 exist and are not run: no journal rows, plans read-only.
 do $$ declare p jsonb; begin
  perform pg_temp.ok(not exists(select 1 from public.crm_data_step_journal where step in ('d3','d5')),'D3 and D5 not run');
