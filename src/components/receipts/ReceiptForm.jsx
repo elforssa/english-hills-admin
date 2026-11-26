@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { getBrowserClient } from '@/lib/supabase';
-import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import { SESSION_TYPES, getLevelsForSession, programmeName, serviceLine } from '@/lib/academicPrograms';
+import { cataloguePrice } from '@/lib/catalogue.mjs';
+import { useCatalogue } from '@/lib/useCatalogue';
+import { dossierLabel, enrollmentLabel } from '@/lib/ui/presentation.mjs';
 import { PAYMENT_METHODS, localBusinessDate, money, receiptNumberLabel } from '@/lib/receiptFinance';
 import { DEFAULT_SCHOOL_YEAR, SCHOOL_YEAR_OPTIONS, buildServiceDescription } from '@/lib/receiptPresentation';
 import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
@@ -257,6 +260,22 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const balanceAfter = Math.max(0, net - paidBefore - todayPayment);
   const levels = useMemo(() => getLevelsForSession(form.session_type, form.level), [form.session_type, form.level]);
   const lockedCharge = Boolean(selectedCharge);
+  // §5.4 (owner decision 2026-11-26): the catalogue price of the programme and year
+  // pre-fills the gross amount, still editable; with no price the field stays empty.
+  // A value typed by hand is never replaced.
+  const catalogue = useCatalogue();
+  const prefilled = useRef('');
+  useEffect(() => {
+    if (lockedCharge) return;
+    const price = cataloguePrice(catalogue.data, form.session_type, form.school_year);
+    const next = price != null ? String(price) : '';
+    setForm((current) => {
+      if (current.gross_amount !== '' && current.gross_amount !== prefilled.current) return current;
+      if (current.gross_amount === next) return current;
+      prefilled.current = next;
+      return { ...current, gross_amount: next };
+    });
+  }, [catalogue.data, form.session_type, form.school_year, lockedCharge]);
   const servicePreview = buildServiceDescription({ sessionType: form.session_type, schoolYear: form.school_year, serviceDetail: form.service_detail });
   // Batch E guardrails (mirrored from the database for messages only).
   const today = localBusinessDate();
@@ -382,18 +401,18 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       {chargesLoading && <SearchMessage icon={LoaderCircle} spin>Chargement des soldes…</SearchMessage>}
       {chargesError && <SearchMessage icon={AlertCircle} tone="error">Impossible de charger les soldes : {chargesError}</SearchMessage>}
       {form.student_id && charges.length > 0 && <div className="space-y-3"><OpenBalanceChooser rows={charges} value={form.charge_id} onChange={selectCharge} newLabel="Nouvelle inscription"
-        crmHref={(lead) => `/crm/leads?lead=${lead}`} />{selectedCharge && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="font-black text-amber-950">{selectedCharge.service_description}</p><p className="mt-1 text-sm text-amber-900">{selectedCharge.session_type}{selectedCharge.school_year ? ` · année ${selectedCharge.school_year}` : ''}</p><div className="mt-3 grid grid-cols-3 gap-2"><MiniAmount label="Prix net" value={selectedCharge.net_amount} /><MiniAmount label="Déjà payé" value={selectedCharge.paid_amount} /><MiniAmount label="Solde" value={selectedCharge.balance} /></div>{selectedCharge.due_date && <p className="mt-2 text-xs text-amber-800">Échéance : {selectedCharge.due_date}</p>}</div>}</div>}
+        crmHref={(lead) => `/crm/leads?lead=${lead}`} />{selectedCharge && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="font-black text-amber-950">{serviceLine(selectedCharge.service_description)}</p><p className="mt-1 text-sm text-amber-900">{programmeName(selectedCharge.session_type)}{selectedCharge.school_year ? ` · année ${selectedCharge.school_year}` : ''}</p><div className="mt-3 grid grid-cols-3 gap-2"><MiniAmount label="Prix net" value={selectedCharge.net_amount} /><MiniAmount label="Déjà payé" value={selectedCharge.paid_amount} /><MiniAmount label="Solde" value={selectedCharge.balance} /></div>{selectedCharge.due_date && <p className="mt-2 text-xs text-amber-800">Échéance : {selectedCharge.due_date}</p>}</div>}</div>}
       {form.student_id && form.session_type && form.session_type !== 'Other' && !selectedCharge?.enrollment_id && <div className="mt-4">
         {enrollmentsLoading && <SearchMessage icon={LoaderCircle} spin>Chargement des inscriptions…</SearchMessage>}
         {enrollmentsError && <SearchMessage icon={AlertCircle} tone="error">Inscriptions indisponibles : {enrollmentsError}</SearchMessage>}
-        {!enrollmentsLoading && !enrollmentsError && <Field label="Inscription à rattacher"><select className={input} value={form.enrollment_id} onChange={(e) => set('enrollment_id', e.target.value)}><option value="">{enrollmentChoices.length ? 'Choisir une inscription ou créer une autre…' : 'Créer une inscription pour cette session au paiement'}</option>{enrollmentChoices.map((row) => <option key={row.id} value={row.id}>{row.crm_linked ? 'Inscription CRM · ' : ''}{row.status} · {row.session_type || 'session non renseignée'} · {row.school_year || 'année non renseignée'} · {row.date_inscription || row.id.slice(0, 8)}</option>)}{enrollmentChoices.length > 0 && <option value="new" disabled={hasCrmEnrollment}>Créer une inscription distincte</option>}</select><p className="mt-1 text-xs text-muted-foreground">{hasCrmEnrollment && <>Une inscription CRM existe pour ce programme et cette année : sélectionnez-la. </>}Pour un acompte sur une session déjà inscrite, sélectionnez son inscription. Les dossiers historiques sans session ou année ne sont jamais associés automatiquement.</p></Field>}
+        {!enrollmentsLoading && !enrollmentsError && <Field label="Inscription à rattacher"><select className={input} value={form.enrollment_id} onChange={(e) => set('enrollment_id', e.target.value)}><option value="">{enrollmentChoices.length ? 'Choisir une inscription ou créer une autre…' : 'Créer une inscription pour cette session au paiement'}</option>{enrollmentChoices.map((row) => <option key={row.id} value={row.id}>{row.crm_linked ? 'Inscription CRM · ' : ''}{enrollmentLabel(row.status)} · {programmeName(row.session_type) || 'session non renseignée'} · {row.school_year || 'année non renseignée'} · {row.date_inscription || row.id.slice(0, 8)}</option>)}{enrollmentChoices.length > 0 && <option value="new" disabled={hasCrmEnrollment}>Créer une inscription distincte</option>}</select><p className="mt-1 text-xs text-muted-foreground">{hasCrmEnrollment && <>Une inscription CRM existe pour ce programme et cette année : sélectionnez-la. </>}Pour un acompte sur une session déjà inscrite, sélectionnez son inscription. Les dossiers historiques sans session ou année ne sont jamais associés automatiquement.</p></Field>}
       </div>}
       {!lockedCharge && <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <Field label="Session *"><select required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, enrollment_id: '', session_type: e.target.value, level: '', service_detail: '' }))}><option value="">Choisir…</option>{SESSION_TYPES.map((session) => <option key={session}>{session}</option>)}</select></Field>
+        <Field label="Session *"><select required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, enrollment_id: '', session_type: e.target.value, level: '', service_detail: '' }))}><option value="">Choisir…</option>{SESSION_TYPES.map(session => <option key={session} value={session}>{programmeName(session)}</option>)}</select></Field>
         <Field label="Année scolaire *"><select required className={input} value={form.school_year} onChange={(e) => setForm((c) => ({ ...c, enrollment_id: '', school_year: e.target.value }))}>{[...new Set([form.school_year, ...SCHOOL_YEAR_OPTIONS].filter(Boolean))].map((year) => <option key={year}>{year}</option>)}</select></Field>
         {form.session_type === 'Other' && <Field label="Description du service *"><input required minLength={3} maxLength={120} className={input} value={form.service_detail} onChange={(e) => set('service_detail', e.target.value)} placeholder="Description courte et précise" /></Field>}
         <Field label="Niveau (facultatif)"><select className={input} value={form.level} onChange={(e) => set('level', e.target.value)}><option value="">Non renseigné</option>{levels.map((value) => <option key={value}>{value}</option>)}</select></Field>
-        {servicePreview && <div className="sm:col-span-2 rounded-xl border border-dashed bg-slate-50 px-4 py-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Libellé généré</p><p className="mt-1 text-sm font-bold text-slate-800">{servicePreview}</p></div>}
+        {servicePreview && <div className="sm:col-span-2 rounded-xl border border-dashed bg-slate-50 px-4 py-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Libellé généré</p><p className="mt-1 text-sm font-bold text-slate-800">{serviceLine(servicePreview)}</p></div>}
       </div>}
       {groupOffered && <div className="mt-4">
         {groupChoices.state === 'loading' && <SearchMessage icon={LoaderCircle} spin>Chargement des groupes…</SearchMessage>}
@@ -420,7 +439,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
 
 function ModeButton({ active, onClick, icon: Icon, children }) { return <button type="button" role="tab" aria-selected={active} onClick={onClick} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition ${active ? 'bg-white text-primary shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}><Icon size={16} /> {children}</button>; }
 function SearchMessage({ icon: Icon, spin, tone, children }) { return <div className={`mt-3 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'bg-slate-50 text-slate-600'}`}><Icon size={16} className={spin ? 'animate-spin' : ''} />{children}</div>; }
-function StudentResult({ student, onSelect }) { return <button type="button" onClick={onSelect} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-primary/[0.04]"><span className="min-w-0"><b className="block truncate text-sm">{student.full_name}</b><span className="block truncate text-xs text-muted-foreground">{[student.telephone ? formatPhoneFr(student.telephone) : null, student.email, student.parent_email].filter(Boolean).join(' · ') || 'Aucun contact'} · {student.status || 'Prospect'}</span></span><ChevronRight size={15} className="shrink-0 text-primary" /></button>; }
+function StudentResult({ student, onSelect }) { return <button type="button" onClick={onSelect} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-primary/[0.04]"><span className="min-w-0"><b className="block truncate text-sm">{student.full_name}</b><span className="block truncate text-xs text-muted-foreground">{[student.telephone ? formatPhoneFr(student.telephone) : null, student.email, student.parent_email].filter(Boolean).join(' · ') || 'Aucun contact'} · {dossierLabel(student.status || 'Prospect')}</span></span><ChevronRight size={15} className="shrink-0 text-primary" /></button>; }
 function Step({ number, title, subtitle, children }) { return <section className="overflow-visible rounded-2xl border bg-card shadow-sm"><div className="flex items-center gap-3 border-b px-5 py-4"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-black text-white">{number}</span><div><h2 className="font-black">{title}</h2><p className="text-xs text-muted-foreground">{subtitle}</p></div></div><div className="p-5">{children}</div></section>; }
 function Field({ label, children }) { return <label className="block text-xs font-bold text-slate-600"><span className="mb-1.5 block">{label}</span>{children}</label>; }
 function Amount({ label, value, accent, warning }) { return <div className={`${accent ? 'bg-primary text-white' : warning ? 'bg-rose-50 text-rose-800' : 'bg-white'} p-3 text-center`}><p className="text-[10px] font-bold uppercase tracking-wide opacity-70">{label}</p><p className="mt-1 text-base font-black">{money(value)} MAD</p></div>; }

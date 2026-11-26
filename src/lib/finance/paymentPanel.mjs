@@ -3,6 +3,7 @@
 // server decides every amount and refusal; these helpers only choose what the panel shows
 // first and word the errors before submit, all at once.
 import { DISCOUNT_REASONS, DISCOUNT_REASON_MAX_LENGTH } from '../financeCorrections.mjs';
+import { programmeName, serviceLine } from '../programCatalog.mjs';
 
 const cents = value => Math.round(Number(value || 0) * 100);
 // As receiptFinance.money: no decimals for a whole amount, two otherwise.
@@ -36,7 +37,7 @@ export const selectableCommitments = (rows = [], leadId = null) => rows.filter(r
 export const COMMITMENT_CHOICE = 'Choisissez l’engagement à encaisser, ou « Nouvelle session ».';
 
 export function balanceLine(row) {
-  const what = [row.session_type === 'Legacy' ? 'Ancien solde' : row.session_type, row.school_year].filter(Boolean).join(' · ');
+  const what = [programmeName(row.session_type), row.school_year].filter(Boolean).join(' · ');
   return `${what} · reste ${mad(row.balance)}`;
 }
 
@@ -100,7 +101,7 @@ export function duplicateRule(receipt, { studentId, chargeId, amount, date, acto
 export function duplicateLine(row) {
   const number = row.receipt_number ? `Reçu N° ${row.receipt_number}` : 'Reçu';
   const day = row.date ? String(row.date).split('-').reverse().join('/') : '';
-  return [number, day, mad(row.amount), row.service_description].filter(Boolean).join(' · ');
+  return [number, day, mad(row.amount), serviceLine(row.service_description)].filter(Boolean).join(' · ');
 }
 
 export const DUPLICATE_REASON = {

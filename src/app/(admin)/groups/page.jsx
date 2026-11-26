@@ -17,7 +17,7 @@ import { Plus, Edit, Trash2, Users, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, isOnlineSessionType } from '@/lib/academicPrograms';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, isOnlineSessionType, programmeName } from '@/lib/academicPrograms';
 import PersonLink from '@/components/PersonLink';
 import ProgrammePill from '@/components/operational/ProgrammePill';
 import { useAuth } from '@/context/AuthContext';
@@ -124,7 +124,7 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
               <p className="mt-1 text-xs text-muted-foreground">N’indiquez jamais le nom d’un apprenant dans le nom du groupe.</p></div>
             <div><label className={labelClass}>Session *</label>
               <select className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)} required disabled={levelLocked || closed}>
-                {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
+                {SESSION_TYPES.map(session => <option key={session} value={session}>{programmeName(session)}</option>)}
               </select>
             </div>
             <div><label className={labelClass}>Niveau</label>
@@ -322,7 +322,7 @@ export default function Groups() {
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterSession} onChange={e => { setFilterSession(e.target.value); setFilterLevel(''); }}>
           <option value="">Toutes les sessions</option>
-          {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
+          {SESSION_TYPES.map(session => <option key={session} value={session}>{programmeName(session)}</option>)}
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterLevel} onChange={e => setFilterLevel(e.target.value)}>
           <option value="">Tous les niveaux</option>

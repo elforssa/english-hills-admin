@@ -26,6 +26,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { chromium, expect } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { programmeName } from '../src/lib/programCatalog.mjs';
 assertLocalFeatureBranch(new URL('../', import.meta.url));
 
 const env = {};
@@ -362,8 +363,9 @@ insert into public.enrollments(student_id, status, session_type, school_year, le
     await expect(status).toContainText(`${preview.to_end} inscription(s) active(s) seront terminées`);
     await expect(status).toContainText(`${preview.kept_in_later_courses} inscription(s) d’un cours qui se termine plus tard restent en cours.`);
     const byProgramme = Object.entries(preview.kept_waiting_unplaced.by_programme).filter(([, n]) => Number(n) > 0)
-      .sort(([a], [b]) => a.localeCompare(b, 'fr')).map(([programme, n]) => `${programme} ${n}`).join(', ');
-    assert.match(byProgramme, /Summer Camp [1-9]/);
+      .sort(([a], [b]) => a.localeCompare(b, 'fr')).map(([programme, n]) => `${programmeName(programme)} ${n}`).join(', ');
+    // B2 (§5.4): the programme is shown by its French label.
+    assert.match(byProgramme, /Stage d’été [1-9]/);
     await expect(status).toContainText(`${preview.kept_waiting_unplaced.total} inscription(s) payée(s) sans groupe restent en attente de leur cours (${byProgramme})`);
     // Only groups to mark: the button is enabled (nit); it is never clicked here.
     const far = directorJson(`public.close_school_year_preview('${FAR_YEAR}')`);

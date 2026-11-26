@@ -124,10 +124,10 @@ try {
  assert.equal(sql(`select count(*) from public.crm_tasks t join public.placement_tests p on p.id=t.placement_test_id where t.id='${saved.next_action.id}' and p.status='Planifié' and p.student_id is null`),'1','the appointment carries the planned test');
  // The appointment outcomes wait for its start (crm_appointment.before_start).
  for(const label of ['Venu · s’inscrit','Venu · reviendra','Venu · pas intéressé','Absent'])assert(await drawer().getByTestId('appointment-outcome').getByRole('button',{name:label,exact:true}).isDisabled(),label+' disabled before the start');
- await more('Clôturer comme perdu');assert.ok(await dialog().getByLabel('Motif',{exact:true}).locator('option[value="unreachable"]').isDisabled());await dialog().getByLabel('Motif',{exact:true}).selectOption('other');await submit();assert.equal(detail(lead).status,'QUALIFIED');await dialog().getByLabel('Note',{exact:true}).fill('Projet abandonné');await submit();await toast('Enregistré');await closed();
+ await more('Clôturer le prospect');assert.ok(await dialog().getByLabel('Motif',{exact:true}).locator('option[value="unreachable"]').isDisabled());await dialog().getByLabel('Motif',{exact:true}).selectOption('other');await submit();assert.equal(detail(lead).status,'QUALIFIED');await dialog().getByLabel('Note',{exact:true}).fill('Projet abandonné');await submit();await toast('Enregistré');await closed();
  saved=await settle(lead,d=>d.status==='LOST');assert.equal(saved.open_tasks.length,0,'closing cancels the appointment');
  await page.getByRole('button',{name:'Rouvrir le prospect'}).click();await dialog().getByLabel('Motif',{exact:true}).fill('Le parent revient');await fillTask();await submit();await toast('Enregistré');await closed();assert.equal((await settle(lead,d=>d.status!=='LOST')).status,'ENGAGED');
- await more('Clôturer comme non qualifié');await dialog().getByLabel('Motif',{exact:true}).selectOption('age_not_suitable');await submit();await toast('Enregistré');await closed();assert.equal((await settle(lead,d=>d.status!=='ENGAGED')).status,'NOT_QUALIFIED');
+ await more('Clôturer le prospect');await dialog().getByLabel('Motif',{exact:true}).selectOption('program_not_suitable');await submit();await toast('Enregistré');await closed();assert.equal((await settle(lead,d=>d.status!=='ENGAGED')).status,'NOT_QUALIFIED');
  console.log('PASS Changer with stale reload, implied qualification by appointment, outcomes before start, Lost eligibility/required explanation, reopen and Not Qualified');
  // Four historical attempts after a conversation, then the real fifth UI call (one tap).
  for(const state of ['ENGAGED','QUALIFIED']){
@@ -143,9 +143,9 @@ try {
  // Decide before saving: the conversation and its outcome are one RPC.
  for (const decision of ['qualify','lost','not_qualified']) {
   const id=intake('Décision '+decision);await open(id);await exchange('Téléphone','On a parlé');
-  await pick({qualify:'Rendez-vous au centre',lost:'Pas intéressé',not_qualified:'Pas pour nous'}[decision]);await dialog().getByLabel('Note (facultative)',{exact:true}).fill('Le parent confirme sa décision');
+  await pick({qualify:'Rendez-vous au centre',lost:'Clôturer',not_qualified:'Clôturer'}[decision]);await dialog().getByLabel('Note (facultative)',{exact:true}).fill('Le parent confirme sa décision');
   if(decision==='qualify'){await slot(tuesday,'16:05');await page.screenshot({path:join(tmpdir(), 'hills-phase4-qualification.png'),fullPage:false});}
-  else {assert.equal(await dialog().getByLabel('Date',{exact:true}).count(),0,'closure requires no dummy date');await dialog().getByLabel('Motif',{exact:true}).selectOption(decision==='lost'?'not_interested':'age_not_suitable');}
+  else {assert.equal(await dialog().getByLabel('Date',{exact:true}).count(),0,'closure requires no dummy date');await dialog().getByLabel('Motif',{exact:true}).selectOption(decision==='lost'?'not_interested':'program_not_suitable');if(decision==='lost')await dialog().getByLabel('Pourquoi ?',{exact:true}).selectOption('schedule');}
   if(decision==='qualify') {
    const attempts=[];let drop=true;
    await page.route('**/rest/v1/rpc/crm_log_exchange',async route=>{attempts.push(route.request().postDataJSON());if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});

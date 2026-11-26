@@ -15,6 +15,7 @@ import {
   UNPLACED_CHOICES, allUnplacedChosen, closeCourse, closeCourseMessage, closeCoursePreview, courseDatesLabel, courseMoney as money,
   effectiveUnplacedChoices, unplacedChoicesFor, unplacedLists,
 } from '@/lib/academic/courseClose.mjs';
+import { programmeName } from '@/lib/programCatalog.mjs';
 
 const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 
@@ -72,7 +73,7 @@ export default function CloseCourseDialog({ groupId, onClose, onClosed }) {
         {preview && (
           <form onSubmit={submit} className="space-y-4 text-sm">
             <p className="text-muted-foreground">
-              {[preview.session_type, preview.niveau, preview.school_year].filter(Boolean).join(' · ')}
+              {[programmeName(preview.session_type), preview.niveau, preview.school_year].filter(Boolean).join(' · ')}
               {courseDatesLabel(preview) ? ` · ${courseDatesLabel(preview)}` : ''}
             </p>
             {preview.closed_at && <p className="rounded-md border border-border bg-muted p-3">Ce cours est déjà clôturé.</p>}

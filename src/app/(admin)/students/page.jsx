@@ -15,7 +15,8 @@ import SearchField from '@/components/operational/SearchField';
 import FilterBar from '@/components/operational/FilterBar';
 import FormField from '@/components/operational/FormField';
 import ReadState from '@/components/operational/ReadState';
-import { queryReadState, DOSSIER_FILTER_STATUSES, DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from '@/lib/ui/presentation.mjs';
+import { queryReadState, DOSSIER_FILTER_STATUSES, DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel, ageCategoryLabel, dossierLabel } from '@/lib/ui/presentation.mjs';
+import { ORIGINS, originLabel, studentOriginCode } from '@/lib/catalogue.mjs';
 import { exportToCsv } from '@/utils/exportCsv';
 import { useEntityUpdate, useEntityAll } from '@/lib/queries';
 import { getBrowserClient } from '@/lib/supabase';
@@ -127,17 +128,13 @@ function YearCloseDialog({ onClose, onDone }) {
 const PAGE_SIZE = 20;
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
-const SOURCES = [
-  'Réseaux sociaux (Facebook / Instagram)',
-  'Recherche Google',
-  'Famille / Ami(e)',
-  'Passage devant le centre (walk-in)',
-  'Ancien élève / Réinscription',
-];
+// RWR-r5 §5.4: the source filter is the origin list (a file D4 has not mapped yet
+// is found by its old answer, server side).
+const SOURCES = ORIGINS.map(o => o.code);
 
 // Compact borderless dropdown for editing a single field directly in a table
 // row. `empty` (when provided) renders a "clear" option that maps to null.
-function InlineSelect({ value, options, onChange, empty, label, className = '', base = 'operational-control cursor-pointer' }) {
+function InlineSelect({ value, options, onChange, empty, label, className = '', base = 'operational-control cursor-pointer', labelOf = programmeLabel }) {
   return (
     <select
       value={value ?? ''}
@@ -146,7 +143,7 @@ function InlineSelect({ value, options, onChange, empty, label, className = '', 
       className={`${base} ${className}`}
     >
       {empty !== undefined && <option value="">{empty}</option>}
-      {options.map(o => <option key={o} value={o}>{programmeLabel(o)}</option>)}
+      {options.map(o => <option key={o} value={o}>{labelOf(o)}</option>)}
     </select>
   );
 }
@@ -270,7 +267,7 @@ export default function StudentsPage() {
       {(student.pending_enrollments || []).map(enrollment => (
         <button key={enrollment.id} className="block text-left text-xs font-semibold text-primary hover:underline"
           onClick={() => setPlacement({ student, enrollment })}>
-          Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
+          Groupe à affecter · {programmeLabel(enrollment.session_type || student.session_type)}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
         </button>
       ))}
       {!student.groupe_id && !student.pending_enrollments?.length && (fileAwaitsGroup(student)
@@ -286,7 +283,7 @@ export default function StudentsPage() {
       {student.groupe_id && groupLabel(student)}
       {awaitingGroup.length === 1 && <button className="block text-left text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, enrollment: awaitingGroup[0] })}>
-        Groupe à affecter · {awaitingGroup[0].session_type || student.session_type || 'Session'}{awaitingGroup[0].school_year ? ` · ${awaitingGroup[0].school_year}` : ''}
+        Groupe à affecter · {programmeLabel(awaitingGroup[0].session_type || student.session_type)}{awaitingGroup[0].school_year ? ` · ${awaitingGroup[0].school_year}` : ''}
       </button>}
       {awaitingGroup.length > 1 && <button className="text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, choices: awaitingGroup })}>Choisir l’inscription à affecter ({awaitingGroup.length})</button>}
@@ -311,14 +308,14 @@ export default function StudentsPage() {
         Nom: s.full_name,
         Email: s.email || '',
         Téléphone: s.telephone ? formatPhoneFr(s.telephone) : '',
-        Catégorie: s.age_category || '',
+        Catégorie: s.age_category ? ageCategoryLabel(s.age_category) : '',
         Groupe: s.group_name ? `${s.group_name}${Number(s.extra_group_count) > 0 ? ` +${s.extra_group_count}` : ''}` : 'À affecter',
-        Session: s.session_type || '',
+        Session: s.session_type ? programmeLabel(s.session_type) : '',
         Niveau: s.niveau_cefr || '',
-        Statut: s.status || '',
+        Statut: s.status ? dossierLabel(s.status) : '',
         'Statut paiement': s.payment_status || 'Aucun engagement',
         'Solde restant (MAD)': Number(s.payment_balance || 0),
-        Source: s.referral_source || '',
+        Origine: studentOriginCode(s) ? originLabel(studentOriginCode(s)) : '',
         'Date naissance': s.date_naissance || '',
       })), `apprenants-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch { toast.error('Export impossible. Aucun fichier CSV créé.'); }
@@ -368,7 +365,7 @@ export default function StudentsPage() {
         </select></FormField></div>
 <div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par catégorie"><select aria-label="Filtrer par catégorie" className="operational-control" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
           <option value="">Toutes catégories</option>
-          {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          {AGE_CATEGORIES.map(c => <option key={c} value={c}>{ageCategoryLabel(c)}</option>)}
         </select></FormField></div>
 <div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par affectation de groupe"><select aria-label="Filtrer par affectation de groupe" className="operational-control" value={filterGroup} onChange={e => { setFilterGroup(e.target.value); setPage(1); }}>
           <option value="">Groupes : tous</option>
@@ -386,9 +383,9 @@ export default function StudentsPage() {
           <option value="">Complétude : tous</option>
           <option value="incomplete">À compléter (sans email)</option>
         </select></FormField></div>
-<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par source"><select aria-label="Filtrer par source" className="operational-control" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
-          <option value="">Source : toutes</option>
-          {SOURCES.map(s => <option key={s} value={s}>{programmeLabel(s)}</option>)}
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par origine"><select aria-label="Filtrer par origine" className="operational-control" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
+          <option value="">Origine : toutes</option>
+          {SOURCES.map(s => <option key={s} value={s}>{originLabel(s)}</option>)}
         </select></FormField></div>
       </>}>{<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par statut"><select aria-label="Filtrer par statut" className="operational-control" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
           <option value="">Dossiers actifs</option>
@@ -413,7 +410,7 @@ export default function StudentsPage() {
                 <div key={s.id} className="flex items-center justify-between px-3 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link></p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · <ProgrammePill sessionType={s.session_type} /> {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{ageCategoryLabel(s.age_category)} · <ProgrammePill sessionType={s.session_type} /> {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     {renderGroup(s)}
                     <p className="text-xs text-muted-foreground">{s.telephone ? formatPhoneFr(s.telephone) : '—'}</p>
                     <p className="mt-1 text-xs"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-1 font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="ml-2 font-semibold">{money(s.payment_balance)} MAD · solde restant actuel</span>}</p>
@@ -447,6 +444,7 @@ export default function StudentsPage() {
                           value={s.age_category}
                           label={`Catégorie de ${s.full_name}`}
                           options={AGE_CATEGORIES}
+                          labelOf={ageCategoryLabel}
                           empty="— Non défini —"
                           onChange={v => patchStudent(s, 'age_category', v)}
                         />
@@ -503,7 +501,7 @@ function EnrollmentChoiceDialog({ student, enrollments, onSelect, onClose }) {
       <div className="space-y-2">
         {enrollments.map(enrollment => <button key={enrollment.id} type="button" className="block w-full rounded-md border border-border p-3 text-left text-sm hover:border-primary"
           onClick={() => onSelect(enrollment)}>
-          <span className="block font-semibold">{displayLabel(ENROLLMENT_LABELS,enrollment.status)} · {enrollment.session_type || student.session_type || 'Session'} · {enrollment.level || 'Niveau à définir'}</span>
+          <span className="block font-semibold">{displayLabel(ENROLLMENT_LABELS,enrollment.status)} · {programmeLabel(enrollment.session_type || student.session_type)} · {enrollment.level || 'Niveau à définir'}</span>
           <span className="text-xs text-muted-foreground">{enrollment.school_year || 'Année non renseignée'} · Réf. {enrollment.id.slice(0, 8)}</span>
         </button>)}
       </div>

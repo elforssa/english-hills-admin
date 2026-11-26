@@ -26,6 +26,14 @@
     "receptionist": "open",
     "md5": "0c249394517684153e41d89a1b78643a"
   },
+  "catalogue_save_programme(p_code text, p_expected_version bigint, p_changes jsonb)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "catalogue_set_price(p_programme text, p_school_year text, p_amount numeric, p_label text, p_expected_price_id uuid)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
   "centre_school_year(p_date date)": {
     "gate": "invoker",
     "receptionist": "rls"
@@ -400,6 +408,10 @@
     "gate": "manual",
     "receptionist": "open",
     "md5": "f890fb097cce166f197c81409dfcee66"
+  },
+  "get_catalogue()": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
   },
   "get_finance_charge_summary()": {
     "gate": "finance_staff",

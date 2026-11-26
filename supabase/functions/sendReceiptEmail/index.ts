@@ -1,5 +1,6 @@
 import { Resend } from 'npm:resend@4.0.0';
 import { deliverReceiptEmail } from './deliveryWorkflow.mjs';
+import { programmeName, serviceLine } from './programmeLabels.mjs';
 
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const money = (value: unknown) => Number(value || 0).toLocaleString('fr-MA', { maximumFractionDigits: 2 });
@@ -49,7 +50,7 @@ Deno.serve(async (request) => {
       sendReceipt: async (receipt: Record<string, unknown>) => {
         const apiKey = Deno.env.get('RESEND_API_KEY');
         if (!apiKey) throw new Error('RESEND_API_KEY is not configured');
-        const session = escapeHtml(receipt.session_type || 'Historique'); const service = escapeHtml(receipt.service_description || 'Reçu historique');
+        const session = escapeHtml(programmeName(receipt.session_type) || 'Historique'); const service = escapeHtml(serviceLine(receipt.service_description) || 'Reçu historique');
         const schoolYear = receipt.school_year_snapshot ? escapeHtml(receipt.school_year_snapshot) : '';
         const discount = Number(receipt.discount_amount_snapshot || 0); const balance = Number(receipt.balance_after_snapshot || 0);
         const body = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e"><div style="height:5px;background:linear-gradient(90deg,#1E4D8B 72%,#B91C2E 72%)"></div><div style="background:#1E4D8B;padding:24px 32px;color:white"><h1 style="margin:0;font-size:20px">English Hills Language Center</h1><p>Confirmation de paiement</p></div><div style="border:1px solid #e5e7eb;padding:28px 32px"><p>Bonjour <strong>${escapeHtml(receipt.nom_prenom)}</strong>,</p><p>Nous confirmons la réception de votre paiement.</p><table style="width:100%;border-collapse:collapse;font-size:14px"><tr><td>N° de reçu</td><td><strong>${escapeHtml(receipt.receipt_number)}</strong></td></tr><tr><td>Date</td><td>${escapeHtml(receipt.date)}</td></tr><tr><td>Session</td><td>${session}</td></tr>${schoolYear ? `<tr><td>Année scolaire</td><td>${schoolYear}</td></tr>` : ''}<tr><td>Service</td><td>${service}</td></tr>${receipt.niveau ? `<tr><td>Niveau</td><td>${escapeHtml(receipt.niveau)}</td></tr>` : ''}<tr><td>Prix brut</td><td>${money(receipt.gross_amount_snapshot)} MAD</td></tr>${discount > 0 ? `<tr><td>Remise</td><td>−${money(discount)} MAD</td></tr>` : ''}<tr><td>Prix net</td><td><strong>${money(receipt.net_amount_snapshot)} MAD</strong></td></tr><tr><td>Déjà payé</td><td>${money(receipt.paid_before_snapshot)} MAD</td></tr><tr><td>Montant payé aujourd’hui</td><td style="color:#1E4D8B"><strong>${money(receipt.montant_paye)} MAD</strong></td></tr><tr><td>Solde restant</td><td style="color:${balance > 0 ? '#B91C2E' : '#166534'}"><strong>${money(balance)} MAD</strong></td></tr><tr><td>Mode</td><td>${escapeHtml(receipt.mode_paiement)}</td></tr></table><p style="border-top:1px solid #eee;padding-top:16px;color:#777">English Hills Language Center — Casablanca</p></div></div>`;

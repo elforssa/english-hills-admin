@@ -382,11 +382,13 @@ export default function GuideContent() {
 <li><span className="ui">Nom du contact</span>&nbsp;: la personne qui appelle ou qui passe (obligatoire).</li>
 <li><span className="ui">Téléphone</span>&nbsp;: la plateforme le met au format international (+212…). Facultatif, mais sans numéro valide vous ne pourrez pas appeler depuis la fiche.</li>
 <li><span className="ui">Nom de l’apprenant</span> et <span className="ui">Âge</span> (facultatif). Laissé vide, la case <span className="ui">C’est la même personne</span> est cochée&nbsp;: un adulte qui s’inscrit pour lui-même est le contact et l’apprenant.</li>
-<li><span className="ui">Origine</span>&nbsp;: Téléphone, Visite au centre, WhatsApp, Recommandation ou Autre.</li>
+<li><span className="ui">Canal</span>&nbsp;: Téléphone, Visite au centre, WhatsApp ou Autre (comment ce premier échange a eu lieu).</li>
+<li><span className="ui">Programme</span> (facultatif)&nbsp;: choisi dans la liste du catalogue, ou «&nbsp;À préciser&nbsp;». Une précision libre reste possible.</li>
+<li><span className="ui">Origine</span> (facultatif)&nbsp;: comment la personne a connu le centre (Instagram, Facebook, Site web, Google, Recommandation, Passage devant le centre, Appel entrant, Ancien élève, Autre). Pour «&nbsp;Recommandation&nbsp;», indiquez qui a recommandé le centre dans <span className="ui">Recommandé par</span>.</li>
 <li><b>Premier échange</b>&nbsp;: ce qui a été convenu, par exemple «&nbsp;En attente du prospect&nbsp;» pour quelqu’un qui reviendra.</li>
 </ol>
 </figure>
-<p>Exemple&nbsp;: une mère passe au centre et «&nbsp;reviendra après la paie&nbsp;». Origine <b>Visite au centre</b>, Premier échange <span className="ui">En attente du prospect</span>, sans date&nbsp;: le prospect passe <span className="st st-eng">En discussion</span>, et la plateforme prévoit une relance dans 5 jours. Aucun «&nbsp;Premier contact&nbsp;» n’est planifié.</p>
+<p>Exemple&nbsp;: une mère passe au centre et «&nbsp;reviendra après la paie&nbsp;». Canal <b>Visite au centre</b>, Premier échange <span className="ui">En attente du prospect</span>, sans date&nbsp;: le prospect passe <span className="st st-eng">En discussion</span>, et la plateforme prévoit une relance dans 5 jours. Aucun «&nbsp;Premier contact&nbsp;» n’est planifié.</p>
 <div className="callout info">
 <strong>Doublon possible</strong><p>Si le même téléphone (dans n’importe quel format), ou le même nom avec la même date de naissance, existe déjà chez un prospect ou un apprenant, rien n’est créé&nbsp;: la fenêtre affiche <b>Doublon possible</b>. Pour chaque fiche, répondez <span className="ui">Même famille, autre personne</span> ou <span className="ui">Personne différente</span>, puis cliquez à nouveau sur <span className="ui">Enregistrer</span>. Si c’est la même personne, ouvrez sa fiche au lieu de créer. Un email déjà connu est seulement signalé après la création, dans un encadré jaune (<span className="ui">Ouvrir les prospects existants</span>). Rien n’est jamais fusionné automatiquement.</p>
 </div>
@@ -450,7 +452,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td><span className="ui">Mauvais numéro</span></td>
-<td><p>Ne compte pas dans les 5 appels. Sous <b>Et ensuite&nbsp;?</b>, gardez l’action actuelle ou choisissez une autre suite&nbsp;: rappel convenu, à faire par nous (retrouver le bon numéro), en attente, ou <span className="ui">Pas pour nous</span> pour clôturer. Vous avez le bon numéro&nbsp;? Saisissez-le dans <span className="ui">Numéro corrigé</span> (tous formats acceptés) et gardez l’action actuelle&nbsp;: la fiche prend le nouveau numéro et une nouvelle série d’appels commence.</p>
+<td><p>Ne compte pas dans les 5 appels. Par défaut, <span className="ui">Enregistrer</span> clôture le prospect <span className="st st-nq">Non qualifié</span>, motif «&nbsp;Mauvais numéro&nbsp;» (deux clics). Sous <b>Et ensuite&nbsp;?</b>, vous pouvez à la place garder l’action actuelle ou choisir une autre suite&nbsp;: rappel convenu, à faire par nous (retrouver le bon numéro) ou en attente. Vous avez le bon numéro&nbsp;? Saisissez-le dans <span className="ui">Numéro corrigé</span> (tous formats acceptés)&nbsp;: la suite proposée devient «&nbsp;garder l’action actuelle&nbsp;», la fiche prend le nouveau numéro et une nouvelle série d’appels commence.</p>
 </td>
 </tr>
 <tr>
@@ -532,14 +534,9 @@ export default function GuideContent() {
 <td><b>Finaliser l’inscription</b>, demain. <a href="#c6">Scénario C6</a>.</td>
 </tr>
 <tr>
-<td><span className="ui">Pas intéressé</span></td>
-<td><span className="st st-lost">Perdu</span></td>
+<td><span className="ui">Clôturer</span></td>
+<td><span className="st st-lost">Perdu</span> ou <span className="st st-nq">Non qualifié</span>, selon le motif</td>
 <td>Aucune. Choisissez un <span className="ui">Motif</span>&nbsp;: le prospect est clôturé tout de suite (<a href="#c7">C7</a>).</td>
-</tr>
-<tr>
-<td><span className="ui">Pas pour nous</span></td>
-<td><span className="st st-nq">Non qualifié</span></td>
-<td>Aucune. Motif&nbsp;: âge ou programme non adapté, invalide ou indésirable, doublon, hors périmètre, autre.</td>
 </tr>
 <tr>
 <td><span className="ui">Garder l’action actuelle</span></td>
@@ -600,7 +597,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td><span className="ui">Venu · pas intéressé</span></td>
-<td>Choisissez le <span className="ui">Motif</span>, puis <span className="ui">Clôturer</span>&nbsp;: le prospect est clôturé <span className="st st-lost">Perdu</span> avec ce motif. Le test passe «&nbsp;Passé&nbsp;».</td>
+<td>Choisissez <span className="ui">Pourquoi&nbsp;?</span> (prix, horaires, localisation, autre centre choisi, projet reporté, ou autre raison avec une précision), puis <span className="ui">Clôturer</span>&nbsp;: le prospect est clôturé <span className="st st-lost">Perdu</span> avec ce motif. Le test passe «&nbsp;Passé&nbsp;».</td>
 </tr>
 <tr>
 <td><span className="ui">Absent</span></td>
@@ -664,7 +661,7 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Dans la fiche ou sur la ligne de <span className="menu">Tâches</span>, cliquez sur <span className="ui">Changer</span>.</p>
 </li>
-<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span> (pour un prospect <span className="st st-qual">Qualifié</span>, ou pour déplacer un rendez-vous&nbsp;; sinon, notez l’échange avec <span className="ui">On a parlé</span>, qui qualifie le prospect), <span className="ui">Rappel convenu</span>, <span className="ui">À faire par nous</span>, <span className="ui">Rappel pour l’équipe</span>, <span className="ui">En attente du prospect</span>, ou une clôture (<span className="ui">Pas intéressé</span>, <span className="ui">Pas pour nous</span>).</p>
+<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span> (pour un prospect <span className="st st-qual">Qualifié</span>, ou pour déplacer un rendez-vous&nbsp;; sinon, notez l’échange avec <span className="ui">On a parlé</span>, qui qualifie le prospect), <span className="ui">Rappel convenu</span>, <span className="ui">À faire par nous</span>, <span className="ui">Rappel pour l’équipe</span>, <span className="ui">En attente du prospect</span>, ou <span className="ui">Clôturer</span> avec un motif.</p>
 </li>
 <li><p>Pour simplement déplacer un rendez-vous ou un rappel convenu, gardez le même choix et changez la date&nbsp;: l’heure convenue est gardée.</p>
 </li>
@@ -728,9 +725,9 @@ export default function GuideContent() {
 <p className="when">Le suivi est terminé sans inscription, ou un prospect clôturé redevient actif.</p>
 </header>
 <ol className="steps">
-<li><p>Dans la fiche, cliquez sur <span className="ui">Autres actions</span>, puis <span className="ui">Clôturer comme perdu</span> ou <span className="ui">Clôturer comme non qualifié</span>. Après une conversation, vous pouvez aussi choisir <span className="ui">Pas intéressé</span> ou <span className="ui">Pas pour nous</span> directement dans <span className="ui">Noter un échange</span> ou <span className="ui">Changer</span>.</p>
+<li><p>Dans la fiche, cliquez sur <span className="ui">Autres actions</span>, puis <span className="ui">Clôturer le prospect</span>. Après une conversation, vous pouvez aussi choisir <span className="ui">Clôturer</span> directement dans <span className="ui">Noter un échange</span> ou <span className="ui">Changer</span>.</p>
 </li>
-<li><p>Choisissez le <span className="ui">Motif</span>, ajoutez une note (obligatoire si le motif est «&nbsp;Autre&nbsp;»), puis <span className="ui">Enregistrer</span>.</p>
+<li><p>Choisissez le <span className="ui">Motif</span> dans une seule liste. Pour «&nbsp;Pas intéressé&nbsp;», choisissez aussi <span className="ui">Pourquoi&nbsp;?</span>. Ajoutez une précision (obligatoire pour «&nbsp;Autre&nbsp;» et «&nbsp;Autre raison&nbsp;»), puis <span className="ui">Enregistrer</span>. Le statut (Perdu ou Non qualifié) découle du motif.</p>
 </li>
 </ol>
 <div className="scroll">
@@ -744,11 +741,11 @@ export default function GuideContent() {
 <tbody>
 <tr>
 <td><span className="st st-lost">Perdu</span></td>
-<td>Injoignable, Pas intéressé, Prix, Horaires, Localisation, Autre centre choisi, Projet reporté, Autre.<br />«&nbsp;Injoignable&nbsp;» n’est possible qu’après 5 appels ratés&nbsp;: la fiche affiche alors <span className="ui">Clôturer&nbsp;: injoignable</span>.</td>
+<td>Pas intéressé (Prix, Horaires, Localisation, Autre centre choisi, Projet reporté, ou autre raison), Injoignable, Doublon, Autre.<br />«&nbsp;Injoignable&nbsp;» n’est possible qu’après 5 appels ratés&nbsp;: la fiche affiche alors <span className="ui">Clôturer&nbsp;: injoignable</span>.</td>
 </tr>
 <tr>
 <td><span className="st st-nq">Non qualifié</span></td>
-<td>Âge non adapté, Programme non adapté, Invalide / indésirable, Doublon, Hors périmètre, Autre.</td>
+<td>Mauvais numéro, Âge ou programme non adapté, Invalide / indésirable, Hors périmètre.</td>
 </tr>
 </tbody>
 </table>

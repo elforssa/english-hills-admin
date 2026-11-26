@@ -5,6 +5,7 @@ import {
   ACTIVE_STUDENT_STATUSES, LIVE_ENROLLMENT_STATUSES, MEMBERSHIP_STATUSES, groupMemberIds, studentNeedsGroup,
 } from './enrollmentWorkflow.mjs';
 import { openCourses } from './academic/courseClose.mjs';
+import { programmeName } from './programCatalog.mjs';
 
 export const ATTENDANCE_STATUSES = ['Présent', 'Absent', 'Retard', 'Justifié'];
 
@@ -85,14 +86,14 @@ export function academicOperationsData({ students, teachers, groups: allGroups, 
   const sessionStudents = activeStudents.filter((student) => !sessionFilter || (student.session_type || 'Yearly') === sessionFilter);
   const unassignedGroups = sessionGroups
     .filter((group) => !group.teacher_id)
-    .map((group) => ({ id: group.id, label: `${group.name} · ${group.session_type || 'Yearly'} · ${group.niveau}` }));
+    .map((group) => ({ id: group.id, label: `${group.name} · ${programmeName(group.session_type || 'Yearly')} · ${group.niveau}` }));
   const studentsWithoutGroup = activeStudents
     .filter((student) => studentNeedsGroup(student, enrollments, sessionFilter))
     .map((student) => {
       const pending = enrollments.filter(e => e.student_id === student.id && e.status === 'Confirmed' && !e.group_id
         && (!sessionFilter || (e.session_type || student.session_type || 'Yearly') === sessionFilter));
-      const sessions = pending.map(e => [e.session_type || student.session_type || 'Yearly', e.school_year].filter(Boolean).join(' · '));
-      return { id: student.id, label: `${student.full_name} · ${sessions.length ? sessions.join(' / ') : student.session_type || 'Yearly'}` };
+      const sessions = pending.map(e => [programmeName(e.session_type || student.session_type || 'Yearly'), e.school_year].filter(Boolean).join(' · '));
+      return { id: student.id, label: `${student.full_name} · ${sessions.length ? sessions.join(' / ') : programmeName(student.session_type || 'Yearly')}` };
     });
 
   const sessionRows = sessionTypes.map((sessionType) => {

@@ -13,6 +13,7 @@ import {
   formStatusLabel, groupMetaForms, jobChannel, jobErrorLabel, jobHint, jobsToHandle, metaConnection, pollingStatus,
   retirePlan, rpcErrorMessage, spendFreshness, websiteForms,
 } from '@/lib/crm/intakeAdmin.mjs';
+import { programmeName } from '@/lib/programCatalog.mjs';
 
 // LIR-r1 P1-B. Director-only (the page and every RPC check the role). It renders form
 // keys, versions and job states only: never a token, secret reference, page/account ID
@@ -93,7 +94,7 @@ function IntakeTools({ meta }) {
           <td className="px-3 py-2">{form.latest.form_name || '—'}</td>
           <td className="px-3 py-2 tabular-nums">v{form.latest.version}</td>
           <td className="whitespace-nowrap px-3 py-2">{when(form.latest.effective_from)}</td>
-          <td className="px-3 py-2">{form.latest.default_session_type || '—'}</td>
+          <td className="px-3 py-2">{form.latest.default_session_type ? programmeName(form.latest.default_session_type) : '—'}</td>
           <td className="px-3 py-2">{form.latest.learner_policy === 'optional' ? 'Facultatif' : 'Obligatoire'}</td>
           <td className="px-3 py-2"><span data-testid="intake-form-status" className={`rounded px-2 py-0.5 font-medium ${statusTone[form.partial ? 'partial' : form.status]}`}>{formStatusLabel(form)}</span>{form.partial && form.status === 'active' && <span className="block text-[10px] text-slate-500">encore importé</span>}</td>
           <td className="whitespace-nowrap px-3 py-2 text-right">
@@ -174,7 +175,7 @@ function PublishDialog({ connection, forms, initial, busy, onClose, onPublish })
           <label className="text-xs font-medium text-slate-600">Identifiant du formulaire Meta<input aria-label="Identifiant du formulaire Meta" className={input} inputMode="numeric" maxLength={32} value={draft.form_key} disabled={!!initial.form_key} onChange={set('form_key')} /></label>
           <label className="text-xs font-medium text-slate-600">Nom<input aria-label="Nom du formulaire" className={input} maxLength={200} value={draft.form_name} onChange={set('form_name')} /></label>
           <label className="text-xs font-medium text-slate-600">Copier les réponses depuis<select aria-label="Copier les réponses depuis" className={input} defaultValue={initial.copy || ''} onChange={e => copy(e.target.value)}><option value="">—</option>{sources.map(m => <option key={m.id} value={m.id}>{m.form_name || m.form_key} · v{m.version}</option>)}</select></label>
-          <label className="text-xs font-medium text-slate-600">Type de session<select aria-label="Type de session" className={input} value={draft.default_session_type || ''} onChange={set('default_session_type')}><option value="">—</option>{SESSION_TYPES.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+          <label className="text-xs font-medium text-slate-600">Type de session<select aria-label="Type de session" className={input} value={draft.default_session_type || ''} onChange={set('default_session_type')}><option value="">—</option>{SESSION_TYPES.map(s => <option key={s} value={s}>{programmeName(s)}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Programme (texte)<input aria-label="Programme" className={input} maxLength={200} value={draft.default_program_interest_text || ''} onChange={set('default_program_interest_text')} /></label>
           <label className="text-xs font-medium text-slate-600">Apprenant<select aria-label="Apprenant" className={input} value={draft.learner_policy} onChange={set('learner_policy')}><option value="required">Obligatoire</option><option value="optional">Facultatif</option></select></label>
           <label className="text-xs font-medium text-slate-600">Date d’effet <span className="font-normal text-slate-500" data-testid="intake-effective-zone">(heure de ce navigateur : {browserZone()})</span><input aria-label="Date d’effet" type="datetime-local" className={input} value={toLocalInput(effectiveFrom)} onChange={e => setEffective(fromLocalInput(e.target.value))} /></label>
@@ -190,7 +191,7 @@ function PublishDialog({ connection, forms, initial, busy, onClose, onPublish })
           <dt className="text-slate-500">Formulaire</dt><dd className="font-mono">{data.form_key} · v{(versions.at(-1)?.version || 0) + 1}</dd>
           <dt className="text-slate-500">Nom</dt><dd>{data.form_name || '—'}</dd>
           <dt className="text-slate-500">Date d’effet (heure de Casablanca)</dt><dd>{when(data.effective_from)}</dd>
-          <dt className="text-slate-500">Type de session</dt><dd>{data.default_session_type || '—'}</dd>
+          <dt className="text-slate-500">Type de session</dt><dd>{data.default_session_type ? programmeName(data.default_session_type) : '—'}</dd>
           <dt className="text-slate-500">Programme</dt><dd>{data.default_program_interest_text || '—'}</dd>
           <dt className="text-slate-500">Apprenant</dt><dd>{data.learner_policy === 'optional' ? 'Facultatif' : 'Obligatoire'}</dd>
           <dt className="text-slate-500">Champs</dt><dd>{Object.keys(data.field_map).join(', ') || 'aucun'}</dd>

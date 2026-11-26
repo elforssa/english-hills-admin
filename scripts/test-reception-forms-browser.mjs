@@ -205,8 +205,12 @@ try {
   }
   const menu = name => async () => { await drawer().getByRole('button', { name: 'Autres actions', exact: true }).click(); await page.getByRole('menuitem', { name, exact: true }).click(); };
   const staleLostLead = intake(reception.id, 'Forms stale close');
-  await staleOld(staleLostLead, 'Clôturer comme perdu', menu('Clôturer comme perdu'));
-  assert.equal(sql(`select status from public.crm_leads where id=${q(staleLostLead)}`), 'LOST', 'close applies after the reload');
+  // B2 (§5.4): one « Clôturer le prospect » form; the reason is chosen, the status derived from it.
+  await staleOld(staleLostLead, 'Clôturer le prospect', menu('Clôturer le prospect'), async () => {
+    await dialog().getByLabel('Motif', { exact: true }).selectOption('not_interested');
+    await dialog().getByLabel('Pourquoi ?', { exact: true }).selectOption('price');
+  });
+  assert.equal(sql(`select status||':'||closure_reason from public.crm_leads where id=${q(staleLostLead)}`), 'LOST:price', 'close applies after the reload, with « Pourquoi ? » as the reason');
   const assignLead = intake(reception.id, 'Forms stale assign');
   await staleOld(assignLead, 'Attribuer un responsable', menu('Attribuer un responsable'), () => dialog().getByLabel('Responsable du prospect', { exact: true }).selectOption(director.id));
   assert.equal(sql(`select owner_id from public.crm_leads where id=${q(assignLead)}`), director.id, 'the assignment applies after the reload');
@@ -235,9 +239,9 @@ try {
   await dialog().getByLabel('Téléphone', { exact: true }).fill('0612345678');
   await dialog().getByLabel('Nom de l’apprenant', { exact: true }).fill('Apprenant synthétique');
   const first = 'Pas encore parlé · Premier contact';
-  await dialog().getByLabel('Origine', { exact: true }).selectOption('Téléphone');
+  await dialog().getByLabel('Canal', { exact: true }).selectOption('Téléphone');
   await dialog().getByLabel(first, { exact: true }).waitFor();
-  await dialog().getByLabel('Origine', { exact: true }).selectOption('Visite au centre');
+  await dialog().getByLabel('Canal', { exact: true }).selectOption('Visite au centre');
   assert.equal(await dialog().getByLabel(first, { exact: true }).count(), 0, 'a walk-in offers no « Pas encore parlé »');
   await dialog().getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await dialog().getByRole('alert').filter({ hasText: 'Choisissez la prochaine action.' }).waitFor();

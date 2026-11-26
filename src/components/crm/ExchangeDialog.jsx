@@ -15,8 +15,11 @@ import { checkPhone, formatPhoneFr } from '@/lib/phone.mjs';
 import { acknowledgedMatches, allAnswered, duplicateMatches, personHref } from '@/lib/people.mjs';
 import DuplicateGate from '@/components/people/DuplicateGate';
 
-const AGREED = ['keep', 'center_visit', 'callback', 'our_step', 'awaiting', 'enrol', 'lost', 'not_qualified'];
-const AFTER_WRONG_NUMBER = ['keep', 'callback', 'our_step', 'awaiting', 'not_qualified'];
+const AGREED = ['keep', 'center_visit', 'callback', 'our_step', 'awaiting', 'enrol', 'close'];
+// §5.4, day script 8 in 2: « Mauvais numéro » closes the prospect with that reason by
+// default; with the right number typed in, the current action is kept (script 8 in 3).
+const AFTER_WRONG_NUMBER = ['close', 'keep', 'callback', 'our_step', 'awaiting'];
+const WRONG_NUMBER_CLOSE = { kind: 'close', reason: 'wrong_number' };
 
 // « Noter un échange »: channel, result, then — when « On a parlé » — what was agreed.
 // A failed call keeps the next action (the server moves a call to its next slot).
@@ -55,12 +58,20 @@ export default function ExchangeDialog({ lead, initial = {}, onClose }) {
   }, [command.error, setStale]);
   // A gate answers for one number only: editing the number asks again.
   const matches = correcting && gate?.number === corrected.trim() ? gate.matches : null;
+  // The choice shown and sent: after a wrong number with nothing picked, the default.
+  const fallback = correcting ? { kind: 'keep' } : WRONG_NUMBER_CLOSE;
+  const chosen = result === 'wrong_number' && !form.kind ? fallback : form;
+  // A change made on the default (a motif, a précision) starts from that default.
+  const pickNext = update => choose(setForm)(old => {
+    const base = result === 'wrong_number' && !old.kind ? { ...old, ...fallback } : old;
+    return typeof update === 'function' ? update(base) : update;
+  });
   async function submit(event) {
     event.preventDefault();
     const saved = await command.run('crm_log_exchange', () => {
       if (!result) throw new Error('Choisissez le résultat de l’échange.');
       if (result === 'note' && !note.trim()) throw new Error('Précisez la note.');
-      const next = picks ? nextActionPayload(result === 'wrong_number' && !form.kind ? { kind: 'keep' } : form, seen.action) : 'keep';
+      const next = picks ? nextActionPayload(chosen, seen.action) : 'keep';
       if (correcting) {
         const checked = checkPhone(corrected);
         if (!checked.ok || !checked.e164) throw new Error(`Saisissez un numéro corrigé valide : ${checked.error || 'Numéro invalide'}.`);
@@ -77,7 +88,7 @@ export default function ExchangeDialog({ lead, initial = {}, onClose }) {
       };
     }, [lead.id, seen.version, channel, result, note, override, form, correcting ? corrected : '', matches ? answers : null]);
     if (saved) {
-      toast.success(correcting ? 'Numéro corrigé' : result === 'no_answer' ? 'Pas de réponse enregistré' : CLOSE_KINDS.includes(form.kind) && picks ? 'Prospect clôturé' : 'Échange enregistré');
+      toast.success(correcting ? 'Numéro corrigé' : result === 'no_answer' ? 'Pas de réponse enregistré' : CLOSE_KINDS.includes(chosen.kind) && picks ? 'Prospect clôturé' : 'Échange enregistré');
       onClose();
     }
   }
@@ -95,7 +106,7 @@ export default function ExchangeDialog({ lead, initial = {}, onClose }) {
       {channel === 'phone' && result === 'wrong_number' && <FormField label="Numéro corrigé" help="Facultatif : le bon numéro, si le contact l’a donné. L’appel reprend sur ce numéro."><input className={control} type="tel" maxLength={40} value={corrected} onChange={e => choose(setCorrected)(e.target.value)} /></FormField>}
       {matches && <DuplicateGate matches={matches} answers={answers} onAnswer={(key, value) => { command.clearError(); setAnswers(old => ({ ...old, [key]: value })); }} onOpen={m => window.open(personHref(m), '_blank', 'noopener')} openLabel="Ouvrir la fiche" />}
       {picks && <div className="rounded-lg border bg-slate-50 p-4"><p className="mb-2 text-sm font-semibold">{result === 'spoke' ? 'Ce qui a été convenu' : 'Et ensuite ?'}</p>
-        <NextActionPicker form={result === 'wrong_number' && !form.kind ? { ...form, kind: 'keep' } : form} setForm={choose(setForm)} current={seen.action} lead={lead} hours={hours.data} kinds={picks} /></div>}
+        <NextActionPicker form={result === 'wrong_number' && !form.kind ? { ...form, ...chosen } : form} setForm={pickNext} current={seen.action} lead={lead} hours={hours.data} kinds={picks} /></div>}
       <FormField label={result === 'note' ? 'Note' : 'Note (facultative)'}><textarea className={`${control} min-h-20`} maxLength={4000} value={note} onChange={e => choose(setNote)(e.target.value)} /></FormField>
       {result && CALL_RESULTS[result] && channel === 'phone' && result !== 'spoke' && <p className="text-xs text-slate-500">Une erreur se corrige par un nouvel échange : l’historique des appels n’est jamais modifié.</p>}
     </fieldset><FormFooter error={isRecordConflict(command.error) && !found ? null : command.error} stale={stale} busy={command.busy} onReload={reload} onCancel={closer.request} cancelLabel="Annuler" /></form>

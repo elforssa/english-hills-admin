@@ -2,7 +2,8 @@
 
 import { toast } from 'sonner';
 import { money, receiptAmounts, receiptNumberLabel, receiptStatus } from './receiptFinance.js';
-import { RECEIPT_PAPER_FORMAT, receiptPhone, receiptSchoolYear } from './receiptPresentation.js';
+import { RECEIPT_PAPER_FORMAT, receiptPhone, receiptSchoolYear, receiptServiceDescription } from './receiptPresentation.js';
+import { programmeName } from './programCatalog.mjs';
 import { retryingImport } from './retryingImport.mjs';
 
 const BLUE = [30, 77, 139];
@@ -53,8 +54,8 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
 
   // Client receipts never paginate. Fit the variable detail rows into one A5.
   const details = [receipt.nom_prenom, receiptPhone(receipt), receipt.email,
-    receipt.session_type, receiptSchoolYear(receipt), receipt.niveau,
-    receipt.service_description, receipt.mode_paiement, receipt.transaction_reference].filter(Boolean);
+    programmeName(receipt.session_type), receiptSchoolYear(receipt), receipt.niveau,
+    receiptServiceDescription(receipt), receipt.mode_paiement, receipt.transaction_reference].filter(Boolean);
   let detailFontSize = 8.5;
   const detailHeight = () => {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(detailFontSize);
@@ -118,10 +119,10 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   sectionTitle('Session');
   // The family projection carries is_legacy and no contact snapshot (plan PRF-r2 D1).
   const legacy = receipt.legacy || receipt.is_legacy;
-  detailRow('Session', receipt.session_type || (legacy ? 'Historique' : ''));
+  detailRow('Session', programmeName(receipt.session_type) || (legacy ? 'Historique' : ''));
   detailRow('Année scolaire', receiptSchoolYear(receipt));
   detailRow('Niveau', receipt.niveau);
-  detailRow('Service', receipt.service_description || (legacy ? 'Reçu historique' : ''));
+  detailRow('Service', receiptServiceDescription(receipt) || (legacy ? 'Reçu historique' : ''));
 
   sectionTitle('Paiement');
   amountRow('Prix brut convenu', `${money(amounts.gross)} MAD`);

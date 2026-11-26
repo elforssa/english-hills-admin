@@ -31,6 +31,12 @@ do $$ begin
      or to_regprocedure('public.phone_e164(text)') is null then
     raise exception 'Restore 139: migration 139 is not applied' using errcode = '55000';
   end if;
+  -- Rollback order (RWR-r5 B2, 2026-11-26): migration 140 rebuilt four of the bodies
+  -- this file restores (on 139's); its own restore runs first and returns them to 139.
+  if to_regprocedure('public.get_catalogue()') is not null then
+    raise exception 'Restore 139: migration 140 is applied; run scripts/rollback/140_catalogues_restore.sql first'
+      using errcode = '55000';
+  end if;
   if exists (select 1 from public.crm_data_step_journal where step = 'd3')
      and not exists (select 1 from public.crm_data_step_journal where step = 'd3_revert') then
     raise exception 'Restore 139: D3 ran; run crm_security.d3_revert() first' using errcode = '55000';

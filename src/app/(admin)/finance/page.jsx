@@ -1,5 +1,6 @@
 'use client';
 
+import { programmeName, serviceLine } from '@/lib/programCatalog.mjs';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getBrowserClient } from '@/lib/supabase';
@@ -129,7 +130,7 @@ export default function Finance() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
             {byProgram.map(p => (
               <div key={p.program} className="bg-muted rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground mb-1 truncate" title={p.program}>{p.program}</p>
+                <p className="text-xs text-muted-foreground mb-1 truncate" title={programmeName(p.program)}>{programmeName(p.program)}</p>
                 <p className="font-bold text-sm" style={{ color: 'var(--brand)' }}>{Math.round(Number(p.encaisse)).toLocaleString('fr-MA')} MAD</p>
                 {Number(p.restant) > 0 && <p className="text-xs" style={{ color: '#B91C2E' }}>{Math.round(Number(p.restant)).toLocaleString('fr-MA')} dû</p>}
               </div>
@@ -189,7 +190,7 @@ export default function Finance() {
                   <div key={r.id} className="px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm text-foreground truncate"><PersonLink id={r.student_id}>{r.nom_prenom}</PersonLink></p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{r.session_type} · {r.service_description}{r.due_date ? ` · échéance ${r.due_date}` : ''}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{programmeName(r.session_type)} · {serviceLine(r.service_description)}{r.due_date ? ` · échéance ${r.due_date}` : ''}</p>
                       {r.telephone && (telHref(r.telephone)
                         ? <a href={telHref(r.telephone)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mt-0.5">
                           <Phone size={11} /> {receiptPhone(r)}

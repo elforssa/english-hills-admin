@@ -16,7 +16,9 @@ import PageFrame from '@/components/operational/PageFrame';
 import PageHeader from '@/components/operational/PageHeader';
 import ReadState from '@/components/operational/ReadState';
 import { Button } from '@/components/ui/button';
-import { DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from '@/lib/ui/presentation.mjs';
+import { DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel, ageCategoryLabel } from '@/lib/ui/presentation.mjs';
+import { originLabel, studentOriginCode } from '@/lib/catalogue.mjs';
+import { serviceLine } from '@/lib/programCatalog.mjs';
 import { ArrowLeft, CircleDollarSign, Edit, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
@@ -259,8 +261,8 @@ function StudentDetail() {
             {charges.filter((charge) => !charge.voided_at).map((charge) => (
               <div key={charge.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm">
                 <div>
-                  <p className="font-semibold">{charge.session_type || 'Session'}{charge.school_year ? ` · ${charge.school_year}` : ''}</p>
-                  <p className="text-xs text-muted-foreground">{charge.service_description || 'Engagement'}{charge.due_date ? ` · échéance ${charge.due_date}` : ''}</p>
+                  <p className="font-semibold">{programmeLabel(charge.session_type)}{charge.school_year ? ` · ${charge.school_year}` : ''}</p>
+                  <p className="text-xs text-muted-foreground">{serviceLine(charge.service_description) || 'Engagement'}{charge.due_date ? ` · échéance ${charge.due_date}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_COLORS[charge.settlement_status] || PAYMENT_STATUS_COLORS['En attente']}`}>{charge.settlement_status}</span>
@@ -280,9 +282,9 @@ function StudentDetail() {
             ['Date de naissance', student.date_naissance],
             ['Téléphone', student.telephone ? formatPhoneFr(student.telephone) : null],
             ['Email', student.email],
-            ['Catégorie', student.age_category],
+            ['Catégorie', ageCategoryLabel(student.age_category)],
             ['Programme du dossier', <ProgrammePill key="programme" sessionType={student.session_type} />],
-            ['Comment connu le centre', student.referral_source || '—'],
+            ['Origine', originLabel(studentOriginCode(student))],
           ].map(([label, val]) => (
             <div key={label}>
               <p className="text-xs text-muted-foreground">{label}</p>

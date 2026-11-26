@@ -97,7 +97,7 @@ test('duplicate rule mirror (§6.1): same charge, or mine within 2 minutes', () 
   assert.equal(duplicateRule({ ...base, student_id: 't' }, ctx), null);
   assert.ok(DUPLICATE_REASON.same_charge && DUPLICATE_REASON.recent_by_you);
   assert.equal(duplicateLine({ receipt_number: 'EH-2026-00430', date: '2026-11-25', amount: 500, service_description: 'Yearly · 2026/2027' }),
-    'Reçu N° EH-2026-00430 · 25/11/2026 · 500 MAD · Yearly · 2026/2027');
+    'Reçu N° EH-2026-00430 · 25/11/2026 · 500 MAD · Programme annuel · 2026/2027', 'the stored code reads in French (§5.4)');
   assert.match(balanceLine(legacy), /^Ancien solde · reste 900 MAD$/);
   assert.equal(mad(1500.5), `${new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(1500.5)} MAD`, 'as receiptFinance.money');
   assert.equal(mad(500), '500 MAD');

@@ -61,8 +61,14 @@ assert.deepEqual(nextActionPayload({ kind: 'reminder', preset: 'in_2_hours' }, c
 assert.deepEqual(nextActionPayload({ kind: 'awaiting' }, call), { task_type: 'awaiting_prospect' }, 'default relance is the server’s today + 5');
 assert.deepEqual(nextActionPayload({ kind: 'awaiting', noRelance: true }, call), { task_type: 'awaiting_prospect', due_at: null });
 assert.deepEqual(nextActionPayload({ kind: 'enrol' }, call), { enrol: { due_preset: 'tomorrow' } });
-assert.deepEqual(nextActionPayload({ kind: 'lost', reason: 'price' }, visit), { close: { status: 'LOST', reason: 'price' } }, 'closing never needs « Remplace »');
-assert.throws(() => nextActionPayload({ kind: 'lost', reason: 'other' }, call), /Précisez/);
+// RWR-r5 §5.4 (migration 140): one « Clôturer » with one reason list; the server derives
+// the status from the reason, so the payload carries none.
+assert.deepEqual(nextActionPayload({ kind: 'close', reason: 'not_interested', why: 'price' }, visit), { close: { reason: 'price' } }, 'closing never needs « Remplace »');
+assert.deepEqual(nextActionPayload({ kind: 'close', reason: 'wrong_number' }, call), { close: { reason: 'wrong_number' } });
+assert.throws(() => nextActionPayload({ kind: 'close', reason: 'other' }, call), /Précisez/);
+assert.throws(() => nextActionPayload({ kind: 'close', reason: 'not_interested' }, call), /Choisissez pourquoi/);
+assert.throws(() => nextActionPayload({ kind: 'close' }, call), /motif/);
+assert.equal(NEXT_KINDS.lost, undefined, 'no separate « Perdu » / « Non qualifié » kinds');
 assert.throws(() => nextActionPayload({ kind: 'callback', date: '2026-11-23' }, call), /date et l’heure/);
 assert.throws(() => nextActionPayload({}, call), /prochaine action/);
 // OD-18.

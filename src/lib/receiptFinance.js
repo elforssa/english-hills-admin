@@ -1,4 +1,5 @@
 import { centreDate, centreMonthStart } from './centreClock.mjs';
+import { programmeName, serviceLine } from './programCatalog.mjs';
 
 export const PAYMENT_METHODS = ['Espèces', 'Carte bancaire', 'Virement', 'Chèque'];
 
@@ -83,9 +84,9 @@ export function financeExportRow(receipt, receiptStatusLabel = receiptStatus(rec
     'N° reçu': receipt.receipt_number || '',
     Apprenant: receipt.nom_prenom,
     Date: receipt.date,
-    Session: receipt.session_type || '',
+    Session: programmeName(receipt.session_type),
     'Année scolaire': receipt.school_year_snapshot || '',
-    Service: receipt.service_description || '',
+    Service: serviceLine(receipt.service_description),
     Niveau: receipt.niveau || '',
     'Prix brut': amounts.gross,
     Remise: amounts.discount,

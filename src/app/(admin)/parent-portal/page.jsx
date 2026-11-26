@@ -15,7 +15,8 @@ import MessagesTab from '@/components/portals/MessagesTab';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 import { getLearnerRecord, getMyLearners, getMyMessages } from '@/lib/portal';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
-import { receiptServiceSummary } from '@/lib/receiptPresentation';
+import { receiptServiceDescription, receiptServiceSummary } from '@/lib/receiptPresentation';
+import { ageCategoryLabel, dossierLabel } from '@/lib/ui/presentation.mjs';
 import { formatPhoneFr } from '@/lib/phone.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -276,8 +277,8 @@ export default function ParentPortal() {
                 </div>
                 <div>
                   <p className="font-bold text-lg">{selectedStudent.full_name}</p>
-                  <p className="text-muted-foreground text-sm">{selectedStudent.age_category} · Niveau {selectedStudent.niveau_cefr || '—'}</p>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">{selectedStudent.status}</span>
+                  <p className="text-muted-foreground text-sm">{ageCategoryLabel(selectedStudent.age_category)} · Niveau {selectedStudent.niveau_cefr || '—'}</p>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">{dossierLabel(selectedStudent.status)}</span>
                 </div>
               </div>
               {/* Re-enrollment starts at the centre with a payment (plan Enrollment at payment, D4):
@@ -369,7 +370,7 @@ export default function ParentPortal() {
                 <div>
                   <button type="button" onClick={() => setPreviewReceipt(r)} className="inline-flex min-h-10 items-center text-left text-sm font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{r.receipt_number || `Reçu du ${r.date}`}</button>
                   <p className="text-xs text-muted-foreground">{r.date}</p>
-                  <p className="text-xs text-muted-foreground">{receiptServiceSummary(r)} · {r.service_description || 'Reçu historique'} · {r.mode_paiement}</p>
+                  <p className="text-xs text-muted-foreground">{receiptServiceSummary(r)} · {receiptServiceDescription(r) || 'Reçu historique'} · {r.mode_paiement}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
