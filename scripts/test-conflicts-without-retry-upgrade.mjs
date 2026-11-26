@@ -4,7 +4,7 @@
 // Never reads .env.local or accepts a database URL from the environment.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { assertLocalStack, resetLocalDatabase } from './lib/local-stack.mjs';
 assertLocalStack({ dbPort: '54322' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
@@ -133,5 +133,6 @@ console.log('PASS catalog zero rule: clean after 119, fails on a reintroduced ra
 console.log('Bringing the ledger to the current migrations with supabase migration up');
 cli(['migration', 'up', '--local']);
 assert.equal(sql("select name from supabase_migrations.schema_migrations where version = '119'"), 'conflicts_without_retry');
-assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '141');
+// Follow-ups 142 (item 6): the ceiling is the newest file in supabase/migrations, never a fixed number.
+assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), String(Math.max(...readdirSync('supabase/migrations').map(f => /^(\d{3})_/.exec(f)?.[1]).filter(Boolean).map(Number))));
 assert.equal(catalogFails(), null, 'catalog zero rule at the current migrations');

@@ -612,8 +612,14 @@ insert into public.portfolios(id, student_id, student_name, title, project_type,
 update public.placement_tests set score = 15 where id = pg_temp.id(901);
 do $$ declare t text; n integer; begin
   foreach t in array array['assessments','learning_assessments','placement_tests','portfolios','attendance'] loop
-    execute format('delete from public.%I where student_id = %L', t, pg_temp.id(201));
-    get diagnostics n = row_count;
+    begin
+      execute format('delete from public.%I where student_id = %L', t, pg_temp.id(201));
+      get diagnostics n = row_count;
+    exception when insufficient_privilege then
+      -- Follow-ups 142 (item 10): attendance has no API DELETE grant any more (42501).
+      perform pg_temp.ok(t = 'attendance', 'T-27 only attendance refuses the delete outright, not ' || t);
+      n := 0;
+    end;
     perform pg_temp.ok(n = 0, 'T-27 a teacher deletes no ' || t || ' row');
   end loop;
 end $$;

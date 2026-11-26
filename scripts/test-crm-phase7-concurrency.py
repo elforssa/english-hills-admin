@@ -137,5 +137,8 @@ alter table public.crm_activities enable trigger crm_activities_immutable;alter 
 -- Receipts and charges after the CRM history that references them (142: the payment now runs in
 -- crm_enroll_and_collect, so the conversion activities point at the receipt).
 delete from public.receipts where student_id in({student_list});delete from public.charges where student_id in({student_list});
-set local eh.enrollment_command = on; delete from public.enrollments where student_id in({student_list});delete from public.students where id in({student_list});delete from auth.users where id='{actor}';commit;""")
+set local eh.enrollment_command = on; delete from public.enrollments where student_id in({student_list});delete from public.students where id in({student_list});
+-- The synthetic director may be the only one on a fresh CI stack: removed under the local teardown guard (as phase 4).
+alter table public.profiles disable trigger role_security_guard;delete from auth.users where id='{actor}';
+update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');alter table public.profiles enable trigger role_security_guard;commit;""")
         print('PASS synthetic revenue fixtures removed; all guards restored',flush=True)

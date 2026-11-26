@@ -2127,6 +2127,10 @@ That is 24 tables and the 2 views. On every one, `anon` loses `DELETE` and `TRUN
   - Python concurrency: phase 4, 5 and 6, rcc-a2 and finance-batch-e (`trusted()`).
 - **`test-enrollment-group-consistency.sql` (item 10):** the API delete of an enrollment now fails with 42501 (the `authenticated` DELETE is revoked), so the five deletes of protected history assert the 42501 first, then prove the `egc.history_protected` trigger as the owner (`pg_temp.delete_guarded`). The trigger assertion is unchanged.
 - **`test-batch3b-security.mjs` (item 10):** the staff API delete of a closed enrollment now asserts 403 / 42501 and that the row stays (no screen deletes an enrollment); the clean-up removes it as before.
+- **`test-receptionist-communication-reports.sql` and `test-receptionist-dossier-teaching.sql` (item 10):** the receptionist's delete of a notification and of a dismissal record was a filtered zero-row delete; with the grant revoked it is refused with 42501, which the tests now assert (`pg_temp.refused`).
+- **`test-portal-readiness.sql` (item 10):** T-27's teacher delete of attendance was a filtered zero-row delete; it is now refused with 42501, and only attendance may refuse that way (the other four tables still answer zero rows).
+- **`test-crm-phase7-concurrency.py` (item 7):** the clean-up removes the synthetic director under the local teardown guard, as phase 4 does, because on a fresh CI stack it is the only director.
+- **`test-conflicts-without-retry-upgrade.mjs` (item 6):** the « current » ceiling is the newest file in `supabase/migrations` instead of a fixed « 140 ».
 - **`test-catalogues.sql` (item 2):** the grant check adds « not executable by service_role ».
 - **The five « current » upgrade tests (item 6):** the ceiling comes from `scripts/lib/upgrade-ceiling.sql`.
 - **`test-receptionist-function-classification` fixture (item 9):** regenerated with `--write`; only the `crm_create_manual_lead` entry is removed.

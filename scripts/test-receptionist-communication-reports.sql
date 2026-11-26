@@ -241,7 +241,8 @@ select pg_temp.ok(exists (select 1 from public.notifications where subject = 'In
 select pg_temp.refused($q$insert into public.notifications(type, recipient_email, subject, message)
   values ('general', 'nobody@example.test', 'X', 'Y')$q$, '42501', 'reception: notification to unknown address refused');
 select pg_temp.ok(pg_temp.touched($q$update public.notifications set subject = 'Changed' where subject = 'Info'$q$) = 0, 'reception: notification not edited');
-select pg_temp.ok(pg_temp.touched($q$delete from public.notifications where subject = 'Info'$q$) = 0, 'reception: notification not deleted');
+-- Follow-ups 142 (item 10): no screen deletes a notification, so the API DELETE grant is gone (42501).
+select pg_temp.refused($q$delete from public.notifications where subject = 'Info'$q$, '42501', 'reception: notification not deleted');
 insert into public.announcements(title, body, audience, author) values ('RPW C annonce', 'Fermeture lundi.', 'all', 'RPW C reception');
 select pg_temp.ok(exists (select 1 from public.announcements where title = 'RPW C annonce'), 'reception: announcement read');
 select pg_temp.ok(pg_temp.touched($q$update public.announcements set pinned = true where title = 'RPW C annonce'$q$) = 0, 'reception: announcement not edited');
