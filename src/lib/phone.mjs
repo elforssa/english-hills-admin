@@ -37,11 +37,16 @@ export function phoneKey(raw) {
   return digits || null;
 }
 
-// A search box matches phones once the query holds 6 or more significant digits.
+// A search box matches phones once the query holds 6 or more significant digits. When
+// removing a leading 00212, 212 or 00 would leave fewer, the typed digits are kept: in a
+// partial query (« 003-97-23 ») they are part of the number (migration 141, 5b). A trunk
+// 0 alone is still removed (« 06 12 34 » is 5 significant digits: no phone search).
 export const PHONE_SEARCH_MIN_DIGITS = 6;
 export function phoneSearchKey(query) {
   const key = phoneKey(query);
-  return key && key.length >= PHONE_SEARCH_MIN_DIGITS ? key : null;
+  if (key && key.length >= PHONE_SEARCH_MIN_DIGITS) return key;
+  const digits = String(query ?? '').replace(/[^0-9]/g, '');
+  return digits.length >= PHONE_SEARCH_MIN_DIGITS && !/^0([^0]|$)/.test(digits) ? digits : null;
 }
 
 // « 06 12 34 56 78 » for Moroccan numbers; the E.164 form otherwise; the raw text

@@ -102,11 +102,16 @@ assert.equal(sql(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.
   and (has_function_privilege('authenticated',p.oid,'execute') or has_function_privilege('anon',p.oid,'execute') or has_function_privilege('service_role',p.oid,'execute'))`), '0', 'D7 not granted');
 assert.equal(sql(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='crm_security' and p.proname ~ '^d7_'`), '4', 'D7 present');
 assert.equal(sql(`select count(*) from public.crm_data_step_journal where step in ('d7','d7_revert')`), '0', 'D7 not run');
+// 5b (§5.1): phone_search_key keeps the typed digits of a partial query; same posture and grants.
+assert.notEqual(after.functions['phone_search_key(text)'][0], before.functions['phone_search_key(text)'][0], 'phone_search_key re-created');
+assert.deepEqual(after.functions['phone_search_key(text)'].slice(1), before.functions['phone_search_key(text)'].slice(1), 'phone_search_key: same posture, owner and grants');
+assert.equal(sql(`select coalesce(public.phone_search_key('003-97-23'),'-')||'|'||coalesce(public.phone_search_key('06 12 34'),'-')||'|'||public.phone_search_key('06 12 34 56')`), '0039723|-|6123456',
+  'partial digits kept; 5 significant digits still no phone search; the 139 key otherwise');
 // An old file keeps saving unrelated edits; the deployed (pre-C2) build's four-argument save_attendance call still resolves.
 sql(as(staff(3), `select public.save_receptionist_student('${mismatch}',(select updated_at from public.students where id='${mismatch}'),'{"notes":"Appel du parent"}')`));
 sql(as(staff(3), `select public.save_attendance('${learner}','${group}',${today}-1,'Retard')`));
 assert.equal(sql(`select status from public.attendance where student_id='${learner}' and group_id='${group}' and session_date=${today}-1`), 'Retard', 'the old call corrects a row');
-console.log('PASS 140 → 141: no row written, bounds from the audience, placement policies and three triggers, D7 present but not run or granted, old calls still work');
+console.log('PASS 140 → 141: no row written, bounds from the audience, placement policies and three triggers, phone_search_key from 6 typed digits, D7 present but not run or granted, old calls still work');
 
 // 3. Under 141, then the restores.
 sql(as(staff(3), `select public.update_placement_test_result('${planned}',(select updated_at from public.placement_tests where id='${planned}'),'{"status":"Annulé","cancel_reason":"Famille absente"}')`));

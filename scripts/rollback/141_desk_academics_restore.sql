@@ -12,7 +12,8 @@
 --  * restores the 140 bodies of the four functions 141 re-created in place
 --    (crm_update_placement_test, enforce_attendance_integrity, save_receptionist_group,
 --    save_receptionist_student) and the four-argument save_attendance (141 replaced it
---    by a five-argument one), then checks each prosrc md5 against the 140 one;
+--    by a five-argument one) and the 139 phone_search_key, then checks each prosrc md5
+--    against the 140 one;
 --  * restores the placement_tests policies 141 replaced (« placement admin all » and the
 --    receptionist insert and update policies, as 124 left them);
 --  * drops the two triggers 141 added (students_rules_guard, placement_tests_rules) and
@@ -386,6 +387,13 @@ from public.programmes p where p.code = pl.programme_code and p.audience = 'adul
 update public.programme_levels pl set max_age = null
 from public.programmes p where p.code = pl.programme_code and p.audience in ('enfants', 'ados') and pl.min_age is null and pl.max_age = 17;
 
+-- phone_search_key: the 139 body (141 section 5b).
+create or replace function public.phone_search_key(query text)
+returns text language sql immutable parallel safe
+set search_path = pg_catalog, pg_temp as $$
+ select case when length(k)>=6 then k end from (select public.phone_key(query) k) x
+$$;
+
 -- The restored bodies are exactly the ones 140 left live (141's section 0 map).
 do $$
 declare f record;
@@ -395,7 +403,8 @@ begin
       'public.enforce_attendance_integrity()', 'eba93c3d81c78116a3af48cd7aa5e2c5',
       'public.save_attendance(uuid,uuid,date,text)', '246adc04e3531d37e59ed2c9b9d9eb35',
       'public.save_receptionist_group(uuid,timestamp with time zone,jsonb)', '23cdb858bb4a50fece6528004da9b8b0',
-      'public.save_receptionist_student(uuid,timestamp with time zone,jsonb)', '525b4b0d2f664c8818a055e34bb6d89c')) loop
+      'public.save_receptionist_student(uuid,timestamp with time zone,jsonb)', '525b4b0d2f664c8818a055e34bb6d89c',
+      'public.phone_search_key(text)', '8be52274875cd6a4e999312e13e39683')) loop
     if (select md5(prosrc) from pg_proc where oid = to_regprocedure(f.key)) is distinct from f.value then
       raise exception 'Restore 141: % is not the 140 body after the restore', f.key using errcode = 'XX000';
     end if;

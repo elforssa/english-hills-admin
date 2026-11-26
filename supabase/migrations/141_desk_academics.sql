@@ -31,6 +31,10 @@
 --    refused for the category; existing files are not re-checked until edited.
 --  * Role surface (§6.5, OD-9 A): save_receptionist_group refuses to create an online
 --    group or to move a group to an online programme (NF-16); it accepts class_days.
+--  * Phone search (§5.1, receptionist observation 2; Verify run 45889045886):
+--    phone_search_key (live 139 body) keeps the typed digits when removing a leading
+--    00212, 212 or 00 would leave fewer than 6 of them: « 003-97-23 », digits of a
+--    stored number, was cut to « 39723 » and matched nothing in any search box.
 --
 -- Unchanged: set_next_action and the one-action rule, the lifecycle barrier, event
 -- types, first-touch immutability, every finance function, grant and policy; the
@@ -51,7 +55,8 @@ begin
       'public.enforce_attendance_integrity()', 'eba93c3d81c78116a3af48cd7aa5e2c5',
       'public.save_attendance(uuid,uuid,date,text)', '246adc04e3531d37e59ed2c9b9d9eb35',
       'public.save_receptionist_group(uuid,timestamp with time zone,jsonb)', '23cdb858bb4a50fece6528004da9b8b0',
-      'public.save_receptionist_student(uuid,timestamp with time zone,jsonb)', '525b4b0d2f664c8818a055e34bb6d89c')) loop
+      'public.save_receptionist_student(uuid,timestamp with time zone,jsonb)', '525b4b0d2f664c8818a055e34bb6d89c',
+      'public.phone_search_key(text)', '8be52274875cd6a4e999312e13e39683')) loop
     if to_regprocedure(f.key) is null
        or (select md5(prosrc) from pg_proc where oid = to_regprocedure(f.key)) is distinct from f.value then
       raise exception 'Migration 141: % differs from the body 140 left live; rebuild 141 on the live definition', f.key
@@ -781,6 +786,24 @@ AS $function$ declare g public.groups%rowtype;
   end if;
   return next;
 end $function$;
+
+-- ---------------------------------------------------------------------------
+-- 5b. Phone search from 6 typed digits (§5.1). phone_key removes one leading 00212, 212,
+--     00 or 0 (a trunk or international prefix); in a partial query those digits may be
+--     part of the number itself. The key is the 139 one when it keeps 6 digits or more;
+--     otherwise, when the removed prefix was 00, 212 or 00212 (more than the trunk 0) and
+--     the query holds 6 digits or more, the query's own digits (still a run of the stored
+--     number); otherwise no phone match. A trunk 0 alone keeps the 139 rule: « 06 12 34 »
+--     (5 significant digits) is no phone search. Same signature, posture and grants (create or replace);
+--     every search box calls it (search_students_page, find_people, crm_search_leads,
+--     opportunity_ids, search_desk_students). Mirrored by phoneSearchKey in src/lib/phone.mjs.
+-- ---------------------------------------------------------------------------
+create or replace function public.phone_search_key(query text)
+returns text language sql immutable parallel safe
+set search_path = pg_catalog, pg_temp as $$
+ select case when length(k)>=6 then k when length(d)>=6 and d !~ '^0([^0]|$)' then d end
+ from (select public.phone_key(query) k, regexp_replace(coalesce(query,''),'[^0-9]','','g') d) x
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 6. Data step D7 (group class days) — shipped, NOT run. Operator only, with the owner's
