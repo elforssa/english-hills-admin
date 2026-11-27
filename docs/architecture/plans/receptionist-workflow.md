@@ -1978,7 +1978,7 @@ The superseded first backup (12:04:02–12:06:22 UTC, data 12,195,723 bytes, `e5
 
 **Release notes for C2 (for the release approval; nothing here is authorized).**
 
-0. **Read-only pre-check before 141** (in one read-only transaction; Q1 and review B1). Production on 2026-11-26 (reviewer's read): 2 future « Planifié » tests, 0 with a level. Learner tests booked with the deployed B2 form until the C2 build is live carry « A1 »; since review B1 they can still be moved, cancelled and marked « Absent » after their start, and the level is replaced when the result is written.
+0. **Read-only pre-check before 141** (in one read-only transaction; Q1 and review B1). The release operator runs it at release time and records the counts in the release record. Learner tests booked with the deployed B2 form until the C2 build is live carry « A1 »; since review B1 they can still be moved, cancelled and marked « Absent » after their start, and the level is replaced when the result is written.
 
    ```sql
    begin transaction read only;
@@ -2007,6 +2007,8 @@ The superseded first backup (12:04:02–12:06:22 UTC, data 12,195,723 bytes, `e5
       and date_naissance > ((now() at time zone public.centre_utc_offset())::date - interval '1 year')::date;
    rollback;
    ```
+
+   Query b also counts « Annulé » tests that kept the old form's « A1 » (any status other than « Planifié » with a level or score), so its count can run high; such rows are not results.
 
    None of these rows is changed by 141. Rows in b, c or d are refused only when that value is written again (a result or status change, the category, programme or level, the birth date); report the counts with the release approval.
 1. Apply 141 (after 140), then deploy the C2 build. The deployed B2 build keeps working on 141 except where C2 changes the rules on purpose: its « Planifier un test » insert and its learner-test edits are refused for every staff role (no staff table policies), it can still offer « Passé » (refused by `crm_update_placement_test`), and its attendance page saves untouched rows as « Présent » unless refused by the new date rules. Deploy the build right after the migration.
