@@ -121,5 +121,5 @@ for (const path of Object.keys(STATIC)) assert.ok(scripts.includes(path), `${pat
 const workflow = readFileSync(join(REPO_ROOT, '.github/workflows/verify.yml'), 'utf8');
 assert.doesNotMatch(workflow, /supabase db reset/, 'CI resets go through local-stack.mjs db-reset');
 assert.match(workflow, /\n {6}HILLS_LOCAL_STACK: hills-admin-next\n/, 'the local-database job names the stack');
-assert.match(workflow, /- run: supabase start\n {6}- name: Local-stack guard[^\n]*\n {8}run: node scripts\/lib\/local-stack\.mjs assert --db-port 54322 --api-url http:\/\/127\.0\.0\.1:54321 --container supabase_db_hills-admin-next\n/, 'CI checks the guard right after supabase start');
+assert.match(workflow, /- (?:name: [^\n]*\n {8})?run: supabase start(?: --exclude [a-z,-]+)?\n {6}- name: Local-stack guard[^\n]*\n {8}run: node scripts\/lib\/local-stack\.mjs assert --db-port 54322 --api-url http:\/\/127\.0\.0\.1:54321 --container supabase_db_hills-admin-next\n/, 'CI checks the guard right after supabase start');
 console.log(`PASS local-stack ratchet: ${scripts.length} scripts checked; every hard-coded port, container or reset goes through the guard; CI names the stack`);

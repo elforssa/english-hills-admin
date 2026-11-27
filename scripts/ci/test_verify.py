@@ -432,6 +432,22 @@ class VerificationTests(unittest.TestCase):
                       'test-portal-readiness.sql', 'test-portal-readiness.mjs', 'test-portal-readiness-browser.mjs',
                       'test-portal-readiness-concurrency.py'):
             self.assertEqual(database.count('scripts/' + suite), 1, suite)
+        # The CRM and reception browser suites each run once, in a shard on Chromium and WebKit.
+        browsers = dict(re.findall(r'- shard: (\S+)\n\s+browsers: (.+)\n', database))
+        for suite in ('npm run test:crm-lifecycle-browser', 'node scripts/test-crm-phase11-browser.mjs',
+                      'npm run test:crm-opportunities-browser', 'npm run test:crm-work-calendar-browser',
+                      'npm run test:crm-intake-admin-browser', 'npm run test:reception-browser'):
+            with self.subTest(suite=suite):
+                self.assertEqual(database.count(suite), 1, suite)
+                step = database[:database.index(suite)].rsplit('\n      - name: ', 1)[1]
+                shard = re.search(r"matrix\.shard == '([^']+)'", step).group(1)
+                self.assertEqual(browsers.get(shard), 'chromium webkit', shard)
+        # Every upgrade shard opens by resetting to its own starting version, so it never
+        # depends on the state a step in another shard used to leave behind.
+        for shard in (s for s in shards if s.startswith('upgrades-')):
+            with self.subTest(shard=shard):
+                first = database.split(f"if: matrix.shard == '{shard}'", 1)[1].split('\n      - ', 1)[0]
+                self.assertRegex(first, r'run: \|\n\s+node scripts/lib/local-stack\.mjs db-reset --version \d+ --no-seed\n')
         # Portal readiness upgrade rehearsal: both modes, each from a database at 121.
         self.assertEqual(database.count('node scripts/test-portal-readiness-upgrade.mjs '), 2)
         self.assertIn('python3 scripts/ci/sqlstate_guard.py', jobs[3])
