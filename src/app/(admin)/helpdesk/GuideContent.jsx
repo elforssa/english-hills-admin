@@ -75,7 +75,7 @@ export default function GuideContent() {
 </div>
 <h3 id="menu">Votre page d’accueil et votre menu</h3>
 <figure className="fig">
-<Image src="/helpdesk/s01-board.jpg" width={1700} height={1075} alt="Page Opportunités avec le menu de gauche, les vues, le bouton Ajouter un prospect et cinq colonnes de prospects" unoptimized tabIndex={0} role="button" /><figcaption>La page d’accueil&nbsp;: le tableau des prospects, par étape.</figcaption>
+<Image src="/helpdesk/s01-board.jpg" width={1700} height={1075} alt="Page Opportunités avec le menu de gauche, les quatre onglets, le bouton Ajouter un prospect et cinq colonnes de prospects portant le nom du responsable" unoptimized tabIndex={0} role="button" /><figcaption>La page d’accueil&nbsp;: le tableau des prospects, par étape.</figcaption>
 <ol className="legend">
 <li>Le menu <span className="menu">CRM</span> contient <span className="menu">Opportunités</span> (cette page) et <span className="menu">Tâches</span>.</li>
 <li>Les <b>onglets</b>&nbsp;: <span className="ui">Tous</span>, <span className="ui">Mes prospects</span>, <span className="ui">À prendre</span> (ceux que personne n’a encore pris) et <span className="ui">Clôturés</span>. Chaque carte porte le nom du responsable, ou «&nbsp;À prendre&nbsp;».</li>
@@ -299,7 +299,7 @@ export default function GuideContent() {
 <p>Une routine simple pour ne rien laisser passer. Pour la rentrée et la fin de mois, voir <a href="#q14">Q14</a>.</p>
 </header>
 <figure className="fig">
-<Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches avec le filtre Moi plus non attribué, les onglets En retard, Aujourd’hui, Demain, À venir, En attente, un appel et un rendez-vous au centre" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin. Une ligne par contact, avec sa prochaine action&nbsp;: une mère et ses deux enfants tiennent sur une seule ligne. <i>Capture de la version précédente&nbsp;: les deux listes «&nbsp;Responsable&nbsp;» sont remplacées par trois onglets.</i></figcaption>
+<Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches avec les trois onglets Mes prospects, À prendre et Toute l’équipe, les échéances En retard, Aujourd’hui, Demain, À venir, En attente, un appel et un rendez-vous au centre" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin. Une ligne par contact, avec sa prochaine action&nbsp;: une mère et ses deux enfants tiennent sur une seule ligne.</figcaption>
 <ol className="legend">
 <li>Trois onglets&nbsp;: <span className="ui">Mes prospects</span> (vos suivis, ouvert par défaut), <span className="ui">À prendre</span> (ce que personne n’a pris, avec un compteur) et <span className="ui">Toute l’équipe</span> (avec le choix d’une personne).</li>
 <li>Les échéances&nbsp;: <b>En retard</b>, <b>Aujourd’hui</b>, <b>Demain</b>, <b>À venir</b> et <b>En attente</b>, avec le nombre de prospects dans chaque onglet.</li>
@@ -406,9 +406,9 @@ export default function GuideContent() {
 </ul>
 <h4>Changer le responsable d’un prospect</h4>
 <figure className="fig narrow">
-<Image src="/helpdesk/s05b-assign.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec le menu Autres actions ouvert sur Attribuer un responsable (capture de la version précédente)" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<Image src="/helpdesk/s05b-assign.jpg" width={1700} height={1075} alt="Fiche d’un prospect à prendre, avec le bouton Je m’en occupe et le menu Autres actions ouvert sur Changer de responsable" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li>La fiche indique le responsable du prospect. Si personne ne l’a pris, elle indique «&nbsp;À prendre&nbsp;» avec le bouton <span className="ui">Je m’en occupe</span>.</li>
-<li><span className="ui">Autres actions</span> › <span className="ui">Changer de responsable</span> (le prospect, «&nbsp;Moi&nbsp;» en tête de liste) ou <span className="ui">Confier cette action à…</span> (seulement l’action). Dans la capture, ces deux entrées portent leur ancien nom.</li>
+<li><span className="ui">Autres actions</span> › <span className="ui">Changer de responsable</span> (le prospect, «&nbsp;Moi&nbsp;» en tête de liste) ou <span className="ui">Confier cette action à…</span> (seulement l’action). Le même menu contient <span className="ui">Modifier la fiche</span>, <span className="ui">Ajouter un enfant</span> et <span className="ui">Clôturer le prospect</span>.</li>
 </ol>
 </figure>
 <p>Prenez un prospect «&nbsp;À prendre&nbsp;» dès que vous vous en occupez, avec <span className="ui">Je m’en occupe</span>&nbsp;: il passe dans <span className="ui">Mes prospects</span>, et vos collègues voient votre nom sur sa carte. Si une collègue l’a pris juste avant vous, la plateforme vous le dit («&nbsp;Déjà pris ou modifié&nbsp;») et met la liste à jour&nbsp;: rien n’est enregistré deux fois.</p>

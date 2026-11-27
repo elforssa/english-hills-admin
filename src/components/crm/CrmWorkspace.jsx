@@ -15,7 +15,7 @@ import LazyOverlay from './LazyOverlay';
 import WorkQueue from './WorkQueue';
 import OpportunitiesBoard from './OpportunitiesBoard';
 import OpportunitiesList from './OpportunitiesList';
-import OpportunityFilters from './OpportunityFilters';
+import OpportunityFilters, { OpportunityTabs } from './OpportunityFilters';
 import ScrollRow from './ScrollRow';
 import useResponsiveBand from './useResponsiveBand';
 // The drawer and the manual-create dialog are needed only after a click. Load them
@@ -119,18 +119,24 @@ export default function CrmWorkspace({
   const closedCount = Number.isFinite(counts?.LOST) && Number.isFinite(counts?.NOT_QUALIFIED) ? counts.LOST + counts.NOT_QUALIFIED : '—';
   const filtered = filters.view !== 'all' || !!contact || Object.entries(filters).some(([key,value]) => !['view','owner'].includes(key) && value) || filters.owner !== 'all';
   const closedHref = () => { const next = new URLSearchParams(params.toString()); next.set('view', 'closed'); return `${pathname}?${next}`; };
-  const toggle = <div role="group" aria-label="Présentation" className="flex shrink-0 gap-1"><Button variant={layout === 'board' ? 'default' : 'outline'} disabled={filters.view === 'closed'} aria-pressed={layout === 'board'} onClick={() => setFilter('layout','board')}><Columns3 size={16} /><span className="max-sm:sr-only">Tableau</span></Button><Button variant={layout === 'list' ? 'default' : 'outline'} aria-pressed={layout === 'list'} onClick={() => setFilter('layout','list')}><List size={16} /><span className="max-sm:sr-only">Liste</span></Button></div>;
+  const toggle = <div role="group" aria-label="Présentation" className="flex shrink-0 gap-1"><Button variant={layout === 'board' ? 'default' : 'outline'} disabled={filters.view === 'closed'} aria-pressed={layout === 'board'} onClick={() => setFilter('layout','board')}><Columns3 size={16} /><span className="max-sm:sr-only lg:max-xl:sr-only">Tableau</span></Button><Button variant={layout === 'list' ? 'default' : 'outline'} aria-pressed={layout === 'list'} onClick={() => setFilter('layout','list')}><List size={16} /><span className="max-sm:sr-only lg:max-xl:sr-only">Liste</span></Button></div>;
   // The count line replaces the former count row and board notice.
   const countLine = taking ? <p><span className="tabular-nums">{matchedCount ?? '—'}</span> prospects à prendre{layout === 'list' ? ` · ${STATUS[stage]}` : ''}</p> : <p><span className="tabular-nums">{matchedCount ?? '—'}</span> prospects correspondants{filters.view === 'closed' ? ' · Les clôtures sont affichées en Liste.' : <> · <a className="font-medium text-blue-800 underline underline-offset-4" href={closedHref()} onClick={event => { event.preventDefault(); setFilter('view','closed'); }}><span className="tabular-nums">{closedCount}</span> clôturés</a> (Liste)</>}</p>;
+  // « Mes prospects » and « À prendre » replace the owner filter, so choosing one clears it.
+  const selectTab = key => { if (['mine', 'to_take'].includes(key)) setFilter('owner', ''); setFilter('view', key); };
+  const tabs = <OpportunityTabs view={filters.view} onSelect={selectTab} compact={band === 'desktop'} />;
+  // The count line shows where there is room for it: on a tablet and from 1280 px.
+  const headerLine = band === 'desktop' ? <div className="space-y-1 max-xl:-mb-1">{tabs}<div className="max-xl:hidden">{countLine}</div></div> : band === 'tablet' ? countLine : undefined;
   return <PageFrame width="wide" data-band={band || undefined} data-presentation={mode === 'leads' ? presentation : undefined}>
   {mode === 'today' ? <PageHeader headingRef={headingRef} title="Tâches · Mon travail" description="Vos prochaines actions, une tâche à la fois." actions={<div className="flex flex-wrap gap-2">
     {/* RPW-r2 item 24: the learners with a balance due, per learner, no totals. */}
     <Button asChild variant="outline"><Link href="/students?payment=due"><CircleDollarSign size={16} />À relancer</Link></Button>
     {/* One line at 320 px: the first task stays where it was before item 24. */}
     <Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></div>} />
-    : <PageHeader compact headingRef={headingRef} title="Opportunités" description={countLine} actions={<>{band === 'desktop' && toggle}<Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
+    : <PageHeader compact headingRef={headingRef} title="Opportunités" description={headerLine} actions={<>{band === 'desktop' && toggle}<Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
   {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
-    <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} onReset={resetFilters} />
+    {band === 'phone' && tabs}
+    <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} tabs={band === 'tablet' ? tabs : null} onReset={resetFilters} />
     {contact && <p className="text-sm">Opportunités de ce contact · Les apprenants restent séparés. <Button variant="link" onClick={() => { const next = new URLSearchParams(window.location.search); next.delete('contact'); window.history.replaceState(null, '', `${pathname}?${next}`); }}>Tous les contacts</Button></p>}
     {(presentation === 'stage-list' || (taking && layout === 'list')) && <StageChips view={filters.view} stage={stage} counts={counts} total={opportunities.data?.total} all={!taking} onSelect={value => setFilter('stage', value)} />}
     <div role="status" className="sr-only">Les vues sont actualisées après chaque action ; les prospects qui ne correspondent plus aux filtres quittent la vue.</div>

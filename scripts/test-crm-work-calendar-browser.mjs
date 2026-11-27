@@ -163,7 +163,7 @@ end $fixture$;commit;
   assert.equal(Number(takes()),takesBefore+1,'one change of responsable recorded, the colleague’s');
   // The refreshed list no longer offers it; under « Toute l'équipe » the row carries the colleague's name and no take.
   await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.',{exact:true}).waitFor();
-  await page.getByRole('button',{name:/^Toute l’équipe/}).click();const taken=page.locator(`[data-testid=work-row][data-lead-id="${unassignedLead}"]`);
+  await page.getByRole('button',{name:/^Toute l’équipe/}).click();await page.getByLabel('Personne',{exact:true}).selectOption(colleague);const taken=page.locator(`[data-testid=work-row][data-lead-id="${unassignedLead}"]`);
   await taken.getByTestId('work-row-responsable').filter({hasText:'Responsable : '+labels[2]}).waitFor();assert.equal(await taken.getByTestId('take-prospect').count(),0);
   // Nobody has it again: one tap takes it.
   sql(`update public.crm_tasks set assigned_to=null where lead_id='${unassignedLead}' and status='open';update public.crm_leads set owner_id=null,version=version+1 where id='${unassignedLead}';`);

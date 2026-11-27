@@ -30,7 +30,14 @@ function FacetSearch({ facet }) {
   const { label, query, search, setSearch, cursors, setCursors } = facet;
   return <details className="min-w-0 basis-48"><summary className="cursor-pointer py-2 text-xs text-muted-foreground">{facet.kind === 'program' ? 'Chercher d’autres programmes' : 'Chercher d’autres valeurs'}</summary><SearchField label={`Rechercher ${label.toLowerCase()}`} maxLength={120} value={search} onChange={value => { setSearch(value); setCursors([null]); }}/><div className="flex gap-1"><Button variant="ghost" disabled={cursors.length === 1 || query.isFetching} onClick={() => setCursors(x => x.slice(0, -1))}>Précédent</Button><Button variant="ghost" disabled={!query.data?.has_more || query.isFetching} onClick={() => setCursors(x => [...x, query.data.next_cursor])}>Suivant</Button></div></details>;
 }
-export default function OpportunityFilters({ filters, setFilter, layout, onReset, contact, band, toggle }) {
+// The four tabs (CPO-r2), rendered once. Where they sit depends on the band, so that the
+// first results stay inside the RCC-B1 height budgets and no tab is clipped: under the title
+// on a computer, in the filter row on a tablet (where the « Vue » select was), and on a row
+// of their own on a phone (the count line gives its place; « Tous n » shows the total).
+export function OpportunityTabs({ view, onSelect, compact = false }) {
+  return <ScrollRow aria-label="Vues des opportunités" role="navigation" className="text-foreground">{Object.entries(OPPORTUNITY_TABS).map(([key, label]) => <Button key={key} variant={opportunityTab(view) === key ? 'secondary' : 'ghost'} className={`${compact ? 'h-7' : 'h-9'} shrink-0 px-3 text-sm`} aria-pressed={opportunityTab(view) === key} onClick={() => onSelect(key)}>{label}</Button>)}</ScrollRow>;
+}
+export default function OpportunityFilters({ filters, setFilter, layout, onReset, contact, band, toggle, tabs }) {
   const [staffOffset, setStaffOffset] = useState(0), [search, setSearch] = useState(filters.q), [notice,setNotice] = useState('');
   const [panelOpen, setPanelOpen] = useState(false), [sheetOpen, setSheetOpen] = useState(false);
   const sentSearch = useRef(filters.q), searchTimer = useRef(null), updateFilter = useRef(setFilter), filtersButton = useRef(null);
@@ -52,7 +59,6 @@ export default function OpportunityFilters({ filters, setFilter, layout, onReset
   // offered nor counted under them; a view chosen in « Filtres » counts as one refinement.
   const ownerScoped = ['mine', 'to_take'].includes(filters.view), filterView = Object.hasOwn(OPPORTUNITY_FILTER_VIEWS, filters.view) ? filters.view : '';
   const activeCount = Number(!!contact) + Number(!!filterView) + Object.entries(filters).filter(([key,value]) => key === 'owner' ? !ownerScoped && value !== 'all' : !['view'].includes(key) && !!value).length;
-  const selectTab = key => { setNotice(''); if (['mine', 'to_take'].includes(key)) setFilter('owner', ''); setFilter('view', key); };
   const reset = () => { onReset(); setNotice(`Filtres effacés · vue ${OPPORTUNITY_VIEWS[filters.view]}`); };
   const ownerLabel = filters.owner === 'me' ? 'Moi' : filters.owner === 'unassigned' ? 'Non attribué' : staffLabel(staff.data?.rows?.find(row => row.id === filters.owner));
   // Removable chips for the refinements in effect; removing one patches the same URL key.
@@ -75,12 +81,12 @@ export default function OpportunityFilters({ filters, setFilter, layout, onReset
     {!ownerScoped && (staffOffset > 0 || staff.data?.total > 50) && <div className="flex flex-wrap gap-1"><Button variant="ghost" disabled={!staffOffset || staff.isFetching} onClick={() => setStaffOffset(x => x - 50)}>Responsables précédents</Button><Button variant="ghost" disabled={staffOffset + 50 >= staff.data?.total || staff.isFetching} onClick={() => setStaffOffset(x => x + 50)}>Responsables suivants</Button></div>}
   </>;
   return <div className="space-y-2">
-    <FilterBar compact activeCount={activeCount} summaryVisible={activeCount > 0 || !!notice} summary={notice || `${activeCount} filtre${activeCount > 1 ? 's' : ''} actif${activeCount > 1 ? 's' : ''} · vue ${OPPORTUNITY_VIEWS[filters.view] || 'non précisée'}`} onReset={activeCount > 0 ? reset : undefined} search={<SearchField label="Rechercher un prospect" className="basis-full lg:flex-1 lg:basis-60" maxLength={120} placeholder="Contact, apprenant ou téléphone…" value={search} onChange={searchChanged} onClear={clearSearch}/>}>
+    <FilterBar compact activeCount={activeCount} summaryVisible={activeCount > 0 || !!notice} summary={notice || `${activeCount} filtre${activeCount > 1 ? 's' : ''} actif${activeCount > 1 ? 's' : ''} · vue ${OPPORTUNITY_VIEWS[filters.view] || 'non précisée'}`} onReset={activeCount > 0 ? reset : undefined} search={<SearchField label="Rechercher un prospect" labelClassName="max-sm:sr-only" className="basis-full lg:flex-1 lg:basis-60" maxLength={120} placeholder="Contact, apprenant ou téléphone…" value={search} onChange={searchChanged} onClear={clearSearch}/>}>
       {desktop && <FacetSelect facet={program} selected={filters.program} onChange={v => setFilter('program', v)}/>}
+      {tabs && <div className="min-w-0 flex-1">{tabs}</div>}
       <Button ref={filtersButton} type="button" variant="outline" className="shrink-0" aria-expanded={desktop ? panelOpen : sheetShown} aria-controls={desktop && panelOpen ? panelId : undefined} aria-haspopup={desktop ? undefined : 'dialog'} onClick={() => desktop ? setPanelOpen(x => !x) : setSheetOpen(true)}><SlidersHorizontal size={16} />Filtres{activeCount > 0 ? ` · ${activeCount}` : ''}</Button>
       {toggle}
     </FilterBar>
-    <ScrollRow aria-label="Vues des opportunités" role="navigation">{Object.entries(OPPORTUNITY_TABS).map(([key, label]) => <Button key={key} variant={opportunityTab(filters.view) === key ? 'secondary' : 'ghost'} className="h-9 shrink-0 px-3 text-sm" aria-pressed={opportunityTab(filters.view) === key} onClick={() => selectTab(key)}>{label}</Button>)}</ScrollRow>
     {desktop && panelOpen && <div id={panelId} className="flex min-w-0 flex-wrap items-end gap-2 rounded-lg border bg-card p-3">{refinements}<FacetSearch facet={source}/><FacetSearch facet={program}/></div>}
     {chips.length > 0 && <div role="group" aria-label="Filtres actifs" className="flex min-w-0 flex-wrap gap-1">{chips.map(chip => <Button key={chip.key} type="button" variant="secondary" className="h-8 max-w-full rounded-full px-3 text-xs" aria-label={`Retirer le filtre · ${chip.label}`} onClick={() => { setNotice(''); chip.remove(); }}><span className="truncate">{chip.label}</span><X size={14} /></Button>)}</div>}
     {!desktop && <Sheet open={sheetShown} onOpenChange={setSheetOpen}><SheetContent onEscapeKeyDown={guard.onEscapeKeyDown} onCloseAutoFocus={event => { event.preventDefault(); filtersButton.current?.focus(); }} className="operational flex w-full max-w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[620px] sm:rounded-l-overlay motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none motion-reduce:transition-none">
