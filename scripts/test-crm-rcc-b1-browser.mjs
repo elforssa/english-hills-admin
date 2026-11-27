@@ -130,7 +130,7 @@ async function escapeSequences(label,reopen,restored){
  await page.locator('[role=menu]').waitFor({state:'detached'});assert(await sheet().isVisible(),label+' E1: the drawer stays open');
  await focusIs(()=>document.activeElement?.textContent?.trim()==='Autres actions','E1 focus returns to Autres actions');await settle();await noPopup(label+' E1 focus return');
  await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});await page.waitForURL(url=>!url.searchParams.has('lead'));await restored();
- phase=label+' E2';await reopen();await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Attribuer un responsable',exact:true}).click();
+ phase=label+' E2';await reopen();await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Changer de responsable',exact:true}).click();
  await top().getByLabel('Responsable du prospect',{exact:true}).waitFor();await top().getByRole('button',{name:'Annuler',exact:true}).click();
  await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await focusIs(()=>document.activeElement?.textContent?.trim()==='Autres actions','E2 focus returns to Autres actions');await settle();await noPopup(label+' E2');
  await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});await restored();
@@ -360,9 +360,9 @@ try {
   // 7. Phone action reachability, keyboard/focus, dialog above the full-screen sheet, 320 reflow.
   phase=`${E} reachability 390`;await setSize({width:390,height:844});await gotoLeads();
   const card=page.locator(`[data-testid=opportunity-card][data-lead-id="${qualified[0]}"]:visible`);await card.scrollIntoViewIfNeeded();await card.getByRole('button',{name:/^Actions ·/}).click();
-  const items=await page.getByRole('menuitem').allInnerTexts();assert.deepEqual(items,['Ouvrir l’inscription','Clôturer le prospect','Attribuer un responsable'],'grouped overflow: one close entry (B2, §5.4)');assert.equal(await page.locator('[role=menu] [role=separator]').count(),2);await page.keyboard.press('Escape');
+  const items=await page.getByRole('menuitem').allInnerTexts();assert.deepEqual(items,['Ouvrir l’inscription','Clôturer le prospect','Changer de responsable'],'grouped overflow: one close entry (B2, §5.4)');assert.equal(await page.locator('[role=menu] [role=separator]').count(),2);await page.keyboard.press('Escape');
   await openDrawer(qualified[0]);for(const name of ['Pas de réponse','On a parlé','Noter un échange','Changer','Autres actions','Inscrire et encaisser','Afficher tout l’historique']){const b=sheet().getByRole('button',{name,exact:true}).first();await b.scrollIntoViewIfNeeded();const box=await b.boundingBox();assert(box&&box.height>=44&&box.x>=0&&box.x+box.width<=390,`${phase}: ${name} reachable ${JSON.stringify(box)}`);}
-  await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();assert.deepEqual(await page.getByRole('menuitem').allInnerTexts(),['Clôturer le prospect','Attribuer un responsable','Réattribuer la prochaine action']);await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});
+  await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();assert.deepEqual(await page.getByRole('menuitem').allInnerTexts(),['Modifier la fiche','Ajouter un enfant','Changer de responsable','Confier cette action à…','Clôturer le prospect']);await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});
   phase=`${E} focus trap 390`;const noteButton=sheet().getByRole('button',{name:'Noter un échange',exact:true});await noteButton.focus();await page.keyboard.press('Enter');await top().getByRole('heading',{name:'Noter un échange'}).waitFor();await dialogFocused();
   for(let i=0;i<8;i++){await page.keyboard.press(i%3===2?'Shift+Tab':'Tab');assert(await page.evaluate(()=>!!document.activeElement?.closest('[role=dialog]:last-of-type')||document.activeElement===document.querySelectorAll('[role=dialog]')[1]||!!document.querySelectorAll('[role=dialog]')[1]?.contains(document.activeElement)),'focus stays in the dialog');}
   await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await focusIs(()=>document.activeElement?.textContent?.trim()==='Noter un échange','dialog closes back to its trigger');await closeDrawer();
@@ -519,7 +519,7 @@ try {
    await focusIs(()=>document.activeElement?.textContent?.trim()==='Réessayer','Réessayer takes focus');
    // The page behind stays mounted: no route error page, the board and its heading remain.
    assert.equal(await page.getByText('Une erreur est survenue').count(),0,`${phase}: the page error boundary is not reached`);
-   assert.equal(await page.locator('h1').filter({hasText:'Pipeline admissions'}).count(),1);assert((await page.locator('[data-testid=opportunity-card]').count())>0,`${phase}: the board stays rendered`);
+   assert.equal(await page.locator('h1').filter({hasText:'Opportunités'}).count(),1);assert((await page.locator('[data-testid=opportunity-card]').count())>0,`${phase}: the board stays rendered`);
   }
   async function gone(label){await shell().waitFor({state:'detached'});assert.equal(await page.locator('[role=dialog]').count(),0,`${label}: no overlay`);}
   // Held/aborted chunk URLs; `gate` releases held requests.

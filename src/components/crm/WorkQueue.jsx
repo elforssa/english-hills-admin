@@ -57,7 +57,8 @@ function OutsideHours({ onOpen, onAction }) {
   </section>;
 }
 
-export default function WorkQueue({ params, setFilter, onOpen, onAction, onReset }) {
+// Tabs are not filters: an empty tab says so and offers no « Effacer les filtres ».
+export default function WorkQueue({ params, setFilter, onOpen, onAction }) {
   const { user } = useAuth();
   const bucket = WORK_BUCKETS[params.get('bucket')] ? params.get('bucket') : 'today', assignee = workAssignee(params.get('assignee')), scope = workScope(assignee);
   const [staffOffset, setStaffOffset] = useState(0), [pages, setPages] = useState({});
@@ -89,7 +90,7 @@ export default function WorkQueue({ params, setFilter, onOpen, onAction, onReset
     {scope==='all' && (staffOffset>0 || staff.data?.total>50) && <div className="flex gap-2"><Button variant="ghost" disabled={!staffOffset} onClick={()=>setStaffOffset(x=>x-50)}>Équipe précédente</Button><Button variant="ghost" disabled={staffOffset+50>=staff.data?.total} onClick={()=>setStaffOffset(x=>x+50)}>Équipe suivante</Button></div>}
     <nav aria-label="Échéances des tâches" className="flex flex-wrap gap-1 border-b pb-2">{Object.entries(buckets).map(([key,label])=><Button key={key} variant={bucket===key ? 'default' : 'ghost'} className="min-h-9" aria-pressed={bucket===key} onClick={()=>setFilter('bucket',key)}>{label}<span data-testid={`work-count-${key}`} className="ml-2 rounded bg-slate-100 px-1.5 text-xs tabular-nums text-slate-700">{query.data?.counts?.[key] ?? '—'}</span></Button>)}</nav>
     <p className="text-xs text-slate-500">Heures de Casablanca · En retard inclut les actions dues plus tôt aujourd’hui ; « En attente » n’est jamais en retard. Actualisation chaque minute.</p>
-    <div className="overflow-hidden rounded-lg border bg-white"><ReadState query={query} available={Array.isArray(query.data?.rows)} filtered={scope !== 'me'} onReset={() => { setPages({}); onReset(); }} empty="Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.">{Array.isArray(query.data?.rows) && query.data.rows.length ? query.data.rows.map(row=>{ const action=row.next_action || row;
+    <div className="overflow-hidden rounded-lg border bg-white"><ReadState query={query} available={Array.isArray(query.data?.rows)} empty="Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.">{Array.isArray(query.data?.rows) && query.data.rows.length ? query.data.rows.map(row=>{ const action=row.next_action || row;
       // One « Responsable »; the action's holder only when it is someone else. Under
       // « Mes prospects » a line that would only say « vous » is left out.
       const who=ownership({ ownerId:row.lead.owner_id, ownerLabel:row.lead.owner_display_label, assigneeId:row.assigned_to, assigneeLabel:row.assignee_display_label });

@@ -141,7 +141,7 @@ try {
   await open(hoursLead);
   await panel().getByRole('button', { name: 'Changer', exact: true }).click();
   await dialog().getByRole('heading', { name: 'Changer la prochaine action' }).waitFor();
-  await dialog().getByLabel('Rappel convenu', { exact: true }).check();
+  await dialog().getByLabel('Rappeler à l’heure convenue', { exact: true }).check();
   await dialog().getByLabel('Date', { exact: true }).fill(day);
   const time = dialog().getByLabel('Heure', { exact: true });
   await page.waitForFunction(el => !el.disabled && el.options.length > 1, await time.elementHandle());
@@ -157,7 +157,7 @@ try {
   sql(`update public.crm_leads set version=version+1 where id=${q(hoursLead)}`);
   await dialog().getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await dialog().getByText(STALE, { exact: true }).waitFor();
-  assert.equal(await dialog().getByLabel('Rappel convenu', { exact: true }).isChecked(), true, 'the chosen kind is kept');
+  assert.equal(await dialog().getByLabel('Rappeler à l’heure convenue', { exact: true }).isChecked(), true, 'the chosen kind is kept');
   assert.equal(await time.inputValue(), '16:05', 'the chosen time is kept');
   assert(await dialog().getByRole('button', { name: 'Enregistrer', exact: true }).isDisabled(), 'save stays disabled until reload');
   await dialog().getByRole('button', { name: 'Recharger', exact: true }).click();
@@ -213,7 +213,7 @@ try {
   });
   assert.equal(sql(`select status||':'||closure_reason from public.crm_leads where id=${q(staleLostLead)}`), 'LOST:price', 'close applies after the reload, with « Pourquoi ? » as the reason');
   const assignLead = intake(reception.id, 'Forms stale assign');
-  await staleOld(assignLead, 'Attribuer un responsable', menu('Attribuer un responsable'), () => dialog().getByLabel('Responsable du prospect', { exact: true }).selectOption(director.id));
+  await staleOld(assignLead, 'Changer de responsable', menu('Changer de responsable'), () => dialog().getByLabel('Responsable du prospect', { exact: true }).selectOption(director.id));
   assert.equal(sql(`select owner_id from public.crm_leads where id=${q(assignLead)}`), director.id, 'the assignment applies after the reload');
   const reopenLead = intake(reception.id, 'Forms stale reopen');
   rpc(reception.id, 'close_prospect', { lead_id: reopenLead, expected_version: version(reopenLead), status: 'LOST', reason: 'price' });

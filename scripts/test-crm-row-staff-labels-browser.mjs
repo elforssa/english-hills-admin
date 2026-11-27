@@ -98,8 +98,8 @@ try {
     for (const layout of ['board','list']) {
       await navigate(app+'/crm/leads?layout='+layout);
       const row=layout==='board'?page.locator(`[data-testid="opportunity-card"][data-lead-id="${lead}"]`):page.getByTestId('opportunity-row').filter({hasText:'UIF stable row identity'});
-      // RCC-B1: board cards no longer repeat the owner; the List table, drawer header and filter keep it.
-      if(layout==='list')await row.getByText(owner.display_label,{exact:true}).waitFor();else{await row.waitFor();assert.equal(await row.getByText(owner.display_label).count(),0);}
+      // CPO-r2: the responsable's name is on every card as well as in the List table, the drawer header and the filter.
+      await row.getByText(owner.display_label,{exact:true}).waitFor();
       const before=await row.innerText();
       await page.getByRole('button',{name:/^Filtres/}).click();
       await pageStaff('Responsables suivants','Responsables précédents',page.getByLabel('Responsable',{exact:true}));
@@ -108,16 +108,17 @@ try {
     }
     await navigate(app+'/crm/today?bucket=overdue&assignee=all');
     const row=page.locator(`[data-task-id="${task.id}"]`);
-    await row.getByText('Responsable de la tâche : '+assignee.display_label+' · Responsable du prospect : '+owner.display_label,{exact:false}).waitFor();
+    // CPO-r2: one « Responsable »; the action's holder is named only because it is someone else.
+    await row.getByText('Responsable : '+owner.display_label+' · action confiée à '+assignee.display_label,{exact:false}).waitFor();
     const before=await row.innerText();
-    await pageStaff('Équipe suivante','Équipe précédente',page.getByLabel('Responsable de la tâche',{exact:true}));
+    await pageStaff('Équipe suivante','Équipe précédente',page.getByLabel('Personne',{exact:true}));
     assert.equal(await row.innerText(),before,'unchanged task assignee/owner across picker pages');
     await row.getByRole('button',{name:'Voir le prospect',exact:true}).click();
     const drawer=page.getByRole('dialog').first();await drawer.getByText('Historique',{exact:true}).waitFor();
     await drawer.getByText('Responsable : '+owner.display_label,{exact:true}).waitFor();
-    await drawer.getByText('Responsable de la tâche : '+assignee.display_label,{exact:true}).waitFor();
+    await drawer.getByText('Action confiée à '+assignee.display_label,{exact:true}).waitFor();
     // Current assignment stays labelled when absent from the bounded dialog page.
-    await drawer.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Attribuer un responsable',exact:true}).click();
+    await drawer.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Changer de responsable',exact:true}).click();
     let dialog=page.getByRole('dialog').last(),select=dialog.getByLabel('Responsable du prospect',{exact:true});
     await select.waitFor();assert.equal(await select.locator('option:checked').textContent(),owner.display_label);
     for (const button of ['Suivants','Précédents']) {
@@ -127,7 +128,7 @@ try {
       assert.equal(await select.locator('option:checked').textContent(),owner.display_label);
     }
     await dialog.getByRole('button',{name:'Annuler',exact:true}).click();
-    await drawer.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Réattribuer la prochaine action',exact:true}).click();
+    await drawer.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Confier cette action à…',exact:true}).click();
     dialog=page.getByRole('dialog').last();select=dialog.getByLabel('Responsable de l’action',{exact:true});await select.waitFor();
     assert.equal(await select.locator('option:checked').textContent(),assignee.display_label);
     await dialog.getByRole('button',{name:'Annuler',exact:true}).click();

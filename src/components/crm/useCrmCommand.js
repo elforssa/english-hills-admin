@@ -36,8 +36,9 @@ export function useCrmCommand({ refreshOnConflict = false, onError } = {}) {
       // gateway body) keeps the request so the retry resends the same key and payload.
       if (isRecordConflict(err) || ['22023', '42501', '23514'].includes(err?.code)) request.current = null;
       setError(err);
-      onError?.(err);
+      // Refresh first: the message then says « La liste est à jour » about a list that is.
       if (refreshOnConflict && isRecordConflict(err)) await refresh();
+      onError?.(err);
       return null;
     } finally {
       locked.current = false;

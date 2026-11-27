@@ -12,7 +12,7 @@ export default function GuideContent() {
 <h1>Guide Accueil</h1>
 <p className="lead">Tout ce qu’il faut savoir pour travailler dans votre espace de la plateforme&nbsp;: suivre les prospects jusqu’à l’inscription, puis gérer au quotidien les apprenants, les paiements, les groupes, les présences et les enseignants.</p>
 <ul className="chips">
-<li>Version 2.5</li>
+<li>Version 2.6</li>
 <li>22 novembre 2026</li>
 <li>Heures de Casablanca</li>
 <li>Captures sur données fictives</li>
@@ -48,7 +48,7 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Ouvrez l’adresse de la plateforme, puis remplissez <span className="ui">Adresse email</span> et <span className="ui">Mot de passe</span>.</p>
 </li>
-<li><p>Cliquez sur <span className="ui">Se connecter</span>. Vous arrivez sur la page <b>Pipeline admissions</b>, votre page d’accueil.</p>
+<li><p>Cliquez sur <span className="ui">Se connecter</span>. Vous arrivez sur la page <b>Opportunités</b>, votre page d’accueil.</p>
 </li>
 </ol>
 <ul className="tight">
@@ -75,10 +75,10 @@ export default function GuideContent() {
 </div>
 <h3 id="menu">Votre page d’accueil et votre menu</h3>
 <figure className="fig">
-<Image src="/helpdesk/s01-board.jpg" width={1700} height={1075} alt="Page Pipeline admissions avec le menu de gauche, les vues, le bouton Ajouter un prospect et cinq colonnes de prospects" unoptimized tabIndex={0} role="button" /><figcaption>La page d’accueil&nbsp;: le tableau des prospects, par étape.</figcaption>
+<Image src="/helpdesk/s01-board.jpg" width={1700} height={1075} alt="Page Opportunités avec le menu de gauche, les vues, le bouton Ajouter un prospect et cinq colonnes de prospects" unoptimized tabIndex={0} role="button" /><figcaption>La page d’accueil&nbsp;: le tableau des prospects, par étape.</figcaption>
 <ol className="legend">
 <li>Le menu <span className="menu">CRM</span> contient <span className="menu">Opportunités</span> (cette page) et <span className="menu">Tâches</span>.</li>
-<li>Les <b>vues</b>&nbsp;: des filtres prêts à l’emploi (<span className="ui">Mes prospects</span>, <span className="ui">À traiter</span>, <span className="ui">Sans réponse</span>…).</li>
+<li>Les <b>onglets</b>&nbsp;: <span className="ui">Tous</span>, <span className="ui">Mes prospects</span>, <span className="ui">À prendre</span> (ceux que personne n’a encore pris) et <span className="ui">Clôturés</span>. Chaque carte porte le nom du responsable, ou «&nbsp;À prendre&nbsp;».</li>
 <li><span className="ui">Ajouter un prospect</span>&nbsp;: pour un appel ou une visite qui n’est pas arrivé par un formulaire.</li>
 <li>Les colonnes sont les <b>étapes</b> du prospect, de gauche à droite.</li>
 </ol>
@@ -95,7 +95,7 @@ export default function GuideContent() {
 <tbody>
 <tr>
 <td><b>CRM</b></td>
-<td><span className="menu">Opportunités</span> (page «&nbsp;Pipeline admissions&nbsp;»)<br /><span className="menu">Tâches</span> (page «&nbsp;Tâches · Mon travail&nbsp;»)</td>
+<td><span className="menu">Opportunités</span><br /><span className="menu">Tâches</span> (page «&nbsp;Tâches · Mon travail&nbsp;»)</td>
 <td>Suivre les prospects et vos actions du jour.</td>
 </tr>
 <tr>
@@ -270,7 +270,7 @@ export default function GuideContent() {
 <h3 id="invisible">Ce que vous ne verrez pas</h3>
 <p>Votre espace est limité aux opérations du quotidien. Ces éléments existent dans la plateforme mais ne sont pas pour vous&nbsp;: l’analyse marketing, le suivi Meta, le tableau de bord financier et les chiffres d’encaissement, la paie et les salaires des enseignants, la décision sur les congés, les conversations entre la direction et les enseignants ou entre les familles et les enseignants, la gestion des utilisateurs et les paramètres du centre. Dans «&nbsp;Messages &amp; Annonces&nbsp;», vous voyez les messages entre le bureau et les familles, et ceux que vous avez envoyés ou reçus.</p>
 <div className="callout info">
-<strong>Une page vous ramène à «&nbsp;Pipeline admissions&nbsp;» sans rien dire&nbsp;?</strong><p>C’est normal. Quand vous ouvrez une adresse qui ne fait pas partie de votre espace (un ancien lien, une page de la direction), la plateforme vous renvoie à votre page d’accueil sans message d’erreur.</p>
+<strong>Une page vous ramène à «&nbsp;Opportunités&nbsp;» sans rien dire&nbsp;?</strong><p>C’est normal. Quand vous ouvrez une adresse qui ne fait pas partie de votre espace (un ancien lien, une page de la direction), la plateforme vous renvoie à votre page d’accueil sans message d’erreur.</p>
 </div>
 <h3 id="reflexes">Les six réflexes</h3>
 <ul className="rules">
@@ -294,9 +294,9 @@ export default function GuideContent() {
 <p>Une routine simple pour ne rien laisser passer. Pour la rentrée et la fin de mois, voir <a href="#q14">Q14</a>.</p>
 </header>
 <figure className="fig">
-<Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches avec le filtre Moi plus non attribué, les onglets En retard, Aujourd’hui, Demain, À venir, En attente, un appel et un rendez-vous au centre" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin. Une ligne par contact, avec sa prochaine action&nbsp;: une mère et ses deux enfants tiennent sur une seule ligne.</figcaption>
+<Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches avec le filtre Moi plus non attribué, les onglets En retard, Aujourd’hui, Demain, À venir, En attente, un appel et un rendez-vous au centre" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin. Une ligne par contact, avec sa prochaine action&nbsp;: une mère et ses deux enfants tiennent sur une seule ligne. <i>Capture de la version précédente&nbsp;: les deux listes «&nbsp;Responsable&nbsp;» sont remplacées par trois onglets.</i></figcaption>
 <ol className="legend">
-<li><span className="ui">Responsable de la tâche</span>&nbsp;: «&nbsp;Moi + non attribué&nbsp;» par défaut. Passez à <span className="ui">Mes tâches</span>, <span className="ui">Non attribué</span> ou <span className="ui">Toute l’équipe</span> pour voir autre chose.</li>
+<li>Trois onglets&nbsp;: <span className="ui">Mes prospects</span> (vos suivis, ouvert par défaut), <span className="ui">À prendre</span> (ce que personne n’a pris, avec un compteur) et <span className="ui">Toute l’équipe</span> (avec le choix d’une personne).</li>
 <li>Les échéances&nbsp;: <b>En retard</b>, <b>Aujourd’hui</b>, <b>Demain</b>, <b>À venir</b> et <b>En attente</b>, avec le nombre de prospects dans chaque onglet.</li>
 <li><span className="ui">Pas de réponse</span>&nbsp;: un seul clic enregistre l’appel sans réponse.</li>
 <li>Un rendez-vous au centre&nbsp;: ses quatre résultats s’activent à l’heure du rendez-vous.</li>
@@ -308,9 +308,9 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Ouvrez <span className="menu">Tâches</span>. Traitez d’abord <b>En retard</b>, puis <b>Aujourd’hui</b>.</p>
 </li>
-<li><p>Le filtre par défaut, «&nbsp;Moi + non attribué&nbsp;», montre vos prospects et ceux qui n’ont pas encore de responsable (par exemple une demande de formulaire). Vos collègues voient les leurs.</p>
+<li><p>L’onglet <span className="ui">Mes prospects</span> montre vos suivis. Regardez aussi <span className="ui">À prendre</span>&nbsp;: les prospects que personne n’a encore pris (par exemple une demande de formulaire). Touchez <span className="ui">Je m’en occupe</span> avant d’appeler&nbsp;: le prospect devient le vôtre et passe dans <span className="ui">Mes prospects</span>.</p>
 </li>
-<li><p>Cliquez sur <span className="ui">À traiter · prospects nécessitant un suivi</span> pour repérer les prospects qui risquent d’être oubliés.</p>
+<li><p>Commencez par l’onglet <b>En retard</b>, dans <span className="ui">Mes prospects</span> puis dans <span className="ui">À prendre</span>&nbsp;: ce sont les prospects qui risquent d’être oubliés.</p>
 </li>
 <li><p>Ouvrez <span className="menu">Admissions</span> › <span className="menu">Calendrier</span> en vue <span className="ui">Jour</span>&nbsp;: les rendez-vous au centre du jour, avec ou sans test de niveau.</p>
 </li>
@@ -355,7 +355,7 @@ export default function GuideContent() {
 <p className="when">Une demande est reçue par un formulaire, ou une personne appelle, écrit ou passe sans formulaire.</p>
 </header>
 <h4>Cas A&nbsp;: la demande vient d’un formulaire (Meta, site web)</h4>
-<p>Le prospect apparaît tout seul dans la colonne <span className="st st-new">Nouveau</span>, avec la prochaine action <b>Premier contact</b>. Il est attribué au responsable choisi par la direction pour les nouveaux prospects&nbsp;; s’il n’y en a pas, il arrive «&nbsp;Non attribué&nbsp;» et toute l’équipe le voit dans «&nbsp;Moi + non attribué&nbsp;». Rien à saisir&nbsp;: appelez-le (<a href="#c2">scénario C2</a>).</p>
+<p>Le prospect apparaît tout seul dans la colonne <span className="st st-new">Nouveau</span>, avec la prochaine action <b>Premier contact</b>. Il arrive dans <span className="ui">À prendre</span>, visible par toute l’équipe (sauf si la direction a choisi un responsable par défaut&nbsp;: il porte alors son nom). Touchez <span className="ui">Je m’en occupe</span>, puis appelez-le (<a href="#c2">scénario C2</a>).</p>
 <p>Si la plateforme hésite sur l’identité de la personne (même téléphone, plusieurs candidats), la demande n’est pas créée toute seule. Elle attend en bas de la page <span className="menu">Tâches</span>, dans <b>À vérifier</b>&nbsp;:</p>
 <ol className="steps">
 <li><p>Ouvrez la demande et lisez les informations. Vérifiez avec la personne si besoin.</p>
@@ -394,19 +394,19 @@ export default function GuideContent() {
 </div>
 <h4>Ajouter un enfant, modifier la fiche</h4>
 <ul className="tight">
-<li><span className="ui">Ajouter un enfant</span> (sur la fiche d’un prospect)&nbsp;: un deuxième apprenant pour le même contact, avec le même téléphone et sa propre prochaine action. Pas de doublon signalé.</li>
-<li><span className="ui">Modifier la fiche</span>&nbsp;: nom du contact, téléphone, WhatsApp, email, nom et âge de l’apprenant. La modification apparaît dans l’historique («&nbsp;Fiche modifiée&nbsp;», numéros masqués).</li>
+<li><span className="ui">Autres actions</span> › <span className="ui">Ajouter un enfant</span> (sur la fiche d’un prospect)&nbsp;: un deuxième apprenant pour le même contact, avec le même téléphone et sa propre prochaine action. Pas de doublon signalé.</li>
+<li><span className="ui">Autres actions</span> › <span className="ui">Modifier la fiche</span>&nbsp;: nom du contact, téléphone, WhatsApp, email, nom et âge de l’apprenant. La modification apparaît dans l’historique («&nbsp;Fiche modifiée&nbsp;», numéros masqués).</li>
 <li>Les autres apprenants du même contact s’affichent sur la fiche&nbsp;; un clic ouvre leur fiche.</li>
 <li>Deux fiches pour la même personne&nbsp;? La direction peut les <span className="ui">Fusionner</span>&nbsp;: l’historique des deux reste lisible sur la fiche conservée.</li>
 </ul>
 <h4>Changer le responsable d’un prospect</h4>
 <figure className="fig narrow">
-<Image src="/helpdesk/s05b-assign.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec le menu Autres actions ouvert sur Attribuer un responsable" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li>La fiche indique le responsable du prospect, ou «&nbsp;Non attribué&nbsp;».</li>
-<li><span className="ui">Autres actions</span> › <span className="ui">Attribuer un responsable</span> (le prospect) ou <span className="ui">Réattribuer la prochaine action</span> (seulement l’action).</li>
+<Image src="/helpdesk/s05b-assign.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec le menu Autres actions ouvert sur Attribuer un responsable (capture de la version précédente)" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li>La fiche indique le responsable du prospect. Si personne ne l’a pris, elle indique «&nbsp;À prendre&nbsp;» avec le bouton <span className="ui">Je m’en occupe</span>.</li>
+<li><span className="ui">Autres actions</span> › <span className="ui">Changer de responsable</span> (le prospect, «&nbsp;Moi&nbsp;» en tête de liste) ou <span className="ui">Confier cette action à…</span> (seulement l’action). Dans la capture, ces deux entrées portent leur ancien nom.</li>
 </ol>
 </figure>
-<p>Prenez un prospect «&nbsp;Non attribué&nbsp;» dès que vous vous en occupez&nbsp;: il reste ainsi dans votre vue, et vos collègues savent qu’il est suivi. Si votre équipe se répartit les prospects autrement, suivez la consigne de la direction.</p>
+<p>Prenez un prospect «&nbsp;À prendre&nbsp;» dès que vous vous en occupez, avec <span className="ui">Je m’en occupe</span>&nbsp;: il passe dans <span className="ui">Mes prospects</span>, et vos collègues voient votre nom sur sa carte. Si une collègue l’a pris juste avant vous, la plateforme vous le dit («&nbsp;Déjà pris ou modifié&nbsp;») et met la liste à jour&nbsp;: rien n’est enregistré deux fois.</p>
 </article>
 <article className="scn" id="c2">
 <header className="scn-head">
@@ -514,12 +514,12 @@ export default function GuideContent() {
 <td>Date et heure convenues, dans les horaires d’ouverture. Cochez <span className="ui">Avec test de niveau</span> si le test a lieu pendant le rendez-vous&nbsp;: il est réservé en même temps. <a href="#c4">Scénario C4</a>.</td>
 </tr>
 <tr>
-<td><span className="ui">Rappel convenu</span></td>
+<td><span className="ui">Rappeler à l’heure convenue</span></td>
 <td><span className="st st-eng">En discussion</span></td>
 <td>Une heure exacte promise au contact, dans les horaires d’appel. Elle ne sera jamais déplacée par la plateforme.</td>
 </tr>
 <tr>
-<td><span className="ui">À faire par nous</span></td>
+<td><span className="ui">À faire de notre côté (prix, groupe…)</span></td>
 <td><span className="st st-eng">En discussion</span></td>
 <td>Envoyer le prix, confirmer un groupe… Choisissez <span className="ui">Quand</span>&nbsp;: demain, dans 2 jours, dans une semaine ou une date.</td>
 </tr>
@@ -555,7 +555,7 @@ export default function GuideContent() {
 <strong>Les heures proposées</strong><p>Les listes <span className="ui">Heure</span> ne proposent que les créneaux du centre&nbsp;: horaires d’appel pour un rappel, horaires d’ouverture pour un rendez-vous, sans la pause de midi ni les jours de fermeture. Changer la date garde l’heure choisie si ce créneau existe le nouveau jour. «&nbsp;Aucun créneau ce jour-là&nbsp;» signifie que le centre est fermé ou que la journée est passée. Les horaires sont fixés par la direction. Quand ils changent, les heures déjà convenues sont gardées&nbsp;; celles qui sortent des nouveaux horaires sont listées sur <span className="menu">Tâches</span> («&nbsp;Hors des nouveaux horaires&nbsp;»).</p>
 </div>
 <div className="callout warn">
-<strong>Rappel convenu ou rappel pour l’équipe&nbsp;?</strong><p><b>Rappel convenu</b>&nbsp;: vous avez promis une heure au contact&nbsp;; il attend votre appel à cette heure. <b>Rappel pour l’équipe</b> (dans <span className="ui">Changer</span>)&nbsp;: un pense-bête, aucune heure n’a été promise&nbsp;; la plateforme le place au prochain créneau.</p>
+<strong>Heure convenue ou rappel plus tard&nbsp;?</strong><p><b>Rappeler à l’heure convenue</b>&nbsp;: vous avez promis une heure au contact&nbsp;; il attend votre appel à cette heure. <b>Rappeler plus tard, sans heure promise</b> (dans <span className="ui">Changer</span>)&nbsp;: un pense-bête pour vous, aucune heure n’a été promise&nbsp;; la plateforme le place au prochain créneau. <b>À faire de notre côté</b>&nbsp;: c’est à nous d’agir (envoyer le prix, confirmer un groupe), le contact n’attend pas d’appel.</p>
 </div>
 <div className="callout info">
 <strong>WhatsApp «&nbsp;Message envoyé&nbsp;» et «&nbsp;Simple note&nbsp;»</strong><p>Sur le canal <span className="ui">WhatsApp</span>, <span className="ui">Message envoyé</span> ajoute seulement une ligne à l’historique&nbsp;: il ne change ni l’étape ni la prochaine action. Sur le canal <span className="ui">Autre</span>, <span className="ui">Simple note</span> fait de même pour une information utile à l’équipe.</p>
@@ -661,7 +661,7 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Dans la fiche ou sur la ligne de <span className="menu">Tâches</span>, cliquez sur <span className="ui">Changer</span>.</p>
 </li>
-<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span> (pour un prospect <span className="st st-qual">Qualifié</span>, ou pour déplacer un rendez-vous&nbsp;; sinon, notez l’échange avec <span className="ui">On a parlé</span>, qui qualifie le prospect), <span className="ui">Rappel convenu</span>, <span className="ui">À faire par nous</span>, <span className="ui">Rappel pour l’équipe</span>, <span className="ui">En attente du prospect</span>, ou <span className="ui">Clôturer</span> avec un motif.</p>
+<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span> (pour un prospect <span className="st st-qual">Qualifié</span>, ou pour déplacer un rendez-vous&nbsp;; sinon, notez l’échange avec <span className="ui">On a parlé</span>, qui qualifie le prospect), <span className="ui">Rappeler à l’heure convenue</span>, <span className="ui">À faire de notre côté</span>, <span className="ui">Rappeler plus tard, sans heure promise</span>, <span className="ui">En attente du prospect</span>, ou <span className="ui">Clôturer</span> avec un motif.</p>
 </li>
 <li><p>Pour simplement déplacer un rendez-vous ou un rappel convenu, gardez le même choix et changez la date&nbsp;: l’heure convenue est gardée.</p>
 </li>
@@ -671,7 +671,7 @@ export default function GuideContent() {
 <div className="callout warn">
 <strong>Jamais deux actions</strong><p>Le nouveau choix <b>remplace</b> l’ancien&nbsp;: un prospect en cours n’a jamais deux actions à la fois. Un rendez-vous remplacé est annulé avec son test. Pour arrêter le suivi, il faut clôturer le prospect (<a href="#c7">C7</a>).</p>
 </div>
-<p>Pour confier seulement l’action à une collègue, sans changer le responsable du prospect&nbsp;: <span className="ui">Autres actions</span> › <span className="ui">Réattribuer la prochaine action</span>.</p>
+<p>Pour confier seulement l’action à une collègue, sans changer le responsable du prospect&nbsp;: <span className="ui">Autres actions</span> › <span className="ui">Confier cette action à…</span>.</p>
 </article>
 <article className="scn" id="c6">
 <header className="scn-head">
@@ -1395,7 +1395,7 @@ export default function GuideContent() {
 <tr>
 <td>Prospect attribué à la mauvaise personne</td>
 <td>Vous</td>
-<td><span className="ui">Autres actions</span> › <span className="ui">Attribuer un responsable</span>.</td>
+<td><span className="ui">Autres actions</span> › <span className="ui">Changer de responsable</span>.</td>
 </tr>
 <tr>
 <td>Mauvais résultat d’appel ou d’échange</td>
@@ -1487,7 +1487,7 @@ export default function GuideContent() {
 <div className="cols">
 <div className="card">
 <h4>Opportunités</h4>
-<p>Page «&nbsp;Pipeline admissions&nbsp;». Vue <span className="ui">Tableau</span> (colonnes) ou <span className="ui">Liste</span>. Neuf vues&nbsp;: <b>Tous les prospects, Mes prospects, Nouveaux aujourd’hui, À traiter, Suivi aujourd’hui, Tests de niveau, Qualifiés, Sans réponse, Clôturés</b>.</p>
+<p>Page «&nbsp;Opportunités&nbsp;». Vue <span className="ui">Tableau</span> (colonnes) ou <span className="ui">Liste</span>. Quatre onglets&nbsp;: <b>Tous, Mes prospects, À prendre, Clôturés</b>. Dans <span className="ui">Filtres</span> › <span className="ui">Vue</span>&nbsp;: <b>Arrivés aujourd’hui, Tests de niveau, Sans réponse</b>. Sous «&nbsp;À prendre&nbsp;», la liste se lit étape par étape (Nouveau, Contact en cours, En discussion, Qualifié).</p>
 <ul className="tight">
 <li>Recherche par nom du parent, de l’apprenant ou téléphone.</li>
 <li>Filtres&nbsp;: responsable, canal, source, programme (et statut en liste).</li>
@@ -1499,7 +1499,7 @@ export default function GuideContent() {
 <h4>Tâches</h4>
 <p>Une ligne par contact dans chaque onglet&nbsp;: sa prochaine action. Les autres apprenants du même contact sont listés sur la ligne («&nbsp;Aussi&nbsp;: …&nbsp;»), chacun avec sa propre prochaine action&nbsp;; si l’action d’un frère ou d’une sœur tombe dans un autre onglet, il y a aussi sa propre ligne. Cinq onglets (<b>En retard, Aujourd’hui, Demain, À venir, En attente</b>), heure de Casablanca. Se met à jour chaque minute.</p>
 <ul className="tight">
-<li>Par défaut «&nbsp;Moi + non attribué&nbsp;»&nbsp;; le filtre du responsable du prospect se combine avec celui de la tâche.</li>
+<li>Trois onglets&nbsp;: «&nbsp;Mes prospects&nbsp;» (par défaut), «&nbsp;À prendre&nbsp;», «&nbsp;Toute l’équipe&nbsp;». Chaque action est soit dans les «&nbsp;Mes prospects&nbsp;» de quelqu’un, soit dans «&nbsp;À prendre&nbsp;».</li>
 <li><span className="ui">Pas de réponse</span> (appels, un clic), <span className="ui">Noter un échange</span>, <span className="ui">Changer</span>, et les quatre résultats d’un rendez-vous au centre.</li>
 <li>«&nbsp;En attente&nbsp;» n’est jamais en retard&nbsp;; «&nbsp;À relancer&nbsp;» s’affiche quand la date de relance est arrivée.</li>
 <li>Plusieurs apprenants pour un même contact&nbsp;: la ligne l’indique («&nbsp;2 apprenants&nbsp;»).</li>
@@ -1905,7 +1905,7 @@ export default function GuideContent() {
 <h3>Questions fréquentes</h3>
 <details className="faq">
 <summary>Ma page Tâches est vide, mais je sais qu’il y a du travail</summary>
-<p>Par défaut, <span className="menu">Tâches</span> montre «&nbsp;Moi + non attribué&nbsp;»&nbsp;: vos prospects et ceux sans responsable. Les prospects de vos collègues n’y sont pas. Choisissez <span className="ui">Toute l’équipe</span> dans <span className="ui">Responsable de la tâche</span>, ou vérifiez l’onglet <b>En attente</b>.</p>
+<p>Par défaut, <span className="menu">Tâches</span> s’ouvre sur <span className="ui">Mes prospects</span>&nbsp;: vos suivis seulement. Regardez <span className="ui">À prendre</span> (personne ne l’a encore pris) ou <span className="ui">Toute l’équipe</span> (il est peut-être chez une collègue), et vérifiez l’onglet <b>En attente</b>.</p>
 </details>
 <details className="faq">
 <summary>Je ne trouve pas un apprenant avec son numéro de téléphone</summary>
@@ -1936,7 +1936,7 @@ export default function GuideContent() {
 <p>La plateforme refuse quand un compte famille (actif ou invitation en attente) utilise l’ancienne adresse&nbsp;: «&nbsp;Un compte famille utilise cet e-mail&nbsp;: la direction le modifie.&nbsp;» Cette adresse sert à la connexion de la famille&nbsp;: demandez à la direction. Sans compte famille, modifiez-la depuis la fiche › <span className="ui">Modifier</span> (<a href="#q2">Q2</a>).</p>
 </details>
 <details className="faq">
-<summary>Un lien ou une page m’a renvoyée à «&nbsp;Pipeline admissions&nbsp;»</summary>
+<summary>Un lien ou une page m’a renvoyée à «&nbsp;Opportunités&nbsp;»</summary>
 <p>La page n’est pas dans votre espace. Voir «&nbsp;Ce que vous ne verrez pas&nbsp;» plus haut.</p>
 </details>
 <details className="faq">
@@ -2087,7 +2087,7 @@ export default function GuideContent() {
 </div>
 </div>
 </section>
-<footer className="foot"><p>Guide Accueil, version 2.5, 22 novembre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
+<footer className="foot"><p>Guide Accueil, version 2.6, 27 novembre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
 <a className="backtop" href="#prise-en-main">Retour en haut</a></footer>
     </>
   );

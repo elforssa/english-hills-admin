@@ -62,7 +62,7 @@ try {
   browser=await engine.launch({headless:true});const ctx=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:'reduce'});
   await ctx.route(url=>!['localhost','127.0.0.1'].includes(url.hostname),route=>{external.push(new URL(route.request().url()).hostname);return route.abort();});
   page=await ctx.newPage();page.on('response',async r=>{if(r.url().endsWith('/rpc/crm_get_operational_acquisition_summary') && r.ok())acquisitions.push(await r.json());});page.on('pageerror',e=>{failures.push(e.message);console.error('BROWSER_ERROR',engine.name(),phase,new URL(page.url()).pathname+new URL(page.url()).search.replace(/lead=[^&]+/g,'lead=synthetic'),e.name,e.message);});page.on('requestfailed',r=>{if(r.url().includes('/rest/v1/rpc/')){const data=r.postDataJSON();console.error('RPC_FAILED',engine.name(),new URL(r.url()).pathname,r.failure()?.errorText,{view:data?.p_view,layout:data?.p_layout,stage:data?.p_stage});}});page.on('request',r=>{if(r.url().includes('/rest/v1/rpc/'))requests.push(r.url().split('/').at(-1));});page.setDefaultTimeout(60000);await login(users[1]);
-  await page.getByRole('heading',{name:'Pipeline admissions'}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();
+  await page.getByRole('heading',{name:'Opportunités'}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();
   assert.equal(await page.locator('[aria-label="Tableau des opportunités, défilement horizontal"] > section').count(),5);
   assert(await page.getByRole('link',{name:'2 clôturés',exact:true}).count());// RCC-B1: the count line replaces the board noticeassert.equal(await page.getByTestId('opportunity-card').count(),27);
   const initialIds=await page.getByTestId('opportunity-card').evaluateAll(nodes=>nodes.map(n=>n.dataset.leadId));assert.equal(new Set(initialIds).size,initialIds.length);
@@ -81,7 +81,7 @@ try {
    await page.getByRole('button',{name:'Mes prospects',exact:true}).click();const total=(await (await mine).json()).total;
    assert(total>0,'the creator owns her manual prospects');await page.getByText(new RegExp(`^${total} prospects correspondants`)).waitFor();}
   await page.getByRole('button',{name:'Clôturés',exact:true}).click();await page.getByTestId('opportunity-row').first().waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),2);assert(await page.getByRole('button',{name:'Tableau',exact:true}).isDisabled());
-  await page.getByRole('button',{name:'Tous les prospects',exact:true}).click();await page.getByRole('button',{name:'Tableau',exact:true}).click();await page.getByTestId('opportunity-card').first().waitFor();
+  await page.getByRole('button',{name:'Tous',exact:true}).click();await page.getByRole('button',{name:'Tableau',exact:true}).click();await page.getByTestId('opportunity-card').first().waitFor();
   const search=page.getByRole('searchbox',{name:'Rechercher un prospect'});await search.pressSequentially('O3 parent 31',{delay:25});await page.waitForURL(url=>url.searchParams.get('q')==='O3 parent 31');await page.getByTestId('opportunity-card').filter({hasText:'O3 parent 31'}).waitFor();assert.equal(await search.inputValue(),'O3 parent 31');await search.fill('');await page.waitForURL(url=>!url.searchParams.has('q'));await page.getByTestId('opportunity-card').filter({hasText:'O3 parent 3'}).first().waitFor();
   phase='rapid programme/search composition';
   sql(`update public.crm_leads set program_interest_text='Programme Anglais annuel',owner_id='${users[0].id}' where id='${leads[0]}';`);
@@ -122,13 +122,15 @@ try {
    await page.setViewportSize(viewport);await page.waitForTimeout(100);await page.waitForLoadState('networkidle');
    if(viewport.width===390) assert(await page.getByRole('button',{name:'Liste',exact:true}).getAttribute('aria-pressed')==='true');
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no body overflow');
-   // RCC-B1: view chips from 1280px, the Vue select below.
-   if(viewport.width>=1280)await page.getByRole('button',{name:'Qualifiés',exact:true}).click();else await page.getByRole('combobox',{name:'Vue',exact:true}).selectOption('qualified');await page.waitForURL(url=>url.searchParams.get('view')==='qualified');
+   // CPO-r2: the same four tabs at every width; the other views are in « Filtres », and a removed view (« Qualifiés ») opens « Tous ».
+   assert.deepEqual(await page.getByRole('navigation',{name:'Vues des opportunités'}).getByRole('button').allInnerTexts(),['Tous','Mes prospects','À prendre','Clôturés']);assert.equal(await page.getByRole('combobox',{name:'Vue',exact:true}).count(),0,'no view select outside « Filtres »');
+   // The qualified prospect is then reached by its stage (the « Qualifié » column, chip or status filter).
+   await page.goto(app+'/crm/leads?view=qualified&stage=QUALIFIED');await page.waitForLoadState('networkidle');assert.equal(await page.getByRole('navigation',{name:'Vues des opportunités'}).getByRole('button',{name:'Tous',exact:true}).getAttribute('aria-pressed'),'true');
    await page.locator(`[data-testid="opportunity-card"][data-lead-id="${leads[3]}"]`).getByRole('button').first().click();
    await page.getByRole('dialog').getByRole('heading',{name:'Demande',exact:true}).waitFor();await page.waitForFunction(()=>{const box=document.querySelector('[role=dialog]')?.getBoundingClientRect();return box&&box.x>=-1&&box.right<=innerWidth+1;});const box=await page.getByRole('dialog').boundingBox();assert(box.x>=-1 && box.x+box.width<=viewport.width+1,JSON.stringify({viewport,box}));
    await page.waitForLoadState('networkidle');await page.screenshot({path:join(tmpdir(), `o3-${engine.name()}-${viewport.width}.png`),fullPage:false});
   }
-  phase='200% viewport';await closeDrawer();await page.goto(app+'/crm/leads?layout=list');await page.waitForLoadState('networkidle');await page.setViewportSize({width:720,height:450});await page.waitForLoadState('networkidle');await page.getByRole('heading',{name:'Pipeline admissions'}).waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'200% equivalent CSS viewport');
+  phase='200% viewport';await closeDrawer();await page.goto(app+'/crm/leads?layout=list');await page.waitForLoadState('networkidle');await page.setViewportSize({width:720,height:450});await page.waitForLoadState('networkidle');await page.getByRole('heading',{name:'Opportunités'}).waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'200% equivalent CSS viewport');
   assert.deepEqual(failures,[]);await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} Board/List/Views, cursor bounds, keyboard/Back, acquisition endpoint, responsive/reduced motion`);
  }
 

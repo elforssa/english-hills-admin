@@ -81,7 +81,6 @@ export default function CrmWorkspace({
     ['q','owner','channel','source','program','stage','contact'].forEach(key => next.delete(key));
     // A view chosen in « Filtres » is a refinement; the four tabs are kept.
     if (Object.hasOwn(OPPORTUNITY_FILTER_VIEWS, next.get('view') || '')) next.delete('view');
-    if (mode === 'today') next.delete('assignee');
     setCursors([null]);
     window.history.replaceState(null, '', `${pathname}${next.size ? '?' + next : ''}`);
     window.dispatchEvent(new Event('crm:filter-reset'));
@@ -130,7 +129,7 @@ export default function CrmWorkspace({
     {/* One line at 320 px: the first task stays where it was before item 24. */}
     <Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></div>} />
     : <PageHeader compact headingRef={headingRef} title="Opportunités" description={countLine} actions={<>{band === 'desktop' && toggle}<Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
-  {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onReset={resetFilters} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
+  {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
     <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} onReset={resetFilters} />
     {contact && <p className="text-sm">Opportunités de ce contact · Les apprenants restent séparés. <Button variant="link" onClick={() => { const next = new URLSearchParams(window.location.search); next.delete('contact'); window.history.replaceState(null, '', `${pathname}?${next}`); }}>Tous les contacts</Button></p>}
     {(presentation === 'stage-list' || (taking && layout === 'list')) && <StageChips view={filters.view} stage={stage} counts={counts} total={opportunities.data?.total} all={!taking} onSelect={value => setFilter('stage', value)} />}

@@ -206,7 +206,9 @@ try {
   await s4.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
   await toast('Prospect créé'); await panel().waitFor();
   const elder = await page.evaluate(() => new URL(location.href).searchParams.get('lead'));
-  await s4.click(drawer().getByRole('button', { name: 'Ajouter un enfant', exact: true }), 'Ajouter un enfant');
+  // CPO-r2: « Ajouter un enfant » lives in « Autres actions » (one more tap, still inside the target).
+  await s4.click(drawer().getByRole('button', { name: 'Autres actions', exact: true }), 'Autres actions');
+  await s4.click(page.getByRole('menuitem', { name: 'Ajouter un enfant', exact: true }), 'Ajouter un enfant');
   await dialog().getByRole('heading', { name: 'Ajouter un enfant' }).waitFor();
   await s4.fill(dialog().getByLabel('Nom de l’apprenant', { exact: true }), 'Jour 4 cadet', 'learner 2');
   await s4.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
@@ -281,7 +283,7 @@ try {
   for (const [i, opener] of [[0, () => row(callback).getByRole('button', { name: 'Changer', exact: true })], [1, () => panel().getByRole('button', { name: 'Changer', exact: true })]]) {
     await s7.click(opener(), 'Changer');
     await dialog().getByRole('heading', { name: 'Changer la prochaine action' }).waitFor();
-    assert.equal(await dialog().getByLabel('Rappel convenu', { exact: true }).isChecked(), true, '« Changer » opens on the agreed callback');
+    assert.equal(await dialog().getByLabel('Rappeler à l’heure convenue', { exact: true }).isChecked(), true, '« Changer » opens on the agreed callback');
     // The hours are loaded and the agreed time is shown before the date changes.
     await page.waitForFunction(el => !el.disabled && el.options.length > 1 && el.value === '16:00', await dialog().getByLabel('Heure', { exact: true }).elementHandle());
     await s7.fill(dialog().getByLabel('Date', { exact: true }), later(7 * (i + 1)), 'new date (time kept)');
