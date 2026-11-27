@@ -121,12 +121,17 @@ jobs:
         include:
           - shard: upgrades-from-097-to-105
           - shard: upgrades-from-106-to-111
-          - shard: upgrades-from-112-to-116
+          - shard: upgrades-from-112-to-119
+          - shard: upgrades-from-122-to-128
+          - shard: upgrades-from-129-to-141
           - shard: sql-and-concurrency
           - shard: browser-security
             browsers: chromium
             browser-cache: chromium
-          - shard: browser-crm
+          - shard: browser-crm-opportunities
+            browsers: chromium webkit
+            browser-cache: chromium-webkit
+          - shard: browser-crm-work-and-reception
             browsers: chromium webkit
             browser-cache: chromium-webkit
     defaults:
@@ -161,7 +166,17 @@ jobs:
       - uses: supabase/setup-cli@afb1b15109756ea5cf9d8985a359d9095235ca2b # v2.1.2
         with:
           version: 2.116.0
-      - run: npm ci
+      # Setup shared by every shard. node_modules is restored only on an exact
+      # package-lock.json + Node version + OS match; otherwise npm ci runs as before.
+      - name: Restore node_modules for this exact lockfile
+        id: node-modules
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies (npm ci) when node_modules was not restored
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci
       - name: Resolve Playwright version
         if: matrix.browsers
         id: playwright
@@ -175,7 +190,10 @@ jobs:
       - name: Install Playwright browsers and system dependencies
         if: matrix.browsers
         run: npx playwright install --with-deps ${{ matrix.browsers }}
-      - run: supabase start
+      # Studio (web UI) and the analytics pair (logflare + vector) are never used by a
+      # suite; skipping them saves three image downloads and their start-up waits.
+      - name: Start local Supabase without Studio and analytics
+        run: supabase start --exclude studio,logflare,vector
       - name: Local-stack guard (HILLS_LOCAL_STACK, ports and container match supabase/config.toml)
         run: node scripts/lib/local-stack.mjs assert --db-port 54322 --api-url http://127.0.0.1:54321 --container supabase_db_hills-admin-next
       - name: Configure local-only app credentials
@@ -273,9 +291,11 @@ jobs:
           node scripts/test-crm-rcc-a2-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
 
-      # Shard upgrades-from-112-to-116.
+      # Former shard upgrades-from-112-to-116, now three shards in the same order. Each
+      # shard starts with a step that resets to its own version first.
+      # Shard upgrades-from-112-to-119.
       - name: Premium retirement stateful 112 to 113 upgrade and open-charge text rehearsal
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-112-to-119'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 112 --no-seed
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-premium-retirement-upgrade-112-setup.sql
@@ -284,25 +304,25 @@ jobs:
           bash scripts/test-premium-retirement-open-charges.sh
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Insights live sync stateful 113 to 114 upgrade
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-112-to-119'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 113 --no-seed
           node scripts/test-crm-insights-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: DGI-B attribution stateful 114 to 115 upgrade
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-112-to-119'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 114 --no-seed
           node scripts/test-crm-dgi-b-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: DGI-B funnel and program stateful 115 to 116 upgrade
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-112-to-119'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 115 --no-seed
           node scripts/test-crm-dgi-b2-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Online learning stateful 116 to 117 upgrade in both workshop-removal landing orders
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-112-to-119'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 116 --no-seed
           node scripts/test-online-learning-upgrade.mjs online-first
@@ -310,12 +330,12 @@ jobs:
           node scripts/test-online-learning-upgrade.mjs release-b-first
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Conflicts without retry 118 to 119 mechanical upgrade, catalog zero rule and real HTTP acceptance
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-112-to-119'
         run: |
           npm run test:conflicts-local
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Enrollment and group consistency 119 to M1, clean-up and M2, M2 refusal without C1b, prepared M1 revert
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-112-to-119'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 119 --no-seed
           node scripts/test-egc-upgrade.mjs full
@@ -324,8 +344,9 @@ jobs:
           node scripts/lib/local-stack.mjs db-reset --version 119 --no-seed
           node scripts/test-egc-upgrade.mjs revert-m1
           node scripts/lib/local-stack.mjs db-reset --no-seed
+      # Shard upgrades-from-122-to-128.
       - name: Portal readiness 122 to 123 upgrade, guarded clean-up and prepared corrective
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-122-to-128'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 122 --no-seed
           node scripts/test-portal-readiness-upgrade.mjs full
@@ -333,7 +354,7 @@ jobs:
           node scripts/test-portal-readiness-upgrade.mjs corrective
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Speed as the centre grows 123 to 124 generator, read/write equivalence, restore and budgets
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-122-to-128'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 123 --no-seed
           node scripts/generate-rls-role-evaluation.mjs --check
@@ -342,38 +363,39 @@ jobs:
           node scripts/test-speed-as-the-centre-grows-local.mjs budget
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Audit follow-ups 124 to 125 generator, UTC equivalence and restore
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-122-to-128'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 124 --no-seed
           python3 scripts/generate-centre-clock.py --check
           node scripts/test-audit-follow-ups-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Lead ad source 125 to 126 upgrade and read acceptance
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-122-to-128'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 125 --no-seed
           node scripts/test-crm-lead-ad-source-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Enrollment at payment 126 to 127 upgrade, archive step, revert and restore
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-122-to-128'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 126 --no-seed
           node scripts/test-enrollment-at-payment-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Courses with dates 127 to 128 upgrade, one-time step, revert and restore
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-122-to-128'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 127 --no-seed
           node scripts/test-course-dates-close-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Online room reliability 128 to 129 upgrade (ORR-r2 reliability PR)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-122-to-128'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 128 --no-seed
           node scripts/test-online-room-reliability-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
+      # Shard upgrades-from-129-to-141.
       - name: Online session evidence 129 to 130 upgrade (ORR-r2 webhook PR)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-129-to-141'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 129 --no-seed
           node scripts/test-online-session-evidence-upgrade.mjs
@@ -381,7 +403,7 @@ jobs:
       # RPW-r2 deviation 8: 135 re-creates apply_pending_role. The same suite on 130 and on the
       # current head must pass and print the same DIGEST (roles, teacher binding, links, audit rows).
       - name: Invitation activation 130 vs current (RPW-r2)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-129-to-141'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 130 --no-seed
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-invitation-activation-equivalence.sql > /tmp/activation-130.log
@@ -392,7 +414,7 @@ jobs:
           cat /tmp/digest-130 /tmp/digest-current
           diff /tmp/digest-130 /tmp/digest-current
       - name: One next action 130 to 136 upgrade (RWR-r5 PR A1)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-129-to-141'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 130 --no-seed
           node scripts/test-crm-next-action-136-upgrade.mjs
@@ -401,7 +423,7 @@ jobs:
       # committed 136→137 path (precondition refusal, D1, the file, writers, COMMIT refusals,
       # restore file, re-apply).
       - name: One next action enforced 136 to 137 upgrade (RWR-r5 PR A2)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-129-to-141'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 136 --no-seed
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action-upgrade.sql
@@ -409,25 +431,25 @@ jobs:
           node scripts/test-crm-next-action-137-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: People identity 138 to 139 upgrade and restore (RWR-r5 PR B1)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-129-to-141'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 138 --no-seed
           node scripts/test-people-139-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Catalogues 139 to 140 upgrade, restore and re-apply (RWR-r5 PR B2)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-129-to-141'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 139 --no-seed
           node scripts/test-catalogues-140-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Desk academics 140 to 141 upgrade, restore and re-apply (RWR-r5 PR C2)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-129-to-141'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 140 --no-seed
           node scripts/test-desk-academics-141-upgrade.mjs
           node scripts/lib/local-stack.mjs db-reset --no-seed
       - name: Follow-ups 141 to 142 upgrade, restore and re-apply (RWR-r5 follow-ups)
-        if: matrix.shard == 'upgrades-from-112-to-116'
+        if: matrix.shard == 'upgrades-from-129-to-141'
         run: |
           node scripts/lib/local-stack.mjs db-reset --version 141 --no-seed
           node scripts/test-rwr-follow-ups-142-upgrade.mjs
@@ -560,6 +582,14 @@ jobs:
         run: bash scripts/test-receipt-concurrency.sh
 
       # Browser shards: build once, then serve the build to the API and browser suites.
+      # Next.js's own build cache; Next checks it and rebuilds whatever changed.
+      - name: Restore the Next.js build cache
+        if: matrix.browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'public/**', 'next.config.*', 'tailwind.config.*', 'postcss.config.*', 'jsconfig.json') }}
+          restore-keys: next-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
       - name: Build and start the local app
         id: app
         if: matrix.browsers
@@ -631,23 +661,25 @@ jobs:
         if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: npm run test:email-links-local
 
-      # Shard browser-crm.
+      # Former shard browser-crm, now two shards, both on Chromium and WebKit.
+      # Opportunities (the longest suite) runs alone; the other CRM and reception
+      # suites run in the second shard in their original order.
       - name: CRM lifecycle and phase 11 browser suites
-        if: matrix.shard == 'browser-crm'
+        if: matrix.shard == 'browser-crm-work-and-reception'
         run: |
           npm run test:crm-lifecycle-browser
           node scripts/test-crm-phase11-browser.mjs
       - name: CRM opportunities browser suites
-        if: matrix.shard == 'browser-crm'
+        if: matrix.shard == 'browser-crm-opportunities'
         run: npm run test:crm-opportunities-browser
       - name: CRM work and calendar browser suites
-        if: matrix.shard == 'browser-crm'
+        if: matrix.shard == 'browser-crm-work-and-reception'
         run: npm run test:crm-work-calendar-browser
       - name: Lead intake director panel browser suite
-        if: matrix.shard == 'browser-crm'
+        if: matrix.shard == 'browser-crm-work-and-reception'
         run: npm run test:crm-intake-admin-browser
       - name: Reception forms, day scripts, payment screens, people search, French labels, desk academics and mobile reception (RWR-r5 PRs A1, B1, B2, C1 and C2, §4.9 T7, §5.1–5.2, §5.4, §6.2–6.5, invariants 12 and 15, §8)
-        if: matrix.shard == 'browser-crm'
+        if: matrix.shard == 'browser-crm-work-and-reception'
         run: npm run test:reception-browser
   required:
     if: always()
