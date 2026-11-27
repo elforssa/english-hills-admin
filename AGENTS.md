@@ -90,7 +90,7 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 
 Architecture and implementation authors run relevant checks, inspect their own final diff and perform **one focused self-check** before handoff. Its purpose is to catch obvious mistakes, verify changed risk areas and confirm that tests/documentation accurately describe the change. Focus on security, authorization, migrations, data integrity, concurrency, external providers, retry/error handling and regression risk as applicable.
 
-The author task must **not spawn an internal reviewer, independent-review, or re-review subagent**. Do not run a second review pass merely to imitate the formal reviewer. If broader review is warranted, finish the author handoff and ask the owner to launch the separate independent reviewer task/session required by the risk tier.
+The author task must **not spawn an internal reviewer, independent-review, or re-review subagent**. Do not run a second review pass merely to imitate the formal reviewer. If broader review is warranted, finish the author handoff and ask the owner to launch the separate independent reviewer task/session required by the risk tier. In the [coordinated Tier 2 flow](#coordinated-tier-2-flow-owner-opt-in-per-task) the author hands off to the coordinator instead, which launches the reviewer; the author still never launches, imitates or orchestrates review.
 
 The self-check never approves the PR, counts as independent review, authorizes merge or replaces a required reviewer. Do not describe it as “approved,” and do not issue **READY FOR FINAL REVIEW** / **CHANGES REQUIRED** from an author task. After push, PR creation and confirmed CI scheduling, stop and report the exact PR/head SHA and CI run reference for the coordinator's handoff.
 
@@ -109,16 +109,26 @@ The implementation agent must not provide its own independent-review verdict. A 
 
 For an eligible change, the owner may ask a **coordinator session** to run the author and the independent reviewer as separate agents. The coordinator writes no code and gives no verdict; it only launches the two agents, passes material between them and reports to the owner.
 
-**Eligible only when all of these hold:** Tier 2; client-only; the diff touches nothing under `supabase/**` (migrations, functions, config), `src/app/api/**`, `src/middleware.js`, server-only modules, auth/roles/permissions, finance/receipts/payments, e-mail/Zoom/Meta/webhooks or any other external delivery, `package.json`/`package-lock.json`, `.github/**`, `scripts/ci/**`, or the rule documents themselves: `AGENTS.md`, `CLAUDE.md`, `docs/ai/SECURITY_RULES.md`, `docs/ai/WORKFLOWS.md`, `docs/ai/PRODUCT_RULES.md` and `docs/ai/ARCHITECTURE.md`. Record updates that the same change requires are allowed: `docs/ai/CURRENT_STATE.md`, the plan document for that change, and `docs/ai/OWNER_DECISIONS.md` entries that only quote decisions the owner actually gave. Tier 3 always uses the fully manual flow. If unsure, it is not eligible.
+**Eligible only when all of these hold:** the change is Tier 2 and client-only (no migration, auth/roles/permissions, finance or external delivery), and every changed path is on this allowed list:
+
+- `src/components/**`, `src/app/**` except `src/app/api/**`, `src/hooks/**` and `src/utils/**`;
+- the tests of those files: `scripts/test-*.mjs`;
+- record files the same change requires: `docs/ai/CURRENT_STATE.md`, the plan document for that change under `docs/architecture/plans/`, and `docs/ai/OWNER_DECISIONS.md` under the rule below.
+
+These paths are excluded even though they sit inside the allowed folders: `src/components/finance/**`, `src/components/receipts/**`, `src/app/(admin)/finance/**`, `src/app/(admin)/receipts/**`, `src/app/(admin)/payroll/**`, `src/app/(admin)/settings/**` (users, roles and invitations), `src/app/(auth)/**`, `src/app/auth/**` and `src/components/ProtectedRoute.jsx`. `src/lib/supabase.js` is excluded by name. Any other path, including the rule documents (`AGENTS.md`, `CLAUDE.md`, `docs/ai/SECURITY_RULES.md`, `docs/ai/WORKFLOWS.md`, `docs/ai/PRODUCT_RULES.md`, `docs/ai/ARCHITECTURE.md`), means the manual flow. A change to an allowed path that still touches payment, receipt, role or permission behaviour is not eligible either. Tier 3 always uses the fully manual flow. If unsure, it is not eligible.
+
+`docs/ai/OWNER_DECISIONS.md` is in the flow only when the author adds wording taken from the owner's own message, which the coordinator passes on unchanged; the coordinator also gives that message to the reviewer to compare. Otherwise that file is out of the flow.
 
 **Flow:**
 
 1. The coordinator launches the author agent in its own worktree with the approved plan. The author follows the Tier 2 steps and returns **READY FOR INDEPENDENT REVIEW** with the exact head SHA.
-2. The coordinator verifies from GitHub, not from the author's report, that required CI is green for that exact SHA, and re-checks the changed paths against the eligibility list. Any path outside it stops the flow and returns to the manual one.
-3. The coordinator launches a fresh reviewer agent that did not write the change and has not seen the author's conversation. It receives only the PR, the plan, the exact SHA and earlier findings, confirms the PR head equals that SHA with green CI, and returns one verdict. In this flow the reviewer also lists every existing test assertion that the change modified or removed and states, for each, whether it now checks less than before.
-4. On **CHANGES REQUIRED**, the coordinator passes the findings unedited to the author, who fixes them and returns a new SHA; the coordinator re-verifies CI and sends the new SHA to the same reviewer for re-review.
-5. After at most two fix rounds, or on any INCONCLUSIVE result, disagreement, scope change or needed owner decision, the coordinator stops and asks the owner.
-6. On **READY FOR FINAL REVIEW**, the coordinator gives the owner the PR, exact SHA, CI run and the reviewer's verdict.
+2. For every new head SHA, including after each fix round, the coordinator repeats this step in full. It verifies from GitHub, not from the author's report, that required CI has finished green for that exact SHA, and it re-checks every path the whole PR changes against the eligibility rules above. If CI is red or unfinished, the SHA goes back to the author and counts as a fix round. Any path outside the rules stops the flow and returns to the manual one.
+3. The coordinator launches a fresh reviewer agent: a new agent, never a fork or copy of the coordinator's conversation, that did not write the change and has not seen the author's conversation. It receives only the PR, the plan, the exact SHA, earlier findings and, for `OWNER_DECISIONS.md`, the owner's message. It confirms that the PR head equals that SHA with green CI, then returns one verdict. In this flow the reviewer also:
+   - confirms eligibility independently by checking every changed path of the whole PR against the rules above; any ineligible path is CHANGES REQUIRED and returns the change to the manual flow;
+   - lists every existing test assertion the change modified or removed, and states for each whether it now checks less than before.
+4. On **CHANGES REQUIRED**, the coordinator passes the findings unedited to the author, who fixes them and returns a new SHA. The coordinator repeats step 2 for that SHA, then sends it to the same reviewer for re-review.
+5. There are at most two fix rounds. If the re-review after the second fix is still CHANGES REQUIRED, the coordinator stops and asks the owner. It also stops and asks the owner on any INCONCLUSIVE result, disagreement, scope change or needed owner decision.
+6. On **READY FOR FINAL REVIEW**, the coordinator gives the owner the PR, the exact SHA, the CI run and the reviewer's verdict.
 
 Merge, deployment and any Production change still require the owner's explicit approval; this flow never grants them. The rule in [author self-check](#author-self-check-before-handoff) that the author must not orchestrate review still applies: here the coordinator, not the author, launches the reviewer.
 
