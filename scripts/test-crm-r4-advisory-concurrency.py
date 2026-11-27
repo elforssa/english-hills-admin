@@ -7,6 +7,8 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
+from lib.local_stack import assert_local_stack, reset_local_database
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 assert subprocess.check_output(['git','branch','--show-current'],text=True).strip().startswith('codex/') or os.getenv('GITHUB_EVENT_NAME')=='pull_request'
 ARGS=['psql','-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1']
@@ -236,5 +238,5 @@ try:
  print('PASS claim skip, reversed multi-lead hierarchy batches, identity/cleanup concurrency, released locks and isolation guards',flush=True)
 finally:
  if created:
-  subprocess.run(['supabase','db','reset','--local','--no-seed'],env={**os.environ,'SUPABASE_TELEMETRY_DISABLED':'1'},stdout=subprocess.DEVNULL,check=True,timeout=180)
+  reset_local_database('--no-seed')  # follow-ups 142 (item 11): through the guard
   print('PASS concurrency fixture inventory removed by local rebuild',flush=True)

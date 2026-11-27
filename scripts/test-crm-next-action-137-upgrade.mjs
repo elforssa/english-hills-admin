@@ -18,8 +18,10 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { openSlotSql } from './lib/centre-days.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
 
 const port = process.env.CRM_UPGRADE_PORT || '54322';
+assertLocalStack({ dbPort: port }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const base = ['-X', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'];
 const env = { ...process.env, PGPASSWORD: 'postgres' };
 const psql = (args, input) => execFileSync('psql', [...base, ...args], { input, encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
@@ -38,6 +40,7 @@ const restore137 = readFileSync('scripts/rollback/137_crm_one_next_action_enforc
 const staff = n => `a9137000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const as = (who, body) => `begin; select set_config('request.jwt.claim.sub','${who}',true); set local role authenticated; ${body}; commit;`;
 const call = (who, fn, payload) => json(sql(as(who, `select public.${fn}(gen_random_uuid(),${payload})::text`)));
+const trustedCall = (who, fn, payload) => json(sql(as(who, `reset role; select public.${fn}(gen_random_uuid(),${payload})::text`)));
 const version = lead => sql(`select version from public.crm_leads where id='${lead}'`);
 const openActions = lead => Number(sql(`select count(*) from public.crm_tasks where lead_id='${lead}' and status='open'`));
 const nextAction = lead => sql(`select concat_ws('|',task_type,assigned_to,placement_test_id) from public.crm_tasks where id=crm_security.next_action_id('${lead}')`);
@@ -52,7 +55,8 @@ sql(`insert into auth.users(id,email,aud,role,created_at,updated_at) values
  update public.profiles set role='receptionist',full_name='Upgrade reception' where id='${staff(3)}';`);
 const hours = { 1: [['09:00', '20:00']], 2: [['09:00', '20:00']], 3: [['09:00', '20:00']], 4: [['09:00', '20:00']], 5: [['09:00', '20:00']], 6: [['09:00', '20:00']], 7: [['09:00', '20:00']] };
 sql(as(staff(1), `select public.crm_create_followup_policy(gen_random_uuid(),'${JSON.stringify({ weekly_hours: hours, attempt_offsets: [0, 0, 1, 3, 5] })}'::jsonb)`));
-const lead = name => call(staff(3), 'crm_create_manual_lead', `jsonb_build_object('display_name','Upgrade ${name}','learner_name','Upgrade learner ${name}','email','upg137-${name}@example.invalid','source_label','Manuel','owner_id','${staff(3)}')`).lead.id;
+// 142 (deviation 3): crm_create_manual_lead has no API role after the upgrade; the fixture create runs trusted.
+const lead = name => trustedCall(staff(3), 'crm_create_manual_lead', `jsonb_build_object('display_name','Upgrade ${name}','learner_name','Upgrade learner ${name}','email','upg137-${name}@example.invalid','source_label','Manuel','owner_id','${staff(3)}')`).lead.id;
 const dupes = lead('dupes'), testOnly = lead('test'), closed = lead('closed'), single = lead('single');
 sql(`begin; set local session_replication_role=replica;
  insert into public.crm_tasks(lead_id,task_type,status,due_at,assigned_to,source_kind,source_key)

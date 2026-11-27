@@ -18,6 +18,7 @@ Flag contradictions between these documents and repository reality instead of si
 - `npm test` — core regression scripts; [package.json](package.json) includes additional CRM, navigation and middleware suites.
 - `npm run lint` and `npm run build` — app checks.
 - `supabase migration up --local` — test reviewed migrations locally before any separately approved production deployment.
+- `export HILLS_LOCAL_STACK=<project_id>` before any database suite; reset only with `node scripts/lib/local-stack.mjs db-reset` ([local stack guard](docs/ai/WORKFLOWS.md#local-stack-guard-follow-ups-142)).
 
 Choose verification appropriate to the change. No application tests are required for Markdown-only documentation changes.
 

@@ -170,7 +170,8 @@ values (pg_temp.id(600), pg_temp.id(300), pg_temp.id(500), 'ignored', true);
 select pg_temp.ok((select count(*) = 1 from public.dismissal_logs where id = pg_temp.id(600)), 'item 5: she records and reads');
 select pg_temp.ok(pg_temp.touched(format($q$update public.dismissal_logs set confirmed = false where id = %L$q$, pg_temp.id(600))) = 0,
   'item 5: edit refused');
-select pg_temp.ok(pg_temp.touched(format($q$delete from public.dismissal_logs where id = %L$q$, pg_temp.id(600))) = 0,
+-- Follow-ups 142 (item 10): no screen deletes a dismissal record, so the API DELETE grant is gone (42501).
+select pg_temp.refused(format($q$delete from public.dismissal_logs where id = %L$q$, pg_temp.id(600)), '42501', null,
   'item 5: delete refused');
 -- An adult in the dismissal history stays: the history refuses the cleared reference.
 select pg_temp.refused(format($q$delete from public.authorized_adults where id = %L$q$, pg_temp.id(500)), '42501', null,

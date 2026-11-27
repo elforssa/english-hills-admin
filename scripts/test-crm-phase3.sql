@@ -316,7 +316,9 @@ do $$ declare cmd text; i integer; data jsonb; begin
  end loop;
  for i in 1..3 loop
   perform pg_temp.actor(i);
-  perform public.crm_create_manual_lead(gen_random_uuid(),'{"display_name":"Staff test","learner_name":"Synthetic learner","source_label":"Manual"}');
+  -- 142 (deviation 3): crm_create_manual_lead has no API role; staff create through crm_create_prospect.
+  perform pg_temp.denied('select public.crm_create_manual_lead(gen_random_uuid(),''{"display_name":"Staff test","learner_name":"Synthetic learner","source_label":"Manual"}'')','42501');
+  perform public.crm_create_prospect(gen_random_uuid(),jsonb_build_object('display_name','Staff test '||i,'learner_name','Synthetic learner','source_label','Manual','email','phase3-staff-'||i||'@example.invalid'));
   perform pg_temp.denied('update public.crm_leads set status=''CONVERTED''','42501');
   perform pg_temp.denied('update public.crm_tasks set status=''completed''','42501');
   perform pg_temp.denied('select crm_security.command(''add_note'',gen_random_uuid(),''{}'')','42501');

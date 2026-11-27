@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServerClient } from '@supabase/ssr';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ container: 'supabase_db_hills-admin-next' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 const root = new URL('../', import.meta.url);
 const status = JSON.parse(execFileSync('supabase', ['status', '-o', 'json'], { cwd: root, encoding: 'utf8' }));

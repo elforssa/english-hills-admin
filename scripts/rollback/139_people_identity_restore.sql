@@ -16,12 +16,14 @@
 --    body, never re-created since); then checks each prosrc md5 against the 138 one;
 --  * drops the phone trigger on students and authorized adults, the two phone_key
 --    indexes and every function 139 added (search, commands, merges, D3, D5);
---  * refuses, changing nothing, if 139 is not applied, or if a D3 or D5 run is
---    journalled and not reverted (restore after d3_revert / unmerge_student only).
+--  * refuses, changing nothing, if 139 is not applied, if migration 140 is applied
+--    (its own restore runs first), if any student is merged (unmerge_student first,
+--    so no merged file is left for the pre-139 lists, which do not read the merge
+--    column), or if a D3 or D5 run is journalled and not reverted (restore after
+--    d3_revert / unmerge_student only).
 -- What it keeps on purpose: the additive tables person_match_decisions and
 -- student_merge_journal, the columns students.merged_into_student_id and
--- merged_at (with their checks and index), and every row. A student merged in B1 shows again in the lists
--- (the pre-139 lists do not read the merge column). 139 creates those additive
+-- merged_at (with their checks and index), and every row. 139 creates those additive
 -- objects only if absent, so it can be applied again after this restore. The ledger
 -- row 139 is removed by the operator wrapper, not here.
 begin;

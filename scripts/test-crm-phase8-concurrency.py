@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import subprocess
 import uuid
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 assert (Path('.git/HEAD').read_text().strip().startswith('ref: refs/heads/codex/'))
 learner_policy=os.environ.get('CRM_TEST_LEARNER_POLICY','required')
 assert learner_policy in ('required','optional')

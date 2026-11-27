@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const args = ['-X','-qAt','-h','127.0.0.1','-p',process.argv.includes('--replay') ? '55322' : '54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'];
+import { assertLocalStack } from './lib/local-stack.mjs';
+// Follow-ups 142 (item 11): this checkout's stack only (the --replay stack is run from a checkout
+// whose supabase/config.toml declares it), before any statement.
+assertLocalStack({ dbPort: args[5], ...(process.argv.includes('--plans') ? { container: process.argv.includes('--replay') ? 'supabase_db_hills-o3-replay' : 'supabase_db_hills-admin-next' } : {}) });
 const sql = input => execFileSync(process.argv.includes('--plans') ? 'docker' : 'psql',process.argv.includes('--plans') ? ['exec','-i',process.argv.includes('--replay') ? 'supabase_db_hills-o3-replay' : 'supabase_db_hills-admin-next','psql','-X','-qAt','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'] : args,{input,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},maxBuffer:50*1024*1024,stdio:['pipe','pipe','inherit']});
 const directory = process.env.O3_EVIDENCE_DIR || '/tmp/o3-evidence'; mkdirSync(directory,{recursive:true});
 const files = process.argv.includes('--regressions') ? ['test-crm-phase4.sql','test-crm-phase5.sql','test-crm-phase6.sql','test-crm-phase7.sql','test-crm-opportunities.sql'] : ['test-crm-opportunities.sql'];

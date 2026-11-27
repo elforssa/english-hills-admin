@@ -3,18 +3,25 @@ import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { DAY_SHIFT } from './centre-days.mjs';
+import { assertLocalStack } from './local-stack.mjs';
 
 export const PORT = process.env.CRM_LOCAL_DB_PORT || '54322';
 const ARGS = ['-X', '-qAt', '-h', '127.0.0.1', '-p', PORT, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'];
 const ENV = { ...process.env, PGPASSWORD: 'postgres' };
+// Follow-ups 142 (item 11): the guard runs before the first statement, not at import, so pure
+// suites that only import the helpers need no stack.
+let guarded = false;
+const guard = () => { if (!guarded) { assertLocalStack({ dbPort: PORT, apiUrl: 'http://127.0.0.1:54321' }); guarded = true; } };
 
 export function sql(input) {
+  guard();
   const r = spawnSync('psql', ARGS, { input, encoding: 'utf8', env: ENV, maxBuffer: 20 * 1024 * 1024 });
   if (r.status !== 0) throw Object.assign(new Error(r.stderr || 'psql failed'), { stdout: r.stdout, stderr: r.stderr });
   return r.stdout.trim();
 }
 
 export function sqlAsync(input) {
+  guard();
   return new Promise(resolve => {
     const p = spawn('psql', ARGS, { env: ENV });
     let stdout = ''; let stderr = '';

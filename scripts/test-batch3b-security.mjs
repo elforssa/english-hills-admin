@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ apiUrl: 'http://127.0.0.1:54321', container: 'supabase_db_hills-admin-next' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 const root = new URL('../', import.meta.url);
 assertLocalFeatureBranch(root);
@@ -210,7 +212,10 @@ try {
     for(const status of ['Refusé','Approuvé']) {
       assert.equal(ok(await request(staff,'leave_requests','PATCH',{status,remplacant:'Staff replacement'},'?id=eq.'+l.id))[0].status,status); checks++;
     }
-    assert.equal(ok(await request(staff,'enrollments','DELETE',undefined,'?id=eq.'+e.id)).length,1);
+    // Follow-ups 142 (item 10): no screen deletes an enrollment, so the API DELETE grant is
+    // revoked: staff get 42501 and the closed row stays (the clean-up below removes it).
+    { const r=await request(staff,'enrollments','DELETE',undefined,'?id=eq.'+e.id); assert.equal(r.status,403,JSON.stringify(r)); assert.equal(r.data?.code,'42501'); }
+    assert.equal(sql(`select count(*) from public.enrollments where id='${e.id}'`).trim(),'1');
     assert.equal(ok(await request(staff,'leave_requests','DELETE',undefined,'?id=eq.'+l.id)).length,1); checks+=2;
   }
   // A teacher can still read a decided request, but cannot edit it afterward.

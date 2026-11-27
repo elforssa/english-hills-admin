@@ -12,8 +12,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { assertLocalStack } from './lib/local-stack.mjs';
 
 const port = process.env.CRM_UPGRADE_PORT || '54322';
+assertLocalStack({ dbPort: port }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const psql = (args, input) => execFileSync('psql', ['-X', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', ...args],
   { input, encoding: 'utf8', env: { ...process.env, PGPASSWORD: 'postgres' }, maxBuffer: 64 * 1024 * 1024 });
 const sql = input => psql(['-qAt'], input).trim();
@@ -30,7 +32,8 @@ sql(`insert into auth.users(id,email,aud,role,created_at,updated_at) values
  update public.profiles set role='receptionist',full_name='Upgrade reception' where id='${staff(2)}';`);
 const hours = { 1: [['15:00', '20:00']], 2: [['10:00', '12:30'], ['15:20', '20:00']], 3: [['10:00', '12:30'], ['15:20', '20:00']], 4: [['10:00', '12:30'], ['15:20', '20:00']], 5: [['10:00', '12:30'], ['15:20', '20:00']], 6: [['10:00', '13:00']], 7: [] };
 sql(as(staff(1), `select public.crm_create_followup_policy(gen_random_uuid(),'${JSON.stringify({ weekly_hours: hours, attempt_offsets: [0, 0, 1, 3, 5] })}'::jsonb)`));
-const lead = name => JSON.parse(sql(as(staff(2), `select public.crm_create_manual_lead(gen_random_uuid(),jsonb_build_object('display_name','Upgrade ${name}','learner_name','Upgrade learner','email','upg136-${name}@example.invalid','source_label','Manuel','owner_id','${staff(2)}'))::text`)).split('\n').find(line => line.startsWith('{'))).lead.id;
+// 142 (deviation 3): crm_create_manual_lead has no API role after the upgrade; the fixture create runs trusted.
+const lead = name => JSON.parse(sql(as(staff(2), `reset role; select public.crm_create_manual_lead(gen_random_uuid(),jsonb_build_object('display_name','Upgrade ${name}','learner_name','Upgrade learner','email','upg136-${name}@example.invalid','source_label','Manuel','owner_id','${staff(2)}'))::text`)).split('\n').find(line => line.startsWith('{'))).lead.id;
 const single = lead('single'), dupes = lead('dupes'), closed = lead('closed');
 // The pre-D1 shapes are written directly, as the live data holds them.
 sql(`set session_replication_role=replica;

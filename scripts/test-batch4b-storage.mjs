@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalize, digest, classify, humanReport } from './lib/storage-inventory.mjs';
 import { localContext, inventory, applyBackfill, guardTarget, LOCAL_URL, saveReport, readEvidence } from './lib/storage-inventory-local.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 let checks = 0;
 function check(test) { test(); checks++; }

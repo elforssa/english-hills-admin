@@ -120,10 +120,6 @@
     "gate": "crm_director",
     "receptionist": "locked"
   },
-  "crm_create_manual_lead(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
   "crm_create_prospect(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"

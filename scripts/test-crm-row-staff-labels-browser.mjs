@@ -6,6 +6,8 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 assertLocalFeatureBranch();
 const env = Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line => {
   const m = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
@@ -18,7 +20,8 @@ const quote = s => "'"+String(s).replaceAll("'","''")+"'";
 const run = 'uif-row-staff-'+randomUUID(), password = randomBytes(24).toString('base64url'), users = [];
 const sharedName = 'Équipe UIF doublon', uniqueName = 'UIF nom unique';
 let browser, actor;
-const rpc = (name,data,id=actor) => JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(randomUUID())},${quote(JSON.stringify(data))}::jsonb);commit;`));
+// 142 (deviation 3): crm_create_manual_lead has no API role; the fixture create runs trusted.
+const rpc = (name,data,id=actor) => JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};${name==='create_manual_lead'?'':'set local role authenticated;'}select public.crm_${name}(${quote(randomUUID())},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const read = query => JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};set local role authenticated;select ${query};commit;`));
 try {
   assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean synthetic policy baseline');

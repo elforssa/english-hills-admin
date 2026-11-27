@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+node "$(cd "$(dirname "$0")" && pwd)/lib/local-stack.mjs" assert --db-port 54322 >/dev/null  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 db_url='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
 actor='11000000-0000-0000-0000-000000000001'

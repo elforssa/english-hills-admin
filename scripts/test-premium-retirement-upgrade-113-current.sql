@@ -1,15 +1,12 @@
 -- Assert the 112 -> 113 upgrade over the persistent fixture of
 -- test-premium-retirement-upgrade-112-setup.sql (plan premium-retirement.md D1, Q7 option A).
 \set ON_ERROR_STOP on
+\set ceiling_from 113
+\ir lib/upgrade-ceiling.sql
 begin;
 
 do $$
 begin
- -- `supabase migration up` also applies every later migration; 141 is the current ceiling.
- if (select max(version::integer) from supabase_migrations.schema_migrations) <> 141
-  or (select count(*) from supabase_migrations.schema_migrations where version in ('113','114','115','116','117','118','119','120','121','122','123','124','125','126','127','128','129','130','131','132','133','134','135','136','137','138','139','140','141')) <> 29 then
-  raise exception 'Expected migrations 113 through 141 after upgrade';
- end if;
  -- The migration rewrote no row.
  if exists(select 1 from rehearsal113.snapshot s left join public.charges c on c.id=s.id
             where s.stage='setup' and s.kind='charge' and to_jsonb(c) is distinct from s.row)

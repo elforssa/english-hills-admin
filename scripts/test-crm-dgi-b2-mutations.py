@@ -9,6 +9,8 @@ so the database always keeps the migration-116 body. A final unmutated run must 
 import os
 import subprocess
 import sys
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MIGRATION = os.path.join(ROOT, 'supabase/migrations/116_crm_marketing_funnel_program.sql')

@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import subprocess
 import uuid
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 ROOT = Path(__file__).resolve().parents[1]
 head = (ROOT / '.git/HEAD').read_text().strip()
@@ -43,7 +45,7 @@ commit;"""
     return json.loads(result.stdout.strip())
 
 def trusted(name, key, payload):
-    # RWR-r5 PR A2 (migration 137): a wrapper revoked from authenticated, used here only as
+    # RWR-r5 PR A2 (migration 137; crm_create_manual_lead since 142): a wrapper revoked from authenticated, used here only as
     # fixture setup, runs from the trusted postgres session as the same staff member, so the
     # fixture state is unchanged; the revocation itself is tested in test-single-writer.sql.
     result = sql(f"""begin;
@@ -67,7 +69,7 @@ try:
     created=True
     command('create_followup_policy',str(uuid.uuid4()),{'weekly_hours':hours})
     def qualified():
-        lead=command('create_manual_lead',str(uuid.uuid4()),{'display_name':'Enrollment concurrency','learner_name':'Synthetic learner','source_label':'Manual'})['lead']['id']
+        lead=trusted('create_manual_lead',str(uuid.uuid4()),{'display_name':'Enrollment concurrency','learner_name':'Synthetic learner','source_label':'Manual'})['lead']['id']
         result=trusted('qualify_lead',str(uuid.uuid4()),{'lead_id':lead,'expected_version':1,'conversation_channel':'phone','note':'Enrollment agreed','qualification_step':'enrollment','next_task':{'task_type':'enrollment_followup','due_at':sql("select (now()+interval '2 days')::text").stdout.strip()}})
         return lead,result['lead']['version']
     def payload(lead,version,name):

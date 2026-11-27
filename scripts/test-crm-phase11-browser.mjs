@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 // Same guard as the Phase 12 matrix: a local codex/ or claude/ branch, or a GitHub Actions pull request.
 const branch=execFileSync('git',['branch','--show-current'],{encoding:'utf8'}).trim();
 assert(branch.startsWith('codex/') || branch.startsWith('claude/') || (process.env.GITHUB_ACTIONS==='true' && process.env.GITHUB_EVENT_NAME==='pull_request'));

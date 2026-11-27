@@ -16,6 +16,8 @@ import re
 import subprocess
 import time
 import uuid
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 ROOT = Path(__file__).resolve().parents[1]
 branch = subprocess.run(['git', 'branch', '--show-current'], cwd=ROOT, capture_output=True, text=True).stdout.strip()
@@ -69,7 +71,7 @@ commit;""", False)
     return json.loads(result.stdout.strip())
 
 def trusted(name, key, payload):
-    # RWR-r5 PR A2 (migration 137): a wrapper revoked from authenticated, used here only as
+    # RWR-r5 PR A2 (migration 137; crm_create_manual_lead since 142): a wrapper revoked from authenticated, used here only as
     # fixture setup, runs from the trusted postgres session as the same staff member, so the
     # fixture state is unchanged; the revocation itself is tested in test-single-writer.sql.
     result = sql(f"""begin;
@@ -116,7 +118,7 @@ try:
     # Every day open (00:00–23:59 Casablanca) so a few seconds ahead resolves to itself.
     call('create_followup_policy', str(uuid.uuid4()), {'weekly_hours': {str(d): [['00:00', '23:59']] for d in range(1, 8)}, 'attempt_offsets': [0, 0, 1, 3, 5]})
     def lead(name):
-        result = call('create_manual_lead', str(uuid.uuid4()), {'display_name': 'A2 race ' + name, 'learner_name': name, 'phone': '06' + str(uuid.uuid4().int)[:8], 'source_label': 'Manual'})
+        result = trusted('create_manual_lead', str(uuid.uuid4()), {'display_name': 'A2 race ' + name, 'learner_name': name, 'phone': '06' + str(uuid.uuid4().int)[:8], 'source_label': 'Manual'})
         identifier = result['lead']['id']
         trusted('qualify_lead', str(uuid.uuid4()), {'lead_id': identifier, 'expected_version': 1, 'conversation_channel': 'phone', 'note': 'A2', 'qualification_step': 'placement_test',
              'next_task': {'task_type': 'confirm_placement_test', 'due_at': value("select (now()+interval '2 days')::text")}})

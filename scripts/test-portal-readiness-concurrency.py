@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import uuid
+from lib.local_stack import assert_local_stack
 
 ROOT = Path(__file__).resolve().parents[1]
 branch = subprocess.run(['git', 'branch', '--show-current'], cwd=ROOT, capture_output=True, text=True).stdout.strip()
@@ -20,6 +21,7 @@ if not branch:
     branch = os.environ.get('GITHUB_HEAD_REF', '').strip()
 assert branch and branch not in ('main', 'master'), 'Refusing main or master; use an isolated feature branch'
 PORT = os.environ.get('PORTAL_CONCURRENCY_PORT', '54322')
+assert_local_stack(db_port=PORT)  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 ARGS = ['psql', '-X', '-qAt', '-h', '127.0.0.1', '-p', PORT, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1']
 ENV = {**os.environ, 'PGPASSWORD': 'postgres'}
 run = uuid.uuid4().hex[:8]

@@ -770,6 +770,7 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
   - `crm_get_today` on malformed legacy times;
   - revoke `crm_create_manual_lead` (deviation 3);
   - desk work: the 11 unreadable phones left by D3 and the 3 desk follow-ups after D5 (counts only).
+- **Follow-ups PR — APPROVED (Maroine, 2026-11-26), IMPLEMENTED ON A PULL REQUEST (migration 142; not applied, not merged).** One Tier 3 PR from fresh `origin/main`, migration 142 (C2 holds 141; renumber at merge), with the standing checklist. It covers the first ten follow-ups above, plus two B2 items: the conversion programme fallback and the catalogue `service_role` revoke. The approval verbatim and the decision for each table are in the plan's [follow-ups record](../architecture/plans/receptionist-workflow.md#implementation-record-follow-ups-pr-migration-142). **Not authorized:** Production, merge, release. The desk work stays with the desk.
 - **Status:** A1, D1, A2, C1, B1, D3 and D5 done. **Next:** B2 (with D6's functions, migration 140), then C2 (with D7) and D4. Each needs the owner's separate approval. The plan stays ACTIVE.
 
 ## Deferred backlog after RCC-r1

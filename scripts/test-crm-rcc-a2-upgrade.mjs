@@ -7,6 +7,8 @@ import { readFileSync,writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { workCalendarFixture } from './lib/crm-work-calendar-fixture.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const sql=input=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},maxBuffer:50*1024*1024});
 const quote=s=>"'"+String(s).replaceAll("'","''")+"'";
 assert.equal(sql('select max(version) from supabase_migrations.schema_migrations').trim(),'111');
@@ -21,7 +23,8 @@ select pg_temp.actor(0);select public.crm_reconcile_external_deliveries(100);
 commit;`);
 // One enrollment initiated by the 084 definition; its stored result must replay unchanged.
 const actor=sql("select id from public.profiles where role='receptionist' order by id limit 1").trim();assert(actor);
-const rpc=(name,data,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`).trim().split('\n').at(-1));
+// 142 (deviation 3): crm_create_manual_lead has no API role; the fixture create runs trusted.
+const rpc=(name,data,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};${name==='create_manual_lead'?'':'set local role authenticated;'}select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`).trim().split('\n').at(-1));
 const lead=rpc('create_manual_lead',{display_name:'A2 upgrade parent',learner_name:'A2upgrade Learner',phone:'0655501234',source_label:'Manual'}).lead;
 const qualified=rpc('qualify_lead',{lead_id:lead.id,expected_version:lead.version,conversation_channel:'phone',note:'A2 upgrade',qualification_step:'placement_test',
  next_task:{task_type:'confirm_placement_test',due_at:new Date(Date.now()+2*86400000).toISOString()}}).lead;

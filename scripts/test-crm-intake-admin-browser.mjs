@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 // LIR-r1 P1-B/P1-D in the browser: the director publishes, retires (including a
 // partial stop finished later) and retries through the real RPCs, with the exact
 // payloads; the ratio guard; admin and receptionist never reach the panel.

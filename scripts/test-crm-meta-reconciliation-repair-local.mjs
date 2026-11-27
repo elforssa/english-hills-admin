@@ -10,6 +10,8 @@ import { MetaError, metaRpcError } from '../src/lib/crm/meta/protocol.mjs';
 import { reconcileMetaLeads } from '../src/lib/crm/meta/reconcile.mjs';
 import { reconcileMetaLeads as oldWorker } from './fixtures/meta-reconcile-104.mjs';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { assertLocalStack, resetLocalDatabase } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 assertLocalFeatureBranch();
 const processEnv = { ...process.env, PGPASSWORD: 'postgres', SUPABASE_TELEMETRY_DISABLED: '1', DISABLE_EXTERNAL_EMAIL: 'true' };
@@ -67,12 +69,12 @@ function directConflict(name, a, message) {
 }
 
 console.log('Starting fresh local 001→105 replay');
-cli(['db', 'reset', '--local', '--version', '105', '--no-seed']);
+resetLocalDatabase(['--version', '105', '--no-seed'], { env: processEnv, stdio: ['ignore', 'pipe', 'ignore'] });
 assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '105');
 workerSQL(`do $$begin begin perform public.crm_finish_meta_reconciliation('${connection}','95002','${stale}',null);exception when sqlstate 'PT409' then if sqlerrm='crm_reconciliation_lease_lost' then return;end if;raise;end;raise exception 'expected conflict';end$$`);
 sql(readFileSync('scripts/test-crm-meta-reconciliation.sql', 'utf8'));
 console.log('PASS fresh 001→105 replay and historical reconciliation SQL on current schema');
-cli(['db', 'reset', '--local', '--version', '104', '--no-seed']);
+resetLocalDatabase(['--version', '104', '--no-seed'], { env: processEnv, stdio: ['ignore', 'pipe', 'ignore'] });
 setup();
 const beforeData = inventory(), beforeCatalog = catalog(), beforeCron = sql('select jsonb_agg(to_jsonb(j) order by jobid) from cron.job j');
 sql(migration);
@@ -332,5 +334,5 @@ assert.deepEqual(digests(),immutable);
 console.log(`Versions: PostgreSQL ${sql('show server_version')}; Supabase CLI ${cli(['--version']).trim()}; client ${JSON.parse(readFileSync('node_modules/@supabase/supabase-js/package.json')).version}; PostgREST ${execFileSync('docker',['exec','supabase_rest_hills-admin-next','postgrest','--version'],{encoding:'utf8'}).trim()}`);
 console.log(`Migration105 SHA-256 ${digest}`);
 // Clear all synthetic committed fixtures/instrumentation for subsequent required CI suites.
-cli(['db','reset','--local','--no-seed']);
+resetLocalDatabase(['--no-seed'], { env: processEnv, stdio: ['ignore', 'pipe', 'ignore'] });
 console.log('PASS repair acceptance complete; local database reset to current migrations');

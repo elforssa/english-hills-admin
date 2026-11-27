@@ -8,6 +8,8 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
@@ -15,7 +17,8 @@ const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U'
 const quote=s=>"'"+String(s).replaceAll("'","''")+"'";
 const run='rcc-a1-'+randomUUID(),password=randomBytes(24).toString('base64url'),users=[];
 let browser,actor;const pageErrors=[];
-const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
+// 142 (deviation 3): crm_create_manual_lead has no API role; the fixture create runs trusted.
+const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};${name==='create_manual_lead'?'':'set local role authenticated;'}select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
 // RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the

@@ -9,6 +9,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const sql = input => execFileSync('psql', ['-X', '-qAt', '-h', '127.0.0.1', '-p', '54322', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'], { input, encoding: 'utf8', env: { ...process.env, PGPASSWORD: 'postgres' }, maxBuffer: 50 * 1024 * 1024 }).trim();
 assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '125', 'run on a database at migration 125');
 const replaced = 'crm_get_operational_acquisition_summary(uuid)';

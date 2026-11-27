@@ -41,6 +41,14 @@ declare st text; h text; msg text; begin
   end;
   raise exception 'FAIL: expected %/% from %', code, hint, statement;
 end $$;
+-- 142: the API role has no DELETE on enrollments (no screen deletes one). A guarded delete
+-- is refused by the privilege first, and by the history guard (I10) in the trusted session.
+create function pg_temp.delete_guarded(target uuid) returns void language plpgsql as $$ begin
+  perform pg_temp.fails(format('delete from public.enrollments where id = %L', target), '42501');
+  execute 'reset role';
+  perform pg_temp.fails(format('delete from public.enrollments where id = %L', target), '42501', 'egc.history_protected');
+  execute 'set local role authenticated';
+end $$;
 -- Fixture readers run as the owner whatever the acting role.
 create function pg_temp.su(p uuid) returns timestamptz language sql security definer as $$
   select updated_at from public.students where id = p $$;
@@ -474,7 +482,12 @@ insert into public.enrollments(id, student_id, status, session_type) values (pg_
 select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.act(2);
 select pg_temp.fails(format($$update public.enrollments set status = 'Rejected' where id = %L$$, pg_temp.id(812)), '23514', 'eap.status_retired');
+-- 142: no screen deletes an enrollment, so the API role has no DELETE on enrollments; the
+-- old pre-enrollment is removed in the trusted session as the admin (the guard still runs).
+select pg_temp.fails(format('delete from public.enrollments where id = %L', pg_temp.id(812)), '42501');
+reset role;
 delete from public.enrollments where id = pg_temp.id(812);
+select pg_temp.act(2);
 select pg_temp.fails(format($$insert into public.enrollments(id, student_id, status, session_type) values (%L, %L, 'Submitted', 'Adults')$$,
   pg_temp.id(813), pg_temp.id(204)), '23514', 'eap.status_retired');
 select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(204), 'session_type', 'Adults', 'school_year', '2026/2027',
@@ -807,12 +820,13 @@ select pg_temp.fails(format('update public.enrollments set status = %L, ended_at
 select pg_temp.fails(format('update public.enrollments set status = %L, ended_at = now() where id = %L', 'Ended', (pg_temp.enr(pg_temp.id(220), 'Adults')).id),
   '42501', 'egc.history_protected');
 update public.enrollments set notes = 'EGC note' where id = (select id from egc_ended);
-select pg_temp.fails(format('delete from public.enrollments where id = %L', (select id from egc_ended)), '42501', 'egc.history_protected');
-select pg_temp.fails(format('delete from public.enrollments where id = %L', (pg_temp.enr(pg_temp.id(220), 'Adults')).id), '42501', 'egc.history_protected');
-select pg_temp.fails(format('delete from public.enrollments where id = %L', (pg_temp.enr(pg_temp.id(201), 'Yearly')).id), '42501', 'egc.history_protected');
+select pg_temp.delete_guarded((select id from egc_ended));
+select pg_temp.delete_guarded((pg_temp.enr(pg_temp.id(220), 'Adults')).id);
+select pg_temp.delete_guarded((pg_temp.enr(pg_temp.id(201), 'Yearly')).id);
+reset role;
 delete from public.enrollments where student_id = pg_temp.id(219) and status = 'Submitted';
 select pg_temp.act(1);
-select pg_temp.fails(format('delete from public.enrollments where id = %L', (pg_temp.enr(pg_temp.id(201), 'Mise à niveau')).id), '42501', 'egc.history_protected');
+select pg_temp.delete_guarded((pg_temp.enr(pg_temp.id(201), 'Mise à niveau')).id);
 select pg_temp.owner();
 select pg_temp.fails(format($$insert into public.enrollments(student_id, status, session_type, school_year) values (%L, 'Ended', 'Adults', '2026/2027')$$,
   pg_temp.id(221)), '23514');

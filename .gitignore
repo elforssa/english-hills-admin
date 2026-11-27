@@ -30,3 +30,5 @@ scripts/.zoom-lifecycle-report.json
 scripts/.zoom-two-party-report.json
 scripts/.zoom-classroom-report.json
 scripts/.zoom-reliability-report.json
+# Python bytecode from scripts/lib/local_stack.py (follow-ups 142)
+__pycache__/

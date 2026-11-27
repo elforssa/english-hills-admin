@@ -22,11 +22,13 @@ import secrets
 import subprocess
 import time
 import uuid
+from lib.local_stack import assert_local_stack
 
 if os.environ.get('CI') != 'true':
     branch = subprocess.run(['git', 'branch', '--show-current'], capture_output=True, text=True).stdout.strip()
     assert branch and branch not in ('main', 'master'), 'Refusing main or master; use an isolated feature branch'
 HOST, PORT, CONTAINER = '127.0.0.1', '54322', 'supabase_db_hills-admin-next'
+assert_local_stack(db_port=PORT, container=CONTAINER)  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 ENV = {**os.environ, 'PGPASSWORD': 'postgres'}
 actor = str(uuid.uuid4())
 students = {k: str(uuid.uuid4()) for k in ['num_a', 'num_b', 'num_c', 'num_d', 'race', 'lock']}
@@ -74,7 +76,7 @@ def command(name, payload):
 
 
 def trusted(name, payload):
-    # RWR-r5 PR A2 (migration 137): crm_qualify_lead is revoked from authenticated; as
+    # RWR-r5 PR A2 (migration 137): crm_qualify_lead (and crm_create_manual_lead since 142) is revoked from authenticated; as
     # fixture setup it runs from the trusted postgres session as the same staff member, so
     # the converted enrolment fixture is unchanged.
     out = sql(f"begin; set local request.jwt.claim.sub={quote(actor)}; select public.crm_{name}({quote(uuid.uuid4())}::uuid,{quote(json.dumps(payload))}::jsonb); commit;")
@@ -176,7 +178,7 @@ from jsonb_each_text({quote(json.dumps(students))}::jsonb) x(k,v);""")
 
     # A converted CRM enrollment with one live payment.
     command('create_followup_policy', {'weekly_hours': hours})
-    lead = command('create_manual_lead', {'display_name': 'Batch E race', 'learner_name': 'Batch E race learner',
+    lead = trusted('create_manual_lead', {'display_name': 'Batch E race', 'learner_name': 'Batch E race learner',
                                           'source_label': 'Manual'})['lead']['id']
     version = trusted('qualify_lead', {'lead_id': lead, 'expected_version': 1, 'conversation_channel': 'phone',
                                        'note': 'Enrollment agreed', 'qualification_step': 'enrollment',

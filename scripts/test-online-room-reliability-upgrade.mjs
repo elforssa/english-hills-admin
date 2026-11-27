@@ -17,8 +17,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
+import { assertLocalStack } from './lib/local-stack.mjs';
 
 const port = process.env.OL_UPGRADE_PORT || '54322';
+assertLocalStack({ dbPort: port }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 const psql = (args, input) => execFileSync('psql', ['-X', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', ...args],
   { input, encoding: 'utf8', env: { ...process.env, PGPASSWORD: 'postgres' }, maxBuffer: 64 * 1024 * 1024 });
 const sql = input => psql(['-qAt'], input).trim();

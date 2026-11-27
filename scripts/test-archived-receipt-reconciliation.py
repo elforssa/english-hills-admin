@@ -2,6 +2,8 @@
 """Exercise migration 056 with synthetic records; fixed local DB, all rolled back."""
 from pathlib import Path
 import subprocess
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 root = Path(__file__).resolve().parent.parent
 migration = (root / 'supabase/migrations/056_archived_student_receipt_reconciliation.sql').read_text()

@@ -402,6 +402,41 @@ select pg_temp.refused(pg_temp.desk_pay(pg_temp.uid_of('s1'), jsonb_build_object
 select pg_temp.owner();
 rollback to savepoint new_session;
 
+-- Follow-ups 142 (C1 reviewer's note): « payment ends it » on a MOVED « Encaisser
+-- l'acompte » action. The action is moved with « Changer » (the marker carries over), then
+-- the payment on the commitment cancels the moved action itself. Rolled back; the unmoved
+-- payment below is unchanged. The new due time is an in-hours slot from the server.
+savepoint moved_then_paid;
+create function pg_temp.change_to(l uuid, nxt jsonb) returns jsonb language plpgsql as $$ begin
+  return public.crm_change_next_action(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),
+    'expected_action_id', (select id from pg_temp.open_tasks(l)), 'next', nxt));
+end $$;
+select pg_temp.put('t_reserved', to_jsonb((select id from pg_temp.open_tasks(pg_temp.uid_of('l1')))));
+select pg_temp.put('slot_moved', to_jsonb(crm_security.next_window(crm_security.current_policy_id(), now() + interval '3 days')));
+select pg_temp.act(3);
+select pg_temp.change_to(pg_temp.uid_of('l1'), jsonb_build_object('task_type', 'enrollment_followup', 'due_at', pg_temp.get('slot_moved')));
+select pg_temp.owner();
+select pg_temp.put('t_moved', to_jsonb((select id from pg_temp.open_tasks(pg_temp.uid_of('l1')))));
+select pg_temp.ok(pg_temp.uid_of('t_moved') <> pg_temp.uid_of('t_reserved')
+  and (select source_key like 'reservation:%:moved:%:next-action' from public.crm_tasks where id = pg_temp.uid_of('t_moved'))
+  and crm_security.next_action(pg_temp.uid_of('l1'))->>'label' like 'Encaisser l’acompte %', 'moved: a new « Encaisser l''acompte » action');
+select pg_temp.act(3);
+select pg_temp.put('r_moved', public.crm_enroll_and_collect(gen_random_uuid(), pg_temp.enrol_existing(pg_temp.uid_of('l1'), pg_temp.uid_of('s1'),
+  jsonb_build_object('charge_id', pg_temp.uid_of('ch1'), 'payment_amount', 1000, 'payment_method', 'Espèces', 'payment_date', public.business_date()))));
+select pg_temp.owner();
+select pg_temp.ok((select status = 'CONVERTED' from public.crm_leads where id = pg_temp.uid_of('l1')), 'moved then paid: the prospect converts');
+select pg_temp.ok(not exists (select 1 from pg_temp.open_tasks(pg_temp.uid_of('l1'))), 'moved then paid: no open action');
+select pg_temp.ok((select status = 'cancelled' and cancellation_reason = 'Inscription confirmée' from public.crm_tasks where id = pg_temp.uid_of('t_moved')),
+  'moved then paid: the payment ends the moved action itself');
+select pg_temp.ok((select count(*) = 1 from public.crm_activities where lead_id = pg_temp.uid_of('l1') and event_type = 'task_cancelled'
+  and source_key = 'conversion-task:' || pg_temp.uid_of('l1') || ':' || pg_temp.uid_of('t_moved')), 'moved then paid: one cancellation entry for it');
+select pg_temp.ok(crm_security.next_action(pg_temp.uid_of('l1')) is null, 'moved then paid: no next action on any screen');
+select pg_temp.ok(pg_temp.get('r_moved')->>'charge_id' = pg_temp.get('ch1') #>> '{}' and (pg_temp.get('r_moved')->>'balance')::numeric = 2000
+  and pg_temp.n_charges(pg_temp.uid_of('s1')) = 1, 'moved then paid: paid on the commitment, one charge, balance 2000');
+set constraints all immediate;
+set constraints all deferred;
+rollback to savepoint moved_then_paid;
+
 -- « Encaisser sur cet engagement »: pay 1000 on the reserved charge.
 select pg_temp.put('k2', to_jsonb(gen_random_uuid()));
 select pg_temp.act(3);
@@ -622,9 +657,14 @@ select pg_temp.put('r900', public.crm_reserve_without_payment(gen_random_uuid(),
 select pg_temp.owner();
 select pg_temp.ok((select telephone from public.students where id = (pg_temp.get('r900')->'student'->>'id')::uuid) = '+212672000900',
   'reservation: the new learner''s phone is stored in E.164');
+-- The placeholder is stored on purpose: crm_create_prospect refuses it, and 142 takes
+-- crm_create_manual_lead from authenticated, so the fixture create runs in the trusted
+-- session as the receptionist (the legacy create path that stored such numbers).
 select pg_temp.act(3);
+reset role;
 select pg_temp.put('l902', public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'DP contact 902',
   'learner_name', 'DP child 902', 'phone', '06 00 00 00 00', 'source_label', 'Phone'))->'lead'->'id');
+select pg_temp.act(3);
 select public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', pg_temp.uid_of('l902'), 'expected_version', pg_temp.ver(pg_temp.uid_of('l902')),
   'channel', 'phone', 'result', 'spoke', 'note', 'x', 'next', jsonb_build_object('enrol', jsonb_build_object('due_at', now() + interval '1 day'))));
 select pg_temp.put('r902', public.crm_reserve_without_payment(gen_random_uuid(), pg_temp.reserve_new(pg_temp.uid_of('l902'), 902)));

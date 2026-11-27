@@ -3,6 +3,7 @@
 -- 8-value check is restored only after d4_revert() (D4 may have written codes outside
 -- it), or else restored not valid so existing rows aren't rejected. »
 --
+-- Refuses while migration 142 (follow-ups) is applied: run its restore first.
 -- Rollback order: run only with its own owner approval, after the application is back
 -- on a pre-B2 build (the B2 screens call get_catalogue, catalogue_set_price and
 -- catalogue_save_programme, which this file drops, and send origin_code and referrer).
@@ -40,6 +41,13 @@ begin;
 do $$ begin
   if to_regprocedure('public.get_catalogue()') is null or to_regclass('public.programmes') is null then
     raise exception 'Restore 140: migration 140 is not applied' using errcode = '55000';
+  end if;
+  -- Rollback order (follow-ups 142, 2026-11-26): 142 re-created evaluate_conversion on
+  -- the 140 body; its restore runs first. 142 is the only change that takes
+  -- crm_create_manual_lead from authenticated, and its restore gives it back.
+  if not has_function_privilege('authenticated', 'public.crm_create_manual_lead(uuid,jsonb)', 'execute') then
+    raise exception 'Restore 140: migration 142 is applied; run scripts/rollback/142_rwr_follow_ups_restore.sql first'
+      using errcode = '55000';
   end if;
   -- Rollback order (RWR-r5 C2, 2026-11-26): migration 141 rebuilt save_receptionist_student
   -- on 140's body; its own restore runs first and returns it to 140.

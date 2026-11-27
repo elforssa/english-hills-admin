@@ -6,6 +6,8 @@ import os
 import subprocess
 import time
 from pathlib import Path
+from lib.local_stack import assert_local_stack, reset_local_database
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 branch = subprocess.run(['git', 'branch', '--show-current'], capture_output=True, text=True, check=True).stdout.strip()
 assert branch.startswith('codex/') or (os.getenv('GITHUB_ACTIONS') == 'true' and os.getenv('GITHUB_EVENT_NAME') == 'pull_request')
@@ -128,5 +130,5 @@ try:
     print('PASS R4 concurrent same-lead claims/begins serialize without deadlock; a started predecessor cannot be overtaken; stale finalize loses after fencing', flush=True)
 finally:
     if created:
-        subprocess.run(['npx', 'supabase', 'db', 'reset', '--local', '--no-seed'], check=True, timeout=180)
+        reset_local_database('--no-seed')  # follow-ups 142 (item 11): through the guard
         print('PASS isolated R4 concurrency fixtures removed by local database rebuild', flush=True)

@@ -9,6 +9,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { assertLocalStack } from './lib/local-stack.mjs';
 
 export const MIGRATION = 'supabase/migrations/124_speed_as_the_centre_grows.sql';
 export const RESTORE = 'scripts/rollback/124_speed_as_the_centre_grows_restore.sql';
@@ -75,6 +76,7 @@ function statement(policy, using, check) {
 }
 
 export function readPolicies(port = process.env.SCG_PORT || '54322') {
+  assertLocalStack({ dbPort: port }); // follow-ups 142 (item 11)
   // The same search_path as the migration, so deparsed names resolve identically.
   const out = execFileSync('psql', ['-X', '-qAt', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
     input: `set search_path = public;

@@ -5,6 +5,8 @@ Middleware owns/rebuilds .next: stop app servers before that group, then rebuild
 """
 import argparse,fcntl,json,os,subprocess,time
 from pathlib import Path
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 p=argparse.ArgumentParser();p.add_argument('group',choices=['sql','concurrency','unit','browser','batch2','middleware','security']);p.add_argument('--reverse',action='store_true');p.add_argument('--only');a=p.parse_args()
 assert Path('.git/HEAD').read_text().startswith('ref: refs/heads/codex/')
 lock=open('/private/tmp/hills-crm-release-tests.lock','w')

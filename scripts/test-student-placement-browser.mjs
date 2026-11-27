@@ -15,6 +15,8 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { chromium, expect } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { assertLocalStack } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', apiUrl: 'http://127.0.0.1:54321' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 assertLocalFeatureBranch(new URL('../', import.meta.url));
 const env = {};
 for (const line of readFileSync('.env.local','utf8').split('\n')) {

@@ -24,7 +24,8 @@ const UNCERTAIN = 'Impossible de confirmer l’enregistrement. Réessayez sans m
 let browser, page, users = [], phase = 'setup';
 const errors = [];
 const as = id => `begin;select set_config('request.jwt.claim.sub',${q(id)},true);set local role authenticated;`;
-const rpc = (id, name, data) => JSON.parse(sql(`${as(id)}select public.crm_${name}(gen_random_uuid(),${q(JSON.stringify(data))}::jsonb);commit;`).split('\n').pop());
+// 142 (deviation 3): crm_create_manual_lead has no API role; the fixture create runs trusted.
+const rpc = (id, name, data) => JSON.parse(sql(`${name === 'create_manual_lead' ? as(id).replace('set local role authenticated;', '') : as(id)}select public.crm_${name}(gen_random_uuid(),${q(JSON.stringify(data))}::jsonb);commit;`).split('\n').pop());
 const intake = (id, name) => rpc(id, 'create_manual_lead', { display_name: name, learner_name: 'Apprenant synthétique', phone: '0612345678', source_label: 'Manuel · Téléphone' }).lead.id;
 const version = lead => Number(sql(`select version from public.crm_leads where id=${q(lead)}`));
 const status = lead => sql(`select status from public.crm_leads where id=${q(lead)}`);
@@ -293,6 +294,9 @@ try {
   await listed.waitFor();
   await page.getByTestId('outside-hours').getByRole('heading', { name: /^Hors des nouveaux horaires \(\d+\)$/ }).waitFor();
   assert.equal(sql(`select due_at from public.crm_tasks where lead_id=${q(keptLead)} and status='open'`), keptAt, 'the agreed time is kept, never moved');
+  // Follow-ups 142 (owner item 4): the server label already carries the date, so the row shows it once.
+  const rowText = await listed.locator('button').first().innerText();
+  assert.equal((rowText.match(/\b\d{2}\/\d{2}\b/g) || []).length, 1, `the date is shown once: ${rowText}`);
   await listed.getByRole('button', { name: 'Changer', exact: true }).click();
   await dialog().getByRole('heading', { name: 'Changer la prochaine action' }).waitFor();
   console.log('PASS review I3: « Hors des nouveaux horaires » lists the kept appointment with « Changer »; its time is unchanged');

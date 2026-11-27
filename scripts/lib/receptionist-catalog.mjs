@@ -2,10 +2,12 @@
 // Local only: the container name is the repository's default local stack.
 import { execFileSync } from 'node:child_process';
 import { CAPABILITIES } from '../../src/lib/roleAccess.mjs';
+import { assertLocalStack } from './local-stack.mjs';
 
 export const ROLES = ['director', 'admin', 'receptionist', 'teacher', 'parent', 'student', 'pending'];
 
 export function sql(statement) {
+  assertLocalStack({ container: 'supabase_db_hills-admin-next' }); // follow-ups 142 (item 11)
   return execFileSync('docker', ['exec', '-i', 'supabase_db_hills-admin-next',
     'psql', '-X', '-qAt', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
   { input: statement, encoding: 'utf8', timeout: 120_000, maxBuffer: 64 * 1024 * 1024 }).trim();

@@ -46,7 +46,9 @@ create temp table base as select coalesce((select (x->>'count')::int from json_a
 -- ===== Grants (checklist 6): the three RPCs for authenticated only; helpers and D4 for no API role.
 do $$ declare fn text; begin
  foreach fn in array array['public.get_catalogue()','public.catalogue_set_price(text,text,numeric,text,uuid)','public.catalogue_save_programme(text,bigint,jsonb)'] loop
-  perform pg_temp.ok(has_function_privilege('authenticated',fn,'execute') and not has_function_privilege('anon',fn,'execute'),'RPC grant '||fn);
+  -- 142 (follow-ups): no service_role grant either; only the screens call them.
+  perform pg_temp.ok(has_function_privilege('authenticated',fn,'execute') and not has_function_privilege('anon',fn,'execute')
+   and not has_function_privilege('service_role',fn,'execute'),'RPC grant '||fn);
  end loop;
  foreach fn in array array['crm_security.close_status(text)','crm_security.close_reason_allowed(text,text)','crm_security.programme_selectable(text)',
   'crm_security.origin_selectable(text)','crm_security.lead_origin(public.crm_leads)','crm_security.referral_origin(text)',

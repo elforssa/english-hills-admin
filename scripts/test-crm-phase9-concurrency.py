@@ -2,6 +2,8 @@
 """Local real-session Meta/website race. No network providers; scoped fixture cleanup."""
 import concurrent.futures,json,os,subprocess,uuid
 from pathlib import Path
+from lib.local_stack import assert_local_stack
+assert_local_stack(db_port='54322')  # follow-ups 142 (item 11): this checkout's stack only, before any statement
 assert Path('.git/HEAD').read_text().startswith('ref: refs/heads/codex/')
 actor=str(uuid.uuid4());meta=str(uuid.uuid4());site=str(uuid.uuid4());mm=str(uuid.uuid4());wm=str(uuid.uuid4());request=str(uuid.uuid4());page=str(uuid.uuid4().int)[:24]
 args=['psql','-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1']

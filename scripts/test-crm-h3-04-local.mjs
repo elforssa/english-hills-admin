@@ -5,6 +5,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { processLifecycleDeliveries } from '../src/lib/crm/lifecycle/worker.mjs';
+import { assertLocalStack, resetLocalDatabase } from './lib/local-stack.mjs';
+assertLocalStack({ dbPort: '54322', container: 'supabase_db_hills-admin-next' }); // follow-ups 142 (item 11): this checkout's stack only, before any statement
 
 assertLocalFeatureBranch();
 const env = { ...process.env, PGPASSWORD: 'postgres', DISABLE_EXTERNAL_EMAIL: 'true', SUPABASE_TELEMETRY_DISABLED: '1' };
@@ -65,7 +67,7 @@ function insert(patch) {
     (select to_jsonb(c) from crm_lifecycle_provider_contracts c where id=${q(expected.id)}) || ${q(JSON.stringify(patch))}::jsonb)`;
 }
 console.log('H3-04: fresh local 001→106');
-cli(['db','reset','--local','--version','106','--no-seed']);
+resetLocalDatabase(['--version','106','--no-seed'], { env: env, stdio: 'pipe' });
 assert.equal(sql('select count(*),max(version::integer) from supabase_migrations.schema_migrations'), '106|106');
 readback(); dormant();
 for (const role of ['anon', 'authenticated', 'service_role']) {
@@ -103,7 +105,7 @@ dormant();
 console.log('PASS exact manifest, collisions, 14 constraint cases, UPDATE/DELETE/TRUNCATE, ACL/RLS/triggers, dormancy and zero network');
 
 console.log('H3-04: stateful local 105→106');
-cli(['db','reset','--local','--version','105','--no-seed']);
+resetLocalDatabase(['--version','105','--no-seed'], { env: env, stdio: 'pipe' });
 // Synthetic inbound state and a pre-existing unrelated immutable provider row.
 sql(`insert into auth.users(id,email,aud,role) values('96000000-0000-0000-0000-000000000010','h3-seed@example.invalid','authenticated','authenticated');
 update profiles set role='director' where id='96000000-0000-0000-0000-000000000010';
@@ -126,5 +128,5 @@ assert.equal(sql("select jsonb_agg(to_jsonb(u) order by id) from auth.users u"),
 assert.equal(sql('select count(*) from crm_lifecycle_provider_contracts'),'2');
 assert.deepEqual(digests(), beforeDigests);
 console.log('PASS stateful 105→106: exactly one additive row; every public row, Auth fixture, schema/security/function body and cron unchanged');
-cli(['db','reset','--local','--no-seed']); readback(); dormant();
+resetLocalDatabase(['--no-seed'], { env: env, stdio: 'pipe' }); readback(); dormant();
 console.log(`PASS H3-04 complete; migration SHA-256 ${createHash('sha256').update(migration).digest('hex')}; local database clean at current migration ledger`);

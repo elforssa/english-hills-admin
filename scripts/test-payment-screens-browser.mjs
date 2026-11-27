@@ -14,6 +14,8 @@
 //      session without the « Nouvelle session » click; after a reservation_collect_on_prospect
 //      refusal (a stale balance read) the screen lands on no choice, never on « Nouvelle session ».
 //   4. The receipts list « Avec solde » filter.
+//   5. Follow-ups 142 (owner item 3): the director clicks « Annuler ce paiement » on a desk
+//      receipt; the receipt is voided (screen and database) and the amount is due again.
 // Synthetic staff, prospects, learners and payments only, removed in finally. Dates from
 // scripts/lib/centre-days.mjs. No external requests.
 import assert from 'node:assert/strict';
@@ -310,8 +312,47 @@ try {
   await page.getByText(/Reste aujourd’hui : /).first().waitFor();
   console.log('PASS « Avec solde »: only receipts whose charge still has a balance');
 
+  // 5 — Follow-ups 142 (owner item 3): the director voids a payment from the receipt.
+  phase = 'void as director';
+  const studentE = learner(`Annulation ${run}`);
+  const paidE = deskPay(director.id, { student_id: studentE, session_type: 'Yearly', school_year: YEAR, level: 'Child 4', gross_amount: 2000, payment_amount: 800 });
+  const chargeE = paidE.charge_id, receiptE = paidE.receipt_id;
+  assert.ok(receiptE && chargeE, 'desk payment returned its receipt and charge');
+  assert.deepEqual(serverBalances(director.id, studentE), { [chargeE]: 1200 }, 'before the void: 1200 still due');
+  const directorContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await directorContext.route(url => !['localhost', '127.0.0.1'].includes(url.hostname), route => route.abort());
+  const receptionPage = page;
+  page = await directorContext.newPage(); page.setDefaultTimeout(30000);
+  page.on('pageerror', e => errors.push(`${phase}: ${e.message}`));
+  await login(director);
+  await page.goto(`${app}/receipts/${receiptE}/print`);
+  await page.getByRole('link', { name: 'Corriger le paiement' }).click();
+  await page.waitForURL(url => url.pathname === `/receipts/${receiptE}/edit`);
+  // The desk payment confirmed the enrollment (EAP), so this is its last live payment: the
+  // page warns first, and the toast says the enrollment stays confirmed.
+  await page.getByText('Dernier paiement actif de l’inscription.').waitFor();
+  await page.getByPlaceholder('Ex. montant saisi par erreur…').fill(`Synthetic void ${run}`);
+  let confirmText = '';
+  page.once('dialog', d => { confirmText = d.message(); d.accept(); });
+  await page.getByRole('button', { name: 'Annuler ce paiement', exact: true }).click();
+  await toast('Paiement annulé. L’inscription reste confirmée et apparaît dans « Inscriptions confirmées sans paiement actif ».');
+  assert.match(confirmText, /^Annuler ce paiement \? Le reçu original restera visible\./, 'the browser confirmation is asked first');
+  await printed();
+  await page.locator('.receipt-sheet').getByText('Annulé', { exact: true }).first().waitFor(); // the corner ribbon (and the status line)
+  await page.getByText(`Synthetic void ${run}`).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Corriger le paiement' }).count(), 0, 'a voided receipt offers no second correction');
+  assert.equal(sql(`select (voided_at is not null)::text||'|'||void_reason||'|'||(voided_by=${q(director.id)})::text from public.receipts where id=${q(receiptE)}`),
+    `true|Synthetic void ${run}|true`, 'the receipt is voided by the director with the reason');
+  assert.deepEqual(serverBalances(director.id, studentE), { [chargeE]: 2000 }, 'after the void: the payment is due again');
+  await page.goto(`${app}/receipts/${receiptE}/edit`);
+  await page.getByText('Déjà annulé', { exact: true }).waitFor();
+  await page.getByRole('link', { name: 'Saisir le paiement corrigé' }).waitFor();
+  await directorContext.close();
+  page = receptionPage;
+  console.log('PASS director « Annuler ce paiement »: last-payment notice, confirmation, toast, « Annulé » on the receipt, voided with the reason, the amount due again');
+
   assert.deepEqual(errors, [], 'no browser errors');
-  console.log('PASS payment screens (RWR-r5 C1): invariant 12, duplicate panel, OD-2 reservation, « Avec solde »');
+  console.log('PASS payment screens (RWR-r5 C1): invariant 12, duplicate panel, OD-2 reservation, « Avec solde », director void');
 } catch (error) {
   console.error(phase, error.message);
   if (page) {
