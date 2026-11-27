@@ -72,7 +72,7 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 2. Run focused local checks and any explicitly required local validation as described below.
 3. Perform one focused author self-check and inspect the final diff. Do not spawn an internal reviewer or re-review subagent.
 4. Commit/push and open the PR, confirm remote CI was successfully scheduled, then stop polling and hand off under the remote-CI policy below. **READY FOR INDEPENDENT REVIEW** requires terminal successful required CI for the current revision.
-5. Stop the authoring task and hand off to a separate independent reviewer task/session; this is mandatory for Tier 2. Tell the owner the exact PR head SHA to review rather than reviewing it yourself.
+5. Stop the authoring task and hand off to a separate independent reviewer task/session; this is mandatory for Tier 2. Tell the owner (or, in the [coordinated Tier 2 flow](#coordinated-tier-2-flow-owner-opt-in-per-task), the coordinator) the exact PR head SHA to review rather than reviewing it yourself.
 
 ### High-risk changes (Tier 3)
 
@@ -82,7 +82,7 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 4. Perform one focused author self-check and inspect the final diff. Do not spawn an internal reviewer or re-review subagent.
 5. Commit/push, open the PR, confirm remote CI was successfully scheduled, then stop polling and hand off under the remote-CI policy below.
 6. Report **READY FOR INDEPENDENT REVIEW** only when the exact-SHA handoff conditions below are met.
-7. Stop the authoring task and tell the owner to launch a separate independent reviewer task/session for the exact PR SHA; the author task must not perform or orchestrate that formal review itself.
+7. Stop the authoring task and tell the owner to launch a separate independent reviewer task/session for the exact PR SHA (Tier 3 never uses the [coordinated Tier 2 flow](#coordinated-tier-2-flow-owner-opt-in-per-task)); the author task must not perform or orchestrate that formal review itself.
 8. If findings require fixes, the implementation agent fixes them, verifies affected behavior and safeguards with focused local validation, commits/pushes, confirms CI scheduling and hands off without polling. The coordinator verifies terminal required CI before requesting fresh independent review of the new SHA.
 9. After review, follow the existing human approval, separate release/operator and Production verification flow.
 
@@ -90,7 +90,7 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 
 Architecture and implementation authors run relevant checks, inspect their own final diff and perform **one focused self-check** before handoff. Its purpose is to catch obvious mistakes, verify changed risk areas and confirm that tests/documentation accurately describe the change. Focus on security, authorization, migrations, data integrity, concurrency, external providers, retry/error handling and regression risk as applicable.
 
-The author task must **not spawn an internal reviewer, independent-review, or re-review subagent**. Do not run a second review pass merely to imitate the formal reviewer. If broader review is warranted, finish the author handoff and ask the owner to launch the separate independent reviewer task/session required by the risk tier.
+The author task must **not spawn an internal reviewer, independent-review, or re-review subagent**. Do not run a second review pass merely to imitate the formal reviewer. If broader review is warranted, finish the author handoff and ask the owner to launch the separate independent reviewer task/session required by the risk tier. In the [coordinated Tier 2 flow](#coordinated-tier-2-flow-owner-opt-in-per-task) the author hands off to the coordinator instead, which launches the reviewer; the author still never launches, imitates or orchestrates review.
 
 The self-check never approves the PR, counts as independent review, authorizes merge or replaces a required reviewer. Do not describe it as “approved,” and do not issue **READY FOR FINAL REVIEW** / **CHANGES REQUIRED** from an author task. After push, PR creation and confirmed CI scheduling, stop and report the exact PR/head SHA and CI run reference for the coordinator's handoff.
 
@@ -104,6 +104,34 @@ Independent review must be performed by a separate reviewer task/session that di
 - **CHANGES REQUIRED**
 
 The implementation agent must not provide its own independent-review verdict. A clean READY FOR FINAL REVIEW verdict goes to the human owner's final decision; it does not require a routine third AI review or another AI rewrite of the handoff. It does not authorize merge, deployment or Production mutation; existing human approval and release/operator gates remain in force.
+
+### Coordinated Tier 2 flow (owner opt-in per task)
+
+For an eligible change, the owner may ask a **coordinator session** to run the author and the independent reviewer as separate agents. The coordinator writes no code and gives no verdict; it only launches the two agents, passes material between them and reports to the owner.
+
+**Eligible only when all of these hold:** the change is Tier 2 and client-only (no migration, auth/roles/permissions, finance or external delivery), and every changed path is on this allowed list:
+
+- `src/components/**`, `src/app/**` except `src/app/api/**`, `src/hooks/**` and `src/utils/**`;
+- these exact files: `src/lib/crm/presentation.mjs`, `src/lib/ui/presentation.mjs`, `src/lib/statusColors.js`, `src/lib/crm/calendar.mjs` and `src/lib/crm/funnel.mjs`, plus the guide pictures under `public/helpdesk/` (image files only: `.jpg`, `.jpeg`, `.png`, `.webp`);
+- these browser tests, by exact name only: `scripts/test-crm-opportunities-browser.mjs`, `scripts/test-crm-phase12-browser.mjs`, `scripts/test-crm-rcc-a1-browser.mjs`, `scripts/test-crm-work-calendar-browser.mjs` and `scripts/test-reception-forms-browser.mjs`. A change to their set-up or clean-up code that switches a role or security guard off or on uses the manual flow. Every other test script means the manual flow, including every `*-local.mjs` and `*-upgrade.mjs`, every `scripts/test-receptionist-*`, `scripts/test-crm-rcc-a2-browser.mjs` and any test that touches payments, receipts, permissions or roles;
+- record files the same change requires: `docs/ai/CURRENT_STATE.md`, the plan document for that change under `docs/architecture/plans/`, the plans index `docs/architecture/plans/README.md`, and `docs/ai/OWNER_DECISIONS.md` under the rule below.
+
+These paths are excluded even though they sit inside the allowed folders: `src/components/finance/**`, `src/components/receipts/**`, `src/app/(admin)/finance/**`, `src/app/(admin)/receipts/**`, `src/app/(admin)/payroll/**`, `src/app/(admin)/settings/**` (users, roles and invitations), `src/app/(auth)/**`, `src/app/auth/**`, `src/app/inscription-compte/**` (account activation, sets a password), `src/app/(admin)/communications/**` (sends e-mail), `src/components/online/**` and `src/app/(admin)/online/**` (Zoom classroom), `src/components/settings/**` (catalogue and prices), `src/components/SpeedInsightsReporter.jsx` (data sent to Vercel), and the sign-in protection files `src/components/ProtectedRoute.jsx`, `src/app/(admin)/layout.jsx` and `src/app/providers.jsx`. Any `route.js`, any middleware file and any file marked `"use server"` means the manual flow, wherever it sits. So does any change that imports `src/lib/supabase-admin.js`, `src/lib/storage-server.js`, any `src/lib/**/server.js` or `server-only`, or that reads a server-side secret setting. `src/lib/supabase.js` is excluded by name. `src/lib/crm/queries.js` and `scripts/lib/**` are not on the list: a change that needs either one uses the manual flow. Any other path, including the rule documents (`AGENTS.md`, `CLAUDE.md`, `docs/ai/SECURITY_RULES.md`, `docs/ai/WORKFLOWS.md`, `docs/ai/PRODUCT_RULES.md`, `docs/ai/ARCHITECTURE.md`), means the manual flow. A change to an allowed path that still touches payment, receipt, role or permission behaviour is not eligible either; for example, a change to the payment steps of `src/components/crm/CrmEnrollmentDialog.jsx` or `src/components/crm/LeadEnrollmentSection.jsx`, the CRM screens that take payments, or to the finance behaviour of `src/app/(admin)/students/[id]/page.jsx`, `src/app/(admin)/reports/page.jsx` or `src/app/(admin)/dashboard/page.jsx`, which call finance functions, uses the manual flow. Tier 3 always uses the fully manual flow. If unsure, it is not eligible.
+
+`docs/ai/OWNER_DECISIONS.md` is in the flow only when the author adds wording taken from the owner's own message, which the coordinator passes on unchanged; the coordinator also gives that message to the reviewer to compare. Otherwise that file is out of the flow.
+
+**Flow:**
+
+1. The coordinator launches the author agent in its own worktree with the approved plan. The author follows the Tier 2 steps and returns **READY FOR INDEPENDENT REVIEW** with the exact head SHA.
+2. For every new head SHA, including after each fix round, the coordinator repeats this step in full. It verifies from GitHub, not from the author's report, that required CI has finished green for that exact SHA, and it re-checks every path the whole PR changes against the eligibility rules above. If CI is still running, the coordinator waits for it; that is not a fix round. If CI is red, the SHA goes back to the author and counts as a fix round. Any path outside the rules stops the flow and returns to the manual one.
+3. The coordinator launches a fresh reviewer agent: a new agent, never a fork or copy of the coordinator's conversation, that did not write the change and has not seen the author's conversation. It receives only the PR, the plan, the exact SHA, earlier findings and, for `OWNER_DECISIONS.md`, the owner's message. It confirms that the PR head equals that SHA with green CI, then returns one verdict. In this flow the reviewer also:
+   - confirms eligibility independently by checking every changed path of the whole PR against the rules above; any ineligible path is CHANGES REQUIRED and returns the change to the manual flow;
+   - lists every existing test assertion the change modified or removed, and states for each whether it now checks less than before.
+4. On **CHANGES REQUIRED**, the coordinator passes the findings unedited to the author, who fixes them and returns a new SHA. The coordinator repeats step 2 for that SHA, then sends it to the same reviewer for re-review.
+5. There are at most two fix rounds. If the re-review after the second fix is still CHANGES REQUIRED, the coordinator stops and asks the owner. It also stops and asks the owner on any INCONCLUSIVE result, disagreement, scope change or needed owner decision.
+6. On **READY FOR FINAL REVIEW**, the coordinator gives the owner the PR, the exact SHA, the CI run and the reviewer's verdict.
+
+Merge, deployment and any Production change still require the owner's explicit approval; this flow never grants them. The rule in [author self-check](#author-self-check-before-handoff) that the author must not orchestrate review still applies: here the coordinator, not the author, launches the reviewer.
 
 ## Findings-driven review and validation
 
