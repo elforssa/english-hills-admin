@@ -9,11 +9,12 @@ import { STATUS } from '@/lib/crm/presentation.mjs';
 import { MATCH_DECISIONS, MATCH_REASONS, PEOPLE_MESSAGES, personHref, personLine } from '@/lib/people.mjs';
 import MergeDialog from '@/components/people/MergeDialog';
 
-// The drawer's people block (RWR-r5 §5.2–5.3): « Modifier la fiche », the other
-// learners of the same contact with « Ajouter un enfant », possible duplicates still
+// The drawer's people block (RWR-r5 §5.2–5.3): the other learners of the same contact,
+// possible duplicates still
 // unanswered (« Même famille » / « Personne différente », recorded), and — for the
 // direction — « Fusionner ». A merged prospect shows where it now lives.
-export default function LeadPeopleSection({ lead, onEdit, onAddChild, onOpenLead }) {
+// « Modifier la fiche » and « Ajouter un enfant » live in « Autres actions » (CPO-r2).
+export default function LeadPeopleSection({ lead, onOpenLead }) {
   const { role } = useAuth();
   const refresh = useCrmRefresh();
   const [merge, setMerge] = useState(null), [busy, setBusy] = useState('');
@@ -41,7 +42,6 @@ export default function LeadPeopleSection({ lead, onEdit, onAddChild, onOpenLead
     <p className="font-medium">Fiche fusionnée</p><p className="mt-1">Ce prospect a été fusionné dans une autre fiche : son suivi continue là-bas.</p>
     <Button variant="link" className="px-0" onClick={() => onOpenLead?.(lead.merged_into_lead_id)}>Ouvrir la fiche conservée</Button></section>;
   return <section aria-label="Fiche et famille" className="space-y-3">
-    <div className="flex flex-wrap gap-2"><Button variant="outline" className="min-h-9" onClick={onEdit}>Modifier la fiche</Button><Button variant="outline" className="min-h-9" onClick={onAddChild}>Ajouter un enfant</Button></div>
     {lead.contact?.phone_needs_review && <p className="text-xs text-amber-900">Numéro à vérifier : le numéro enregistré n’est pas valide.</p>}
     {lead.siblings?.length > 0 && <div><h4 className="text-sm font-medium">Autres apprenants de ce contact</h4><ul className="mt-1 space-y-1 text-sm">{lead.siblings.map(s => <li key={s.id}><button type="button" className="min-h-9 text-left text-blue-800 underline" onClick={() => onOpenLead?.(s.id)}>{s.learner_name || 'Apprenant à préciser'}</button><span className="ml-2 text-xs text-slate-600">{STATUS[s.status] || s.status}</span></li>)}</ul></div>}
     {lead.merged_from?.length > 0 && <p className="text-xs text-slate-600">Fiche{lead.merged_from.length > 1 ? 's' : ''} fusionnée{lead.merged_from.length > 1 ? 's' : ''} ici : {lead.merged_from.map(m => m.learner_name || 'sans nom').join(', ')}. Leur historique s’affiche ci-dessous.</p>}

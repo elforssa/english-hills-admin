@@ -23,7 +23,7 @@ function Column({ stage, initial, args, count, onOpen, onAction, dragging, asOf 
 }
 // Mounts only once the board's data has rendered, so a saved scroll position can be
 // restored against real dimensions. Paging and refresh semantics stay with the parent.
-function BoardRegion({ data, args, onOpen, onAction, regionRef, restore, filterKey }) {
+function BoardRegion({ data, args, stages, onOpen, onAction, regionRef, restore, filterKey }) {
   const [dragging,setDragging] = useState(null);
   const ref = useRef(null), edges = useOverflowEdges(ref);
   useLayoutEffect(() => {
@@ -55,15 +55,18 @@ function BoardRegion({ data, args, onOpen, onAction, regionRef, restore, filterK
     el.scrollTo({ left: Math.max(0, left), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
   return <div className="min-w-0 space-y-2">
-    {edges.overflow && <div role="group" aria-label="Aller à l’étape" className="flex flex-wrap items-center gap-1"><span aria-hidden className="mr-1 text-xs text-muted-foreground">Aller à l’étape</span>{BOARD_STAGES.map(stage => <Button key={stage} type="button" variant="outline" size="sm" className="min-h-9 text-xs" aria-label={`Aller à l’étape ${STATUS[stage]} (${data?.counts?.[stage] ?? '—'})`} onClick={() => jump(stage)}>{STATUS[stage]} <span className="ml-1 tabular-nums text-muted-foreground">{data?.counts?.[stage] ?? '—'}</span></Button>)}</div>}
+    {edges.overflow && <div role="group" aria-label="Aller à l’étape" className="flex flex-wrap items-center gap-1"><span aria-hidden className="mr-1 text-xs text-muted-foreground">Aller à l’étape</span>{stages.map(stage => <Button key={stage} type="button" variant="outline" size="sm" className="min-h-9 text-xs" aria-label={`Aller à l’étape ${STATUS[stage]} (${data?.counts?.[stage] ?? '—'})`} onClick={() => jump(stage)}>{STATUS[stage]} <span className="ml-1 tabular-nums text-muted-foreground">{data?.counts?.[stage] ?? '—'}</span></Button>)}</div>}
     <div className="relative min-w-0">
-      <div ref={ref} data-board-region className="grid max-w-full grid-cols-[repeat(5,minmax(184px,1fr))] gap-2 overflow-auto overscroll-x-contain rounded-lg pb-2 lg:[@media(min-height:640px)]:h-[var(--board-fill)]" role="region" tabIndex={0} aria-label="Tableau des opportunités, défilement horizontal" onDragStart={e => setDragging(e.target.closest('[data-stage]')?.dataset.stage)} onDragEnd={() => setDragging(null)} onDrop={() => setDragging(null)}>
-        {BOARD_STAGES.map(stage => <Column key={stage} dragging={dragging} stage={stage} args={args} initial={data?.pages?.[stage]} count={data?.counts?.[stage]} asOf={data?.as_of} onOpen={onOpen} onAction={onAction} />)}
+      <div ref={ref} data-board-region style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(184px, 1fr))` }} className="grid max-w-full gap-2 overflow-auto overscroll-x-contain rounded-lg pb-2 lg:[@media(min-height:640px)]:h-[var(--board-fill)]" role="region" tabIndex={0} aria-label="Tableau des opportunités, défilement horizontal" onDragStart={e => setDragging(e.target.closest('[data-stage]')?.dataset.stage)} onDragEnd={() => setDragging(null)} onDrop={() => setDragging(null)}>
+        {stages.map(stage => <Column key={stage} dragging={dragging} stage={stage} args={args} initial={data?.pages?.[stage]} count={data?.counts?.[stage]} asOf={data?.as_of} onOpen={onOpen} onAction={onAction} />)}
       </div>
       <EdgeFades edges={edges} />
     </div>
   </div>;
 }
-export default function OpportunitiesBoard({ query, args, onOpen, onAction, filtered, onReset, regionRef, restore, filterKey }) {
-  return <ReadState query={query} available={Number.isFinite(query.data?.total) && BOARD_STAGES.every(stage => Array.isArray(query.data?.pages?.[stage]?.rows))} filtered={filtered} onReset={onReset} empty={filtered ? "Aucun prospect correspondant à cette vue et ces filtres." : "Aucun prospect enregistré. Ajoutez un prospect pour commencer le suivi."}>{query.data?.total !== 0 ? <BoardRegion data={query.data} args={args} onOpen={onOpen} onAction={onAction} regionRef={regionRef} restore={restore} filterKey={filterKey} /> : null}</ReadState>;
+// `stages` narrows the columns shown (« À prendre »: the four active stages); the read
+// still returns every board stage, and an empty board is judged on the columns shown.
+export default function OpportunitiesBoard({ query, args, stages = BOARD_STAGES, onOpen, onAction, filtered, onReset, regionRef, restore, filterKey }) {
+  const shown = stages === BOARD_STAGES ? query.data?.total : stages.reduce((sum, stage) => sum + (query.data?.counts?.[stage] || 0), 0);
+  return <ReadState query={query} available={Number.isFinite(query.data?.total) && BOARD_STAGES.every(stage => Array.isArray(query.data?.pages?.[stage]?.rows))} filtered={filtered} onReset={onReset} empty={filtered ? "Aucun prospect correspondant à cette vue et ces filtres." : "Aucun prospect enregistré. Ajoutez un prospect pour commencer le suivi."}>{shown !== 0 ? <BoardRegion data={query.data} args={args} stages={stages} onOpen={onOpen} onAction={onAction} regionRef={regionRef} restore={restore} filterKey={filterKey} /> : null}</ReadState>;
 }
