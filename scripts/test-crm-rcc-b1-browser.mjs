@@ -175,8 +175,23 @@ try {
   update public.crm_leads set latest_submission_id=(select id from n) where id='${distinct}'`);
  const total=Number(sql(`select count(*) from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by='${actor}')`));
  const ordinaryCard=fresh[5];
+ // CPO-r2: an ordinary (owned) card names its responsable on its origin line, so it stays within 150px; a card
+ // nobody has carries « Je m'en occupe » on a row of its own and has its own, separate limit (TAKE_CARD_MAX).
+ const takeCard=fresh[6];sql(`update public.crm_tasks set assigned_to=null where lead_id='${takeCard}' and status='open';update public.crm_leads set owner_id=null,version=version+1 where id='${takeCard}';`);
  console.log(`fixture: ${total} synthetic prospects (27+1 Nouveau incl. distinct inquiries, 4+1 Contact en cours, 3+1 En discussion incl. long identity, 6 Qualifié, 1 Perdu, 1 Non qualifié, overdue task, booked test)`);
 
+ // The take card's own limit: the ordinary 150px plus its one extra row (6px gap + the 36px « Je m'en occupe » button).
+ const TAKE_CARD_MAX=192;
+ const cardShapes=async label=>{const card=id=>page.locator(`[data-testid=opportunity-card][data-lead-id="${id}"]`);
+  const ordinary=await card(ordinaryCard).evaluate(c=>{const owner=c.querySelector('[data-testid=card-owner]'),line=owner?.parentElement,before=c.getBoundingClientRect().height;if(!owner)return {before,without:null};const shown=[...owner.getClientRects()].every(r=>r.bottom<=line.getBoundingClientRect().bottom+1);const html=line.innerHTML;owner.nextSibling?.remove();owner.remove();line.classList.remove('line-clamp-2');const without=c.getBoundingClientRect().height;line.classList.add('line-clamp-2');line.innerHTML=html;return {before,without,shown,take:!!c.querySelector('[data-testid=card-take]')};});
+  assert(ordinary.without!==null&&!ordinary.take,`${label}: the ordinary card names its responsable on its origin line, with no take button`);
+  assert(ordinary.shown,`${label}: the responsable's name is never in the part cut off by the two-line cap`);
+  assert(ordinary.before<=ordinary.without,`${label}: the responsable's name adds no height (${ordinary.before}px with it, ${ordinary.without}px as before CPO-r2: no name, no cap)`);
+  const take=await card(takeCard).evaluate(c=>({h:c.getBoundingClientRect().height,owner:c.querySelector('[data-testid=card-owner]')?.textContent,take:!!c.querySelector('[data-testid=card-take] [data-testid=take-prospect]')}));
+  assert(take.owner==='À prendre'&&take.take,`${label}: the take card reads « À prendre » and carries « Je m'en occupe » ${JSON.stringify(take)}`);
+  assert(take.h<=TAKE_CARD_MAX,`${label}: card with « Je m'en occupe » ${take.h}px ≤ ${TAKE_CARD_MAX}`);
+  assert(take.h<=ordinary.before+43,`${label}: the take card is taller than an ordinary card by its button row only (${take.h}px vs ${ordinary.before}px)`);
+  console.log(`HEIGHTS ${label}: ordinary ${ordinary.before}px (without name ${ordinary.without}px), take ${take.h}px`);};
  // B1_ENGINES narrows a local iteration; the acceptance run uses both engines.
  for(const engine of (process.env.B1_ENGINES||'chromium,webkit').split(',').map(name=>({chromium,webkit})[name])){
   const E=engine.name();browser=await engine.launch({headless:true});await newContext(engine);
@@ -202,7 +217,7 @@ try {
    if(m.lg)assert(await page.locator('.operational-sidebar:not(#mobile-sidebar)').first().isVisible());else await page.getByRole('button',{name:'Ouvrir le menu',exact:true}).waitFor();
    // Card readability: long names wrap; ordinary desktop board card ≤ 150px.
    const longCard=page.locator(`[data-testid=opportunity-card][data-lead-id="${rich}"]:visible`);if(await longCard.count())assert(await longCard.evaluate(c=>c.scrollWidth<=c.clientWidth+1),`${phase}: long name wraps without clipping`);
-   if(m.presentation==='board'){const h=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(h<=150,`${phase}: ordinary card ${h}px ≤ 150`);}
+   if(m.presentation==='board'){const h=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(h<=150,`${phase}: ordinary card ${h}px ≤ 150`);await cardShapes(phase);}
    await page.screenshot({path:join(tmpdir(),`b1-${E}-${viewport.width}.png`)});
    // Drawer at each width: shape, single pinned Fermer, body order, close/Back.
    await openDrawer(rich);const {m:dm}=await drawerShape(phase+' drawer');await fermerPinned(phase+' drawer');
@@ -446,7 +461,7 @@ try {
   phase=`${E} I1 fine 1280`;await setSize({width:1280,height:800});await gotoLeads();assert.equal((await mode()).presentation,'board');
   const riskyCard=page.locator(`[data-testid=opportunity-card][data-lead-id="${risky}"]`);await riskyCard.getByText('Yasmine El Fassi-Bennani · 8 ans',{exact:true}).waitFor();
   const fine=await identityClear('board',36);assert(fine.find(c=>c.id===risky).lines>=2,'the risky learner wraps beside the trigger, never under it');
-  const ordinaryHeight=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(ordinaryHeight<=150,`${phase}: ordinary card ${ordinaryHeight}px ≤ 150`);
+  const ordinaryHeight=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(ordinaryHeight<=150,`${phase}: ordinary card ${ordinaryHeight}px ≤ 150`);await cardShapes(phase);
   // I2: Opportunities applies the root scrollbar workaround, restores the prior inline value, and Tâches never applies it.
   phase=`${E} I2 root scrollbar`;await setSize({width:1440,height:900});await nav(app+'/students');await page.getByRole('heading').first().waitFor();
   await page.evaluate(()=>{document.documentElement.style.overflowY='auto';window.__b1Spa=true;});

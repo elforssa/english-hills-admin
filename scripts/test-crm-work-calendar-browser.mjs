@@ -147,7 +147,8 @@ end $fixture$;commit;
   // « À prendre »: the one action nobody holds. Its prospect has a responsable, so no take is offered:
   // a take never replaces an existing responsable. (Both engines start from the same fixture state.)
   sql(`update public.crm_tasks set assigned_to=null where lead_id='${unassignedLead}' and status='open';update public.crm_leads set owner_id='${users[0].id}',version=version+1 where id='${unassignedLead}';`);
-  await page.getByRole('button',{name:/^À prendre/}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
+  // The change above was made behind the screen: reload so the counter's own read is fresh too (it may still hold its value).
+  await page.getByRole('button',{name:/^À prendre/}).click();await page.reload();await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
   await page.getByTestId('work-to-take-count').filter({hasText:/^1$/}).waitFor();
   const toTake=page.locator(`[data-testid=work-row][data-lead-id="${unassignedLead}"]`);
   await toTake.getByTestId('work-row-responsable').filter({hasText:'Responsable : '+labels[0]+' · action sans responsable'}).waitFor();

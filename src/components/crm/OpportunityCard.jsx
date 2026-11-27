@@ -36,7 +36,9 @@ export default function OpportunityCard({ lead, onOpen, onAction, asOf, showStag
   ].filter(Boolean);
   // The programme once: « Meta • Anglais enfants » beside « Anglais enfants » reads « Meta ».
   const learner = learnerLine(lead);
-  const meta = [sourceWithoutProgramme(lead.source_label, lead.program, lead.program && programmeLabel(lead.program)) || 'Origine à préciser', lead.program && programmeLabel(lead.program), lead.last_activity_at ? `Dernière activité ${dateLabel(lead.last_activity_at)}` : 'Aucune activité'].filter(Boolean);
+  const owner = lead.owner_id ? lead.owner_display_label || 'Responsable indisponible' : active ? 'À prendre' : '';
+  const origin = [sourceWithoutProgramme(lead.source_label, lead.program, lead.program && programmeLabel(lead.program)) || 'Origine à préciser', lead.program && programmeLabel(lead.program)].filter(Boolean).join(' · ');
+  const activity = lead.last_activity_at ? `Dernière activité ${dateLabel(lead.last_activity_at)}` : 'Aucune activité';
   return <article data-testid="opportunity-card" data-lead-id={lead.id} data-stage={lead.status} draggable={active} onDragStart={e => { e.dataTransfer.setData('application/eh-opportunity', JSON.stringify({ id: lead.id, status: lead.status })); e.dataTransfer.effectAllowed = 'move'; }} className="min-w-0 rounded-lg border border-slate-200 bg-white px-1.5 py-1.5 text-sm">
     <div className="flex items-start gap-1">
       {/* One span child keeps parent and learner stacked even when the touch rule makes the button inline-flex.
@@ -47,9 +49,11 @@ export default function OpportunityCard({ lead, onOpen, onAction, asOf, showStag
     {showStage && <div className="mt-2"><LifecycleBadge status={lead.status}/></div>}
     <p className={`mt-1.5 break-words text-xs ${late ? 'text-red-700' : 'text-slate-700'}`}>{late ? 'En retard · ' : ''}{next ? next.label : lead.next_placement ? `Test de niveau · ${scheduledLabel(lead.next_placement)}` : active ? 'Prochaine action à choisir' : 'Suivi clos'}{qualifiers.length > 0 && <span className="text-slate-600"> · {qualifiers.join(' · ')}</span>}</p>
     {lead.closed_at && <p className="mt-1 text-xs">{closeReasonLabel(lead.closure_reason)} · {dateLabel(lead.closed_at)}</p>}
-    <p className="mt-1 break-words text-xs text-muted-foreground">{meta.join(' · ')}</p>
-    {/* The responsable's name, or « À prendre » with the one-tap take (CPO-r2). */}
-    {lead.owner_id ? <p data-testid="card-owner" className="mt-1 break-words text-xs font-medium text-slate-700">{lead.owner_display_label || 'Responsable indisponible'}</p>
-      : active ? <div data-testid="card-owner" className="mt-1.5 flex flex-wrap items-center gap-2"><span className="text-xs font-medium text-amber-900">À prendre</span><TakeProspectButton lead={lead} /></div> : null}
+    {/* The responsable's name, or « À prendre », opens the origin line the card already has (CPO-r2). The line is
+        capped at two lines, so the name never makes an ordinary card taller and is never the part cut: a long line
+        ends with « … » in the programme or the activity date (full text in the tooltip and the panel). Only the
+        take adds a row. */}
+    <p className="mt-1 line-clamp-2 break-words text-xs text-muted-foreground" title={[owner, origin, activity].filter(Boolean).join(' · ')}>{owner && <><span data-testid="card-owner" className={`font-medium ${lead.owner_id ? 'text-slate-700' : 'text-amber-900'}`}>{owner}</span> · </>}{origin} · {activity}</p>
+    {!lead.owner_id && active && <div data-testid="card-take" className="mt-1.5"><TakeProspectButton lead={lead} /></div>}
   </article>;
 }
