@@ -107,14 +107,15 @@ end $fixture$;commit;
   await ctx.route(url=>!['localhost','127.0.0.1'].includes(url.hostname),route=>{external.push(new URL(route.request().url()).hostname);return route.abort();});
   page=await ctx.newPage();page.setDefaultTimeout(60000);const fetches=cancelledFetches(page);page.on('pageerror',e=>{if(fetches.take(e,`${phase}: ${e.message}`))return;errors.push(e.message);console.error('BROWSER_ERROR',phase,e.message);});
   page.on('request',r=>{if(r.url().includes('/rest/v1/'))requests.push({path:new URL(r.url()).pathname,url:r.url(),args:r.postDataJSON()});});
-  const payloadReads=new Set();
+  const payloadReads=new Set();let closing=false;
   page.on('response',r=>{
    const target=r.url().endsWith('/rpc/crm_get_admissions_calendar')?eventPayloads:r.url().endsWith('/rpc/crm_get_work_queue')?workPayloads:null;
    if(!r.ok()||!target)return;
    const pending=r.json().then(payload=>target.push(payload));payloadReads.add(pending);
    // A read still in flight when the page navigates has no body to inspect (the « À prendre » counter is a
-   // second work-queue read, so one is often in flight): that is not a page error. Any other failure is.
-   pending.then(()=>payloadReads.delete(pending),error=>{if(!/navigated away|No resource with given identifier/.test(error.message))errors.push(error.message);payloadReads.delete(pending);});
+   // second work-queue read, so one is often in flight): that is not a page error. Nor is a body the test itself
+   // abandons by closing this engine's browser (`closing`, set only right before that close). Any other failure is.
+   pending.then(()=>payloadReads.delete(pending),error=>{if(!closing&&!/navigated away|No resource with given identifier/.test(error.message))errors.push(error.message);payloadReads.delete(pending);});
   });
   await page.clock.install();await login(users[1]);phase=engine.name()+' Tasks';await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
   // CPO-r2: one person picker, under « Toute l'équipe » only.
@@ -243,7 +244,7 @@ end $fixture$;commit;
   await page.clock.fastForward(61000);await minuteRead;
   const focusRead=page.waitForResponse(r=>r.url().endsWith('/rpc/crm_get_work_queue')&&r.ok());
   await page.clock.fastForward(16000);await page.evaluate(()=>window.dispatchEvent(new Event('visibilitychange')));await focusRead;
-  await page.waitForLoadState('networkidle');await Promise.allSettled([...payloadReads]);assert.deepEqual(errors,[]);assert.deepEqual(fetches.uncancelled(),[],'every WebKit fetch error is a cancelled request');await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} task types/pages/AND filters/exact-task stale guards/Calendar/legacy/Back/responsive/reduced motion`);
+  await page.waitForLoadState('networkidle');await Promise.allSettled([...payloadReads]);assert.deepEqual(errors,[]);assert.deepEqual(fetches.uncancelled(),[],'every WebKit fetch error is a cancelled request');closing=true;await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} task types/pages/AND filters/exact-task stale guards/Calendar/legacy/Back/responsive/reduced motion`);
  }
  assert.deepEqual(external,[],'no external browser/provider requests');
  assert(!requests.some(r=>r.path.endsWith('/rpc/crm_get_lead_detail')||r.path.endsWith('/rpc/crm_get_submission_attribution')));

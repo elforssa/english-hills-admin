@@ -85,6 +85,8 @@ async function drawerShape(label,ordinary=false){
  assert(shape.bodyBelow,`${label}: the body never sits under the header`);
  if(ordinary)assert(shape.header<=(m.sm?140:168),`${label}: drawer header height ${shape.header} with ordinary text`);
  assert.equal(await fermer().count(),1,`${label}: exactly one Fermer`);
+ // CPO-r2: the status and contact lines use the header's full width, so they must start below « Fermer ».
+ {const close=await fermer().boundingBox(),rows=await sheet().evaluate(el=>['header-status','header-contact'].map(id=>el.querySelector(`[data-testid=${id}]`)?.getBoundingClientRect().top).filter(v=>v!=null));assert(rows.every(top=>top>=close.y+close.height),`${label}: header lines start below Fermer ${JSON.stringify({close,rows})}`);}
  return {m,shape};
 }
 async function fermerPinned(label){
