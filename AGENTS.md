@@ -72,7 +72,7 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 2. Run focused local checks and any explicitly required local validation as described below.
 3. Perform one focused author self-check and inspect the final diff. Do not spawn an internal reviewer or re-review subagent.
 4. Commit/push and open the PR, confirm remote CI was successfully scheduled, then stop polling and hand off under the remote-CI policy below. **READY FOR INDEPENDENT REVIEW** requires terminal successful required CI for the current revision.
-5. Stop the authoring task and hand off to a separate independent reviewer task/session; this is mandatory for Tier 2. Tell the owner the exact PR head SHA to review rather than reviewing it yourself.
+5. Stop the authoring task and hand off to a separate independent reviewer task/session; this is mandatory for Tier 2. Tell the owner (or, in the [coordinated Tier 2 flow](#coordinated-tier-2-flow-owner-opt-in-per-task), the coordinator) the exact PR head SHA to review rather than reviewing it yourself.
 
 ### High-risk changes (Tier 3)
 
@@ -82,7 +82,7 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 4. Perform one focused author self-check and inspect the final diff. Do not spawn an internal reviewer or re-review subagent.
 5. Commit/push, open the PR, confirm remote CI was successfully scheduled, then stop polling and hand off under the remote-CI policy below.
 6. Report **READY FOR INDEPENDENT REVIEW** only when the exact-SHA handoff conditions below are met.
-7. Stop the authoring task and tell the owner to launch a separate independent reviewer task/session for the exact PR SHA; the author task must not perform or orchestrate that formal review itself.
+7. Stop the authoring task and tell the owner to launch a separate independent reviewer task/session for the exact PR SHA (Tier 3 never uses the [coordinated Tier 2 flow](#coordinated-tier-2-flow-owner-opt-in-per-task)); the author task must not perform or orchestrate that formal review itself.
 8. If findings require fixes, the implementation agent fixes them, verifies affected behavior and safeguards with focused local validation, commits/pushes, confirms CI scheduling and hands off without polling. The coordinator verifies terminal required CI before requesting fresh independent review of the new SHA.
 9. After review, follow the existing human approval, separate release/operator and Production verification flow.
 
@@ -104,6 +104,23 @@ Independent review must be performed by a separate reviewer task/session that di
 - **CHANGES REQUIRED**
 
 The implementation agent must not provide its own independent-review verdict. A clean READY FOR FINAL REVIEW verdict goes to the human owner's final decision; it does not require a routine third AI review or another AI rewrite of the handoff. It does not authorize merge, deployment or Production mutation; existing human approval and release/operator gates remain in force.
+
+### Coordinated Tier 2 flow (owner opt-in per task)
+
+For an eligible change, the owner may ask a **coordinator session** to run the author and the independent reviewer as separate agents. The coordinator writes no code and gives no verdict; it only launches the two agents, passes material between them and reports to the owner.
+
+**Eligible only when all of these hold:** Tier 2; client-only; the diff touches nothing under `supabase/**` (migrations, functions, config), `src/app/api/**`, `src/middleware.js`, server-only modules, auth/roles/permissions, finance/receipts/payments, e-mail/Zoom/Meta/webhooks or any other external delivery, `package.json`/`package-lock.json`, `.github/**`, `scripts/ci/**`, or the rule documents themselves: `AGENTS.md`, `CLAUDE.md`, `docs/ai/SECURITY_RULES.md`, `docs/ai/WORKFLOWS.md`, `docs/ai/PRODUCT_RULES.md` and `docs/ai/ARCHITECTURE.md`. Record updates that the same change requires are allowed: `docs/ai/CURRENT_STATE.md`, the plan document for that change, and `docs/ai/OWNER_DECISIONS.md` entries that only quote decisions the owner actually gave. Tier 3 always uses the fully manual flow. If unsure, it is not eligible.
+
+**Flow:**
+
+1. The coordinator launches the author agent in its own worktree with the approved plan. The author follows the Tier 2 steps and returns **READY FOR INDEPENDENT REVIEW** with the exact head SHA.
+2. The coordinator verifies from GitHub, not from the author's report, that required CI is green for that exact SHA, and re-checks the changed paths against the eligibility list. Any path outside it stops the flow and returns to the manual one.
+3. The coordinator launches a fresh reviewer agent that did not write the change and has not seen the author's conversation. It receives only the PR, the plan, the exact SHA and earlier findings, confirms the PR head equals that SHA with green CI, and returns one verdict. In this flow the reviewer also lists every existing test assertion that the change modified or removed and states, for each, whether it now checks less than before.
+4. On **CHANGES REQUIRED**, the coordinator passes the findings unedited to the author, who fixes them and returns a new SHA; the coordinator re-verifies CI and sends the new SHA to the same reviewer for re-review.
+5. After at most two fix rounds, or on any INCONCLUSIVE result, disagreement, scope change or needed owner decision, the coordinator stops and asks the owner.
+6. On **READY FOR FINAL REVIEW**, the coordinator gives the owner the PR, exact SHA, CI run and the reviewer's verdict.
+
+Merge, deployment and any Production change still require the owner's explicit approval; this flow never grants them. The rule in [author self-check](#author-self-check-before-handoff) that the author must not orchestrate review still applies: here the coordinator, not the author, launches the reviewer.
 
 ## Findings-driven review and validation
 
