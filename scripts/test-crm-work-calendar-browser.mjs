@@ -152,11 +152,22 @@ end $fixture$;commit;
   const toTake=page.locator(`[data-testid=work-row][data-lead-id="${unassignedLead}"]`);
   await toTake.getByTestId('work-row-responsable').filter({hasText:'Responsable : '+labels[0]+' · action sans responsable'}).waitFor();
   assert.equal(await toTake.getByTestId('take-prospect').count(),0,'no take on a prospect that has a responsable');
-  // Nobody has it: « Je m'en occupe ». A screen that is out of date is refused, refreshed and never retried (PT409).
+  // Nobody has it, and a colleague takes it first (the same command, from her own session): this screen is now out of
+  // date. « Je m'en occupe » here is refused (PT409), never retried, writes nothing, and the list refreshes.
   sql(`update public.crm_leads set owner_id=null,version=version+1 where id='${unassignedLead}'`);await page.reload();await toTake.getByTestId('work-row-responsable').filter({hasText:/^À prendre/}).waitFor();
-  sql(`update public.crm_leads set version=version+1 where id='${unassignedLead}'`);
+  const colleague=users[2].id,takes=()=>sql(`select count(*) from public.crm_activities where lead_id='${unassignedLead}' and event_type='lead_reassigned'`);
+  const takesBefore=Number(takes());
+  rpc('reassign',{lead_id:unassignedLead,expected_version:detail(unassignedLead).version,owner_id:colleague},colleague);
   await toTake.getByTestId('take-prospect').click();await page.getByText('Déjà pris ou modifié. La liste est à jour.',{exact:true}).waitFor();
-  assert.equal(sql(`select owner_id is null from public.crm_leads where id='${unassignedLead}'`),'t','a stale take wrote nothing');
+  assert.equal(sql(`select l.owner_id||':'||t.assigned_to from public.crm_leads l join public.crm_tasks t on t.lead_id=l.id and t.status='open' where l.id='${unassignedLead}'`),colleague+':'+colleague,'the colleague keeps the prospect and its action');
+  assert.equal(Number(takes()),takesBefore+1,'one change of responsable recorded, the colleague’s');
+  // The refreshed list no longer offers it; under « Toute l'équipe » the row carries the colleague's name and no take.
+  await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:/^Toute l’équipe/}).click();const taken=page.locator(`[data-testid=work-row][data-lead-id="${unassignedLead}"]`);
+  await taken.getByTestId('work-row-responsable').filter({hasText:'Responsable : '+labels[2]}).waitFor();assert.equal(await taken.getByTestId('take-prospect').count(),0);
+  // Nobody has it again: one tap takes it.
+  sql(`update public.crm_tasks set assigned_to=null where lead_id='${unassignedLead}' and status='open';update public.crm_leads set owner_id=null,version=version+1 where id='${unassignedLead}';`);
+  await page.getByRole('button',{name:/^À prendre/}).click();await page.reload();await toTake.getByTestId('take-prospect').waitFor();
   await toTake.getByTestId('take-prospect').click();await page.getByText('Ce prospect est le vôtre',{exact:true}).waitFor();
   assert.equal(sql(`select l.owner_id||':'||t.assigned_to||':'||(select count(*) from public.crm_tasks x where x.lead_id=l.id and x.status='open') from public.crm_leads l join public.crm_tasks t on t.lead_id=l.id and t.status='open' where l.id='${unassignedLead}'`),actor+':'+actor+':1','the taker is responsable, holds the action, and there is still one action');
   await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.',{exact:true}).waitFor();

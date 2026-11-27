@@ -443,6 +443,13 @@ Each needs its own approval. None blocks the PR.
 | **F3** | « À prendre » in Opportunités as one list across the stages. | Needs a small server view. Only worth doing if the stage-by-stage version bothers you. |
 | **F4** | Sharing out the existing prospects with no responsable, and the default account's backlog. | A data step with its own plan and counts. |
 | **F5** | « Mon compte » for directors and administrators, so a future name change needs no data step. | Client-only, but you asked for no new screen in this round. |
+| **F6** | In the lists (cards, Tâches rows), show the programme a form answer names when the prospect has none of its own. | The list reads do not return form answers: a migration. The panel does it in this PR. |
+| **F7** | The action names on rows and cards (« Rappel convenu », « À faire par nous (WhatsApp) ») aligned with the new « Changer » wording. | Those names are produced by a database function. |
+| **F8** | On cards, hide « Apprenant à préciser » exactly when the contact is the learner. | Cards do not receive the kind of contact: a migration. This PR hides it on adult programmes, and exactly in the panel. |
+| **F9** | A « Rendez-vous passés sans résultat » reminder at the top of Tâches. | Listed by the owner on 2026-11-27, not to build now. The rows are already in « En retard »; a complete block needs a small read (a migration), or a client-only version limited to the loaded page. |
+| **F10** | Hide prospects whose name starts with « TEST » from the lists and the counts. | Listed by the owner on 2026-11-27, not to build now. Counts are computed by the database: a migration, or a data step that closes them as test data (as D6 did). |
+| **F11** | On Tâches rows and cards, replace the bare « En retard » on call attempts with the attempt count and the next try (« 4 appels sans réponse · … »). | Listed by the owner on 2026-11-27, not to build now. The count and the next try are already in the list data (client-only); the time of the last attempt is not (a migration for that part). |
+| **F12** | « Clôturer : injoignable » on the Tâches row once it is available. | Listed by the owner on 2026-11-27, not to build now. Client-only: the row carries the status and the failed attempts, and the command exists. |
 
 # Owner decisions
 
@@ -460,6 +467,51 @@ Each needs its own approval. None blocks the PR.
 | Q6 | The shared login. | A: one partner keeps it under their name, the other is invited. B: freeze it as « Ancien compte partagé », two new accounts. | **A** |
 
 **Needed from you for N1 and S2 only** (it does not block the PR): which accounts have no name and the name for each; which account is shared, who keeps it, and whether it is the director account.
+
+# Additions after approval (owner, 2026-11-27)
+
+Three further messages from the owner on 2026-11-27, after the approval, all for the same single PR. They add display-only work and conditions for the handoff; they do not change the approved ownership design.
+
+## Ten display clean-ups (same PR, display only)
+
+The owner's rule for these: if one needs a migration or a server change, it becomes a follow-up and does not block the PR. The six quick call-result buttons stay as they are.
+
+| # | Asked | In the PR | Left for a follow-up |
+| --- | --- | --- | --- |
+| 1 | Programme once in the panel's « Demande » (it appeared five times) and on cards (twice). | « Demande » has one « Programme » line. « Précision » appears only when the typed text says something else. « Arrivé par », « Dernière demande » and the summary's title lose a second part that only repeats the programme (« Meta • Anglais enfants » reads « Meta »). The summary drops the answer that repeats it. Cards and the table: the origin loses the repeated programme. The header's identity line keeps the programme. | — |
+| 2 | French labels instead of raw form field names (« program interest », « deplacement centre », « current level »). | A French label for the known field names, and a tidy capitalised label for unknown ones. A label configured in the form mapping is shown as it is. | The lasting fix needs no code: the director can enter question labels in the form mapping (« Réception des leads »). |
+| 3 | When the programme is « à préciser » but a form answer names one, show the answer. | In the panel (header and « Demande », marked « réponse au formulaire »). | F6: the lists. |
+| 4 | « Tél. / WhatsApp / e-mail » line at normal size. | Done. | — |
+| 5 | The panel's action buttons in one row; « Modifier la fiche » and « Ajouter un enfant » inside « Autres actions ». | « Noter un échange », « Changer » and « Autres actions » share one row (on a narrow phone « Autres actions » shows as « ··· »). The menu: « Modifier la fiche », « Ajouter un enfant », « Changer de responsable », « Confier cette action à… », « Clôturer le prospect ». | — |
+| 6 | Historique: one line for a new prospect's arrival instead of three system lines. | « Nouveau prospect arrivé », outside « Détails ». A later request and every user action keep their own line. | — |
+| 7 | The « Test de niveau » explanation only when a test exists. | Done. | — |
+| 8 | « Changer »: clearer wording. | « Rappeler à l'heure convenue », « Rappeler plus tard, sans heure promise », « À faire de notre côté (prix, groupe…) », each with a sentence saying who expects what. | F7: the action names on rows and cards. |
+| 9 | Cards: no « Apprenant à préciser » when the learner is the contact. | Hidden on adult programmes; exact in the panel header. | F8: exact on cards. |
+| 10 | One page name: « Opportunités ». | Done (the heading « Pipeline admissions » is gone). | — |
+
+Also corrected in passing, because the new screens made them visible: the history titles of three commands that read « Action enregistrée » (« Prospect créé », « Responsable modifié », « Fiche modifiée »).
+
+## Conditions before the handoff
+
+1. Run every existing CRM test suite and report the result; add tests for « Je m'en occupe » (success, and a colleague taking the prospect first), the three Tâches tabs and the WhatsApp link.
+2. Give the preview deployment link and a French checklist of at most ten steps for the owner's own check on a computer and a phone.
+3. Check every changed screen at phone width (390 px) and say what could not be verified.
+4. No database function, migration or command changes in this PR; anything that needs one is a follow-up.
+5. Follow-ups to write down, not to build: F9 and F10.
+6. Follow-ups to write down, not to build: F11 and F12.
+7. A question answered from code and tests, and a one-page guide (below).
+
+## Several children: what the code does (question 7)
+
+**(a) One « Inscrire et encaisser » and one receipt per child.** A receipt, a charge and an enrolment each belong to exactly one learner (`receipts.student_id`, `charges.student_id` and `charges.enrollment_id`; `create_charge_payment` takes one learner). The enrolment command takes one prospect, which is one learner (`crm_enroll_and_collect`, [139](../../../supabase/migrations/139_people_identity.sql)). No screen or function takes one payment and splits it across learners. The discount reason « Fratrie » exists and is entered by hand on each child's enrolment; nothing calculates it. In the tests, day script 4 creates two learners under one contact and checks one Tâches row for the family; day script 2 checks one receipt per learner; **no test enrols siblings together**.
+
+**(b) The steps** are written for the receptionist as scenario C8 of the help guide ([GuideContent.jsx](../../../src/app/(admin)/helpdesk/GuideContent.jsx), « Une mère, ses deux enfants et un cousin »). In short: one prospect per child (« Ajouter un prospect », then « Autres actions » › « Ajouter un enfant »), an appointment with « Avec test de niveau » for each, the result of the appointment and of the test on each file, then three times « Inscrire et encaisser » a week later.
+
+Found while reading, for the owner:
+
+- **The cousin.** The code allows both ways (a third learner under the mother's contact, or his own prospect with his parents as contact). Nothing in the code says which is intended. The guide says: under the mother when she answers and pays for him, otherwise his own prospect. To confirm.
+- **A test taken on the spot.** The appointment only offers hours to come, and a result is refused before the test's start time. A walk-in who takes the test immediately is booked on the next slot and the result is entered after that hour. The guide says so. A « test now » path would be a change of rule, not display.
+- **Order of the two results.** After « Venu · reviendra » the next action is « En attente du prospect »; entering the test result then does not change it to « Proposer l'inscription ». The guide uses that order, which fits a family that comes back later. The other order is not covered by a test.
 
 # Approval record
 

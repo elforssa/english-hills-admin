@@ -206,7 +206,10 @@ try {
    await page.screenshot({path:join(tmpdir(),`b1-${E}-${viewport.width}.png`)});
    // Drawer at each width: shape, single pinned Fermer, body order, close/Back.
    await openDrawer(rich);const {m:dm}=await drawerShape(phase+' drawer');await fermerPinned(phase+' drawer');
-   const order=await sheet().evaluate(el=>['Prochaine action','Autres actions','Demande','Test de niveau','Inscription','Historique'].map(t=>{const n=[...el.querySelectorAll('h3,p,summary,section[aria-label]')].find(x=>(x.getAttribute('aria-label')||x.textContent.trim()).startsWith(t));return n?n.getBoundingClientRect().top:null;}));
+   // CPO-r2: « Autres actions » is no longer a block of its own; it sits in the row of the panel's main buttons.
+   {const tops=await sheet().getByTestId('panel-actions').locator(':scope > button').evaluateAll(ns=>ns.map(n=>Math.round(n.getBoundingClientRect().top)));assert(tops.length>=3&&new Set(tops).size===1,`${phase}: « Noter un échange », « Changer » and « Autres actions » on one row ${JSON.stringify(tops)}`);
+    assert.equal(await sheet().getByRole('button',{name:'Modifier la fiche',exact:true}).count()+await sheet().getByRole('button',{name:'Ajouter un enfant',exact:true}).count(),0,`${phase}: both moved into « Autres actions »`);}
+   const order=await sheet().evaluate(el=>['Prochaine action','Demande','Test de niveau','Inscription','Historique'].map(t=>{const n=[...el.querySelectorAll('h3,p,summary,section[aria-label]')].find(x=>(x.getAttribute('aria-label')||x.textContent.trim()).startsWith(t));return n?n.getBoundingClientRect().top:null;}));
    assert(order.every(v=>v!==null)&&order.every((v,i)=>!i||v>order[i-1]),`${phase}: drawer body order ${JSON.stringify(order)}`);
    if(dm.band!=='desktop')await targets(sheet(),'drawer');
    await noOverflow('drawer');await page.screenshot({path:join(tmpdir(),`b1-${E}-${viewport.width}-drawer.png`)});

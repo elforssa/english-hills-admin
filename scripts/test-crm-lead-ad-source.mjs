@@ -23,8 +23,8 @@ const sheet = readFileSync('src/components/crm/LeadDetailSheet.jsx', 'utf8');
 assert.match(sheet, /import \{[^}]*\badSourceLabel\b[^}]*\} from '@\/lib\/crm\/presentation\.mjs'/, 'the panel uses the shared helper');
 assert.match(sheet, /function AdSource\(\{ ad \}\) \{\s*const label = adSourceLabel\(ad\);\s*if \(!label\) return null;/, 'nothing is rendered without a label');
 assert.match(sheet, /<dt className="inline text-muted-foreground">Publicité · <\/dt><dd className="inline">\{label\.main\}\{label\.campaign && <span className="ml-1 text-xs text-muted-foreground">\{label\.campaign\}<\/span>\}<\/dd>/, 'ad set › ad then the campaign as small muted text');
-assert.match(sheet, /Dernière demande · <\/dt><dd className="inline break-words">\{inquiryLabel\(latest\)\}<\/dd><\/div><AdSource ad=\{latest\?\.ad\} \/>/, 'under Dernière demande');
-assert.match(sheet, /Première demande · <\/dt><dd className="inline break-words">\{inquiryLabel\(first\)\}<\/dd><\/div><AdSource ad=\{first\?\.ad\} \/><\/>\}/, 'under Première demande only when it differs');
+assert.match(sheet, /Dernière demande · <\/dt><dd className="inline break-words">\{inquiryLabel\(latest, programmeTexts\)\}<\/dd><\/div><AdSource ad=\{latest\?\.ad\} \/>/, 'under Dernière demande');
+assert.match(sheet, /Première demande · <\/dt><dd className="inline break-words">\{inquiryLabel\(first, programmeTexts\)\}<\/dd><\/div><AdSource ad=\{first\?\.ad\} \/><\/>\}/, 'under Première demande only when it differs');
 assert.equal((sheet.match(/<AdSource /g) || []).length, 2);
 assert.match(sheet, /function AdSource[\s\S]*?<div className="break-words">/, 'wraps on phones');
 

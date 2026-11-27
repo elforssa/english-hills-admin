@@ -175,6 +175,11 @@ export default function GuideContent() {
 <td>Fiche du prospect › <span className="ui">Autres actions</span></td>
 <td><a href="#c7">Scénario C7</a></td>
 </tr>
+<tr>
+<td>Une famille&nbsp;: plusieurs enfants, du test à l’inscription</td>
+<td><span className="ui">Ajouter un prospect</span>, puis <span className="ui">Autres actions</span> › <span className="ui">Ajouter un enfant</span></td>
+<td><a href="#c8">Scénario C8</a></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -757,6 +762,60 @@ export default function GuideContent() {
 <li><b>Rouvrir</b>&nbsp;: fiche › <span className="ui">Rouvrir le prospect</span>. Un motif est demandé, et une prochaine action est proposée (modifiable). La réouverture ne propose pas de rendez-vous au centre&nbsp;: pour en réserver un (avec ou sans test), notez l’échange avec <span className="ui">Noter un échange</span> › «&nbsp;On a parlé&nbsp;». Le prospect revient en «&nbsp;En discussion&nbsp;» s’il y a déjà eu une conversation, sinon en «&nbsp;Contact en cours&nbsp;», et le compteur d’appels repart à zéro.</li>
 <li>Un prospect <span className="st st-conv">Inscription confirmée</span> ne peut plus être rouvert ni modifié depuis cet écran.</li>
 </ul>
+</article>
+<article className="scn" id="c8">
+<header className="scn-head">
+<p className="kicker">Scénario C8</p>
+<h3>Une mère, ses deux enfants et un cousin&nbsp;: du test à l’inscription</h3>
+<p className="when">Une mère se présente avec ses deux enfants et un cousin. Les trois passent un test de niveau. Une semaine plus tard, ils reviennent s’inscrire.</p>
+</header>
+<div className="callout info">
+<strong>La règle à retenir</strong><p>Un apprenant = une fiche, un test, une inscription et un reçu. Pour trois enfants, vous faites donc trois fois <span className="ui">Inscrire et encaisser</span> et vous remettez trois reçus. Un seul paiement ne peut pas couvrir plusieurs enfants&nbsp;: saisissez pour chacun le montant qui le concerne.</p>
+</div>
+<h4>Le jour de la première visite</h4>
+<ol className="steps">
+<li><p><span className="ui">Rechercher une personne</span>&nbsp;: vérifiez d’abord que la mère n’est pas déjà enregistrée (son nom ou son téléphone).</p>
+</li>
+<li><p><span className="ui">Ajouter un prospect</span>, pour le premier enfant&nbsp;: <span className="ui">Nom du contact</span> (la mère), <span className="ui">Téléphone</span>, <span className="ui">Nom de l’apprenant</span> (l’enfant). Dans <span className="ui">Canal</span>, choisissez <span className="ui">Visite au centre</span>.</p>
+</li>
+<li><p>Dans <span className="ui">Premier échange</span>, choisissez <span className="ui">Rendez-vous au centre</span>, la date et l’heure du test, et cochez <span className="ui">Avec test de niveau</span>. Puis <span className="ui">Enregistrer</span>&nbsp;: le prospect est <span className="st st-qual">Qualifié</span> et son test est «&nbsp;Planifié&nbsp;».</p>
+</li>
+<li><p>Pour le deuxième enfant, restez sur la fiche du premier&nbsp;: <span className="ui">Autres actions</span> › <span className="ui">Ajouter un enfant</span>. Le contact et le téléphone sont repris&nbsp;; saisissez seulement son nom, le canal et le même rendez-vous avec test.</p>
+</li>
+<li><p>Pour le cousin, deux cas&nbsp;:</p>
+<ul className="tight">
+<li>la mère répond pour lui (c’est elle qu’on appelle et qui paie)&nbsp;: <span className="ui">Autres actions</span> › <span className="ui">Ajouter un enfant</span>, comme pour le deuxième enfant&nbsp;;</li>
+<li>ses propres parents répondent pour lui&nbsp;: <span className="ui">Ajouter un prospect</span> avec leur nom et leur téléphone. Si la plateforme signale «&nbsp;Cette personne existe peut-être déjà&nbsp;», répondez <span className="ui">Même famille, autre personne</span>, puis <span className="ui">Enregistrer</span> de nouveau.</li>
+</ul>
+</li>
+<li><p>Les trois tests peuvent être à la même heure. Après le test, ouvrez chaque fiche&nbsp;: notez le résultat du rendez-vous avec <span className="ui">Venu · reviendra</span>, puis, section <b>Test de niveau</b> › <span className="ui">Voir</span>, passez le <span className="ui">Statut</span> à <span className="ui">Résultat saisi</span> avec le <span className="ui">Score</span> et le <span className="ui">Niveau recommandé</span>.</p>
+</li>
+</ol>
+<div className="callout warn">
+<strong>Si le test se passe tout de suite</strong><p>La plateforme ne propose que des heures à venir, et elle refuse un résultat avant l’heure du test. Réservez donc le prochain créneau proposé aujourd’hui, faites passer le test, puis saisissez le résultat une fois cette heure passée.</p>
+</div>
+<h4>En attendant leur retour</h4>
+<ul className="tight">
+<li>Dans <span className="menu">Tâches</span>, la famille tient sur une seule ligne&nbsp;: celle de la mère, avec ses enfants. Un cousin enregistré avec ses propres parents a sa propre ligne.</li>
+<li>Après <span className="ui">Venu · reviendra</span>, la prochaine action est <span className="ui">En attente du prospect</span>, avec une relance dans 5 jours&nbsp;: la fiche n’est jamais «&nbsp;En retard&nbsp;». Le niveau recommandé reste visible dans la section <b>Test de niveau</b> de la fiche.</li>
+</ul>
+<h4>Une semaine plus tard&nbsp;: l’inscription</h4>
+<ol className="steps">
+<li><p>Retrouvez la mère avec <span className="ui">Rechercher une personne</span>, ou dans <span className="menu">Tâches</span>, onglet <b>En attente</b>. Ouvrez la fiche du premier enfant.</p>
+</li>
+<li><p>Section <b>Inscription</b>, cliquez sur <span className="ui">Inscrire et encaisser</span>. Trois étapes&nbsp;: <b>Apprenant</b> (son nom, sa date de naissance si elle est connue), <b>Inscription</b> (programme, année scolaire, niveau proposé déjà rempli d’après le test, groupe si vous le connaissez), <b>Paiement</b> (prix, remise éventuelle avec son motif, par exemple <span className="ui">Fratrie</span>, montant payé aujourd’hui, date et mode de paiement).</p>
+</li>
+<li><p>Validez&nbsp;: la plateforme affiche «&nbsp;Inscription confirmée · reçu…&nbsp;» avec <span className="ui">Ouvrir le reçu</span>. Le prospect passe en <span className="st st-conv">Inscription confirmée</span> et n’a plus de prochaine action.</p>
+</li>
+<li><p>Recommencez pour le deuxième enfant, puis pour le cousin&nbsp;: une fiche, une inscription, un reçu chacun. Les autres enfants du même contact sont listés sur la fiche&nbsp;: un clic ouvre la suivante.</p>
+</li>
+</ol>
+<div className="callout warn"><strong>À retenir</strong><ul className="tight">
+<li>Un paiement partiel est accepté&nbsp;: le reste dû reste suivi sur la fiche de l’apprenant. Un montant à 0 est refusé, sauf remise de 100&nbsp;% avec son motif.</li>
+<li>La remise «&nbsp;Fratrie&nbsp;» n’est pas calculée par la plateforme&nbsp;: vous la saisissez sur l’inscription de chaque enfant concerné, selon la consigne de la direction.</li>
+<li>Si la mère paie tout en une fois, répartissez la somme&nbsp;: un montant par enfant, un reçu par enfant.</li>
+<li>Le détail de chaque étape&nbsp;: <a href="#c1">C1</a> (nouveau prospect), <a href="#c4">C4</a> (rendez-vous et test), <a href="#c6">C6</a> (inscription).</li>
+</ul></div>
 </article>
 </section>
 <section className="part" id="quotidien">

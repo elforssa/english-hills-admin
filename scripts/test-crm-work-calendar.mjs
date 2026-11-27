@@ -17,8 +17,15 @@ assert(page.includes("params.get('view')==='calendar' ? <AdmissionsCalendar/> : 
 const calendar=readFileSync('src/components/placement/AdmissionsCalendar.jsx','utf8');
 assert(!/listAll|calendar_events|Annulé|draggable/.test(calendar));
 const queue=readFileSync('src/components/crm/WorkQueue.jsx','utf8');
-assert(queue.includes("ownerArgs(assignee,'assignee')")&&queue.includes("ownerArgs(owner,'owner')"));
-assert(queue.includes('/crm/leads?view=attention&layout=list'));
+// CPO-r2: Tâches filters on the action's holder through three tabs; the prospect's owner is never a second
+// filter (the read's owner parameters stay « all »), and the link to the removed « À traiter » view is gone.
+assert(queue.includes('...workAssigneeArgs(assignee), ...ANY_OWNER')&&queue.includes("const ANY_OWNER = { p_owner_mode: 'all', p_owner: null };"));
+assert(queue.includes('Object.entries(WORK_SCOPES)')&&!queue.includes('Responsable du prospect')&&!queue.includes('Responsable de la tâche'));
+assert(!queue.includes('view=attention'));
+// « Je m'en occupe » is the existing owner change with the version on screen and the signed-in account: no new RPC.
+const take=readFileSync('src/components/crm/TakeProspectButton.jsx','utf8');
+assert(take.includes("take.run('crm_reassign', () => ({ lead_id: lead.id, expected_version: lead.version, owner_id: user.id })")&&take.includes('refreshOnConflict: true'));
+assert(queue.includes('{who.takeable && <TakeProspectButton lead={row.lead} primary />}'),'offered only when the prospect has no owner');
 console.log('PASS civil-date presentation, task vocabulary, additive-read and bounded-route guards');
 
 // Stable civil labels under host timezone/locale changes; never reinterpret UTC.
