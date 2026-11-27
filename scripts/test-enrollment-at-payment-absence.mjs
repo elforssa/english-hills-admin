@@ -54,7 +54,7 @@ const ALLOW = {
     ['retired status', /MEMBERSHIP_STATUSES = \['Validated', 'Trial'\]|ACTIVE_STUDENT_STATUSES = \['Enrolled', 'Trial'\]/, 'read: old Trial rows stay members until the archive step'],
     ['retired status', /!\['Ended', 'Rejected'\]\.includes/, 'read filter: closed rows are not open'],
   ],
-  'src/app/(admin)/students-directory/page.jsx': [['retired status', /^\s*Trial: \{ bg:/, 'read-only colour of the old learner-file status']],
+  // RWR-r5 C2 (§6.4): the Annuaire page is now a redirect to the list's cards view (no status colours).
   // Read filters that leave closed (Rejected, Ended) rows out.
   'src/app/(admin)/groups/[id]/page.jsx': [['retired status', /!\['Rejected', 'Ended'\]\.includes\(e\.status\)/, 'read filter: closed rows are not members']],
   'src/components/receipts/ReceiptForm.jsx': [['retired status', /!\['Rejected', 'Ended'\]\.includes\(row\.status\)/, 'read filter: a closed CRM row is not a live enrollment']],

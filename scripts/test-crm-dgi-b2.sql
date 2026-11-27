@@ -60,9 +60,13 @@ select pg_temp.ev('L1','contact_attempted','2026-03-01 15:00Z');select pg_temp.e
 select pg_temp.ev('L1','conversation_recorded');select pg_temp.ev('L1','conversation_recorded');select pg_temp.ev('L1','whatsapp_sent');
 select pg_temp.ev('L1','lead_qualified');select pg_temp.ev('L1','lead_qualified');
 insert into placement_tests(student_name,date_test,heure,status,crm_lead_id) values('B2 child L1',current_date+5,'10:00','Planifié',pg_temp.lead('L1'));
+-- RWR-r5 C2 (141, invariant 5): attended only once the start time has passed; the test moves to yesterday.
+set local session_replication_role=replica; update placement_tests set date_test=current_date-1 where crm_lead_id=pg_temp.lead('L1') and status='Planifié'; set local session_replication_role=origin;
 update placement_tests set status='Passé' where crm_lead_id=pg_temp.lead('L1');
 update placement_tests set notes='Edited twice' where crm_lead_id=pg_temp.lead('L1');
 insert into placement_tests(student_name,date_test,heure,status,crm_lead_id) values('B2 child L1',current_date+6,'11:00','Planifié',pg_temp.lead('L1'));
+-- RWR-r5 C2 (141, invariant 5): attended only once the start time has passed; the test moves to yesterday.
+set local session_replication_role=replica; update placement_tests set date_test=current_date-1 where crm_lead_id=pg_temp.lead('L1') and status='Planifié'; set local session_replication_role=origin;
 update placement_tests set status='Passé' where crm_lead_id=pg_temp.lead('L1') and status='Planifié';
 -- L3: qualified at a walk-in without any outreach evidence.
 select pg_temp.ev('L3','lead_qualified');

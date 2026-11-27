@@ -370,19 +370,24 @@ do $$ declare l uuid; k public.crm_tasks; p uuid; q jsonb; via text; begin
   perform pg_temp.denied(format('update public.placement_tests set status=%L where id=%L','Planifié',p),'22023','crm_placement.not_replannable');
   perform pg_temp.ok((select status<>'Planifié' from public.placement_tests where id=p),'still not planned after '||via);
   -- Re-review of #208: two steps through « Passé » are refused as well (owner decision 2).
+  -- RWR-r5 C2 (141, invariant 5): « Passé » needs the start time to have passed; the test moves to yesterday.
+  set local session_replication_role=replica;
+  update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p;
+  set local session_replication_role=origin;
   update public.placement_tests set status='Passé' where id=p;
   q:=q||jsonb_build_object('expected_updated_at',(select updated_at from public.placement_tests where id=p),'expected_version',(select version from public.crm_leads where id=l));
   perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q),'22023','crm_placement.not_replannable');
   perform pg_temp.denied(format('update public.placement_tests set status=%L where id=%L','Planifié',p),'22023','crm_placement.not_replannable');
   perform pg_temp.ok((select status='Passé' from public.placement_tests where id=p),'two-step replan refused after '||via);
  end loop;
- -- C2 scope: a student's own test (no prospect) keeps today's behaviour.
+ -- C2 (141): a student's own test (no prospect) is edited through update_placement_test_result,
+ -- which refuses planning it again (scripts/test-placement-rules.sql); the result-time
+ -- trigger also covers a direct write: no « Passé » before the start time.
  insert into public.placement_tests(student_name,date_test,heure,status,cancelled_at,examinateur)
  values('Synthetic student',(now() at time zone public.centre_utc_offset())::date+2,'11:00','Annulé',now(),'Fixture') returning id into p;
  update public.placement_tests set status='Planifié' where id=p;
- update public.placement_tests set status='Passé' where id=p;
- update public.placement_tests set status='Planifié' where id=p;
- perform pg_temp.ok((select status='Planifié' from public.placement_tests where id=p),'a student''s own test can still be planned again');
+ perform pg_temp.denied(format('update public.placement_tests set status=%L where id=%L','Passé',p),'22023','placement.result_before_start');
+ perform pg_temp.ok((select status='Planifié' from public.placement_tests where id=p),'a student''s own test: no « Passé » before its time');
  delete from public.placement_tests where id=p;
  -- A result on a cancelled test stays allowed (the migration's cancel check).
  perform pg_temp.ok((select count(*)=0 from public.placement_tests where id=p and status='Planifié'),'cancelled fixture');
@@ -396,7 +401,7 @@ do $$ declare l uuid; k public.crm_tasks; p uuid; q jsonb; via text; begin
  update public.placement_tests set status='Résultat saisi',niveau_recommande='A2' where id=p;
  perform pg_temp.ok((select status='Résultat saisi' and cancelled_at is not null from public.placement_tests where id=p),'a result on a cancelled test keeps its cancellation history');
 end $$;
-\echo PASS T5c B2 a prospect's cancelled or absent test is never planned again (one or two steps); students' tests unchanged
+\echo PASS T5c B2 a prospect's cancelled or absent test is never planned again (one or two steps); students' tests: no « Passé » before the start time (C2)
 
 -- T5d (review of #208, important 4): an appointment still to come that an exchange
 -- replaces is cancelled « Remplacée », never completed, and is not shown as held.

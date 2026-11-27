@@ -61,7 +61,7 @@ try {
  assert.equal(await dialog().getByLabel('Niveau recommandé').count(),0,'no fake booking result');
  // RWR-r5 §4.4: the booked test is the appointment; it must fall inside the opening hours.
  const futureDate=inHours().slice(0,10),laterDate=new Date(Date.parse(futureDate)+7*86400000).toISOString().slice(0,10);
- await dialog().getByLabel('Date *',{exact:true}).fill(futureDate);await dialog().getByLabel('Heure',{exact:true}).fill('10:30');await dialog().getByLabel('Examinateur',{exact:true}).fill('Examinateur test');
+ await dialog().getByLabel('Date',{exact:true}).fill(futureDate);await dialog().getByLabel('Heure',{exact:true}).fill('10:30');await dialog().getByLabel('Examinateur',{exact:true}).fill('Examinateur test');
  await screenshot({path:join(tmpdir(), 'hills-phase5-booking.png'),fullPage:false});
  const requests=[];let drop=true;
  await page.route('**/rest/v1/rpc/crm_book_placement_test',async route=>{requests.push(route.request().postDataJSON());if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
@@ -75,10 +75,12 @@ try {
  await page.getByRole('button',{name:'Reprogrammer',exact:true}).click();
  // A week later, inside the opening hours (§4.4); the same row moves.
  const todayDate=laterDate;
- await dialog().getByLabel('Date *',{exact:true}).fill(todayDate);await dialog().getByLabel('Heure',{exact:true}).fill('16:05');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByRole('dialog').first().getByRole('button',{name:'Reprogrammer',exact:true}).waitFor();
+ await dialog().getByLabel('Date',{exact:true}).fill(todayDate);await dialog().getByLabel('Heure',{exact:true}).fill('16:05');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByRole('dialog').first().getByRole('button',{name:'Reprogrammer',exact:true}).waitFor();
  assert.equal(detail(lead).next_placement.id,pid);assert.equal(detail(lead).next_placement.heure,'16:05');
  await page.goto(app+'/placement-tests?view=calendar&date='+todayDate);await page.getByTestId('calendar-event').filter({hasText:'Adam test CRM'}).waitFor();assert.equal(await page.getByTestId('calendar-event').filter({hasText:'Adam test CRM'}).count(),1,'scheduled appointment appears once');await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();assert.equal(await page.getByTestId('work-row').count(),0,'a future appointment is not overdue');await screenshot({path:join(tmpdir(), 'hills-phase5-agenda.png'),fullPage:true});
  console.log('PASS same-row reschedule and one appointment in Agenda, without a fake task or missing-action warning');
+ // RWR-r5 C2 (141, invariant 5): a result is entered after the start time; the fixture moves the test to yesterday without the booking triggers.
+ sql(`begin;set local session_replication_role=replica;update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id='${pid}';commit;`);
  await page.goto(app+'/placement-tests');const row=page.getByRole('row').filter({hasText:'Adam test CRM'});await row.getByText('Prospect CRM',{exact:true}).waitFor();await row.getByRole('button',{name:/Test du/}).click();
  await dialog().getByLabel('Statut',{exact:true}).selectOption('Résultat saisi');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();
  assert.equal(sql(`select status from public.placement_tests where id='${pid}'`),'Planifié','result requires explicit level');
@@ -94,11 +96,11 @@ try {
  // Existing admin result email behavior is intercepted locally; no message is sent.
  const adminContext=await browser.newContext({viewport:{width:1440,height:1000}});await adminContext.route('**/*',r=>['localhost','127.0.0.1'].includes(new URL(r.request().url()).hostname)?r.continue():r.abort());page=await adminContext.newPage();await login(users[2]);
  const sid=randomUUID();normalStudents.push(sid);sql(`insert into public.students(id,full_name,status,session_type,parent_email) values('${sid}','Normal placement test','Prospect','Other','parent@example.invalid')`);
- const normal=randomUUID();normalTests.push(normal);sql(`insert into public.placement_tests(id,student_id,student_name,date_test,niveau_recommande) values('${normal}','${sid}','Normal placement test',current_date,'A1')`);
+ const normal=randomUUID();normalTests.push(normal);/* RWR-r5 C2 (141): a planned test carries no level, and its result follows its start time (yesterday). */sql(`insert into public.placement_tests(id,student_id,student_name,date_test) values('${normal}','${sid}','Normal placement test',current_date-1)`);
  const emails=[];await page.route('**/api/email/send',async route=>{emails.push(route.request().postDataJSON());await route.fulfill({status:200,contentType:'application/json',body:'{"success":true,"id":"local-intercept"}'});});
- await page.goto(app+'/placement-tests');const normalRow=page.getByRole('row').filter({hasText:'Normal placement test'});await normalRow.getByRole('button',{name:/Test du/}).click();await dialog().getByLabel('Statut',{exact:true}).selectOption('Résultat saisi');await dialog().getByLabel('Niveau recommandé',{exact:true}).selectOption('A2');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);assert.equal(emails.length,1);assert.match(emails[0].body,/Niveau recommandé : A2/);
+ await page.goto(app+'/placement-tests');const normalRow=page.getByRole('row').filter({hasText:'Normal placement test'});await normalRow.getByRole('button',{name:/Test du/}).click();/* §6.2: a learner's own test opens the level-test dialog. */await dialog().getByRole('radio',{name:'Résultat',exact:true}).click();await dialog().getByLabel('Niveau recommandé',{exact:true}).selectOption('A2');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);assert.equal(emails.length,1);assert.match(emails[0].body,/Niveau recommandé : A2/);
  const crmRow=page.getByRole('row').filter({hasText:'Adam test CRM'});assert.equal(await crmRow.locator('svg.lucide-trash2').count(),0,'admin cannot see CRM delete control');
- await normalRow.getByRole('button',{name:/Test du/}).click();await dialog().getByLabel('Notes',{exact:true}).fill('Précision du résultat');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);assert.equal(emails.length,1,'ordinary result edit does not resend email');
+ await normalRow.getByRole('button',{name:/Test du/}).click();await dialog().getByRole('radio',{name:'Résultat',exact:true}).click();await dialog().getByLabel('Notes (facultatif)',{exact:true}).fill('Précision du résultat');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);assert.equal(emails.length,1,'ordinary result edit does not resend email');
  await adminContext.close();assert.deepEqual(pageErrors,[]);console.log('PASS mobile, linked delete hidden for admin, and existing non-CRM result email behavior (intercepted, never sent)');
 } catch(error) {
  console.error(error.message);

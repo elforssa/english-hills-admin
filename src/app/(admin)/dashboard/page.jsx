@@ -280,8 +280,9 @@ export default function Dashboard() {
                 { href: '/students/new', label: 'Ajouter un apprenant', icon: UserPlus, color: '#7c3aed' },
               ] : []),
               { href: '/attendance', label: 'Marquer les présences', icon: ClipboardCheck, color: '#0891b2' },
-              { href: '/students-directory', label: 'Annuaire des apprenants', icon: Users, color: '#059669' },
               ...(isOperations ? [
+                // RWR-r5 §6.4: the Annuaire is the list's cards view.
+                { href: '/students?view=cards', label: 'Liste des apprenants', icon: Users, color: '#059669' },
                 { href: '/dismissal', label: 'Sortie des jeunes', icon: LogOut, color: '#B91C2E' },
               ] : []),
             ].map(({ href, label, icon: Icon, color }) => (

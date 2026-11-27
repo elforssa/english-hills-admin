@@ -6,7 +6,7 @@ import { CONFLICT_CODE, isRecordConflict, recordConflictMessage } from '../src/l
 import { metaRpcError } from '../src/lib/crm/meta/protocol.mjs';
 import { commandError } from '../src/lib/crm/presentation.mjs';
 import { STUDENT_ALREADY_CREATED_MESSAGE, STUDENT_CREATED_THEN_DELETED_MESSAGE, STUDENT_CREATE_UNCONFIRMED_MESSAGE, createLearnerIdentity, createStudentOnce, isReceptionistIdentityConflict, resolveReceptionistIdentityConflict } from '../src/lib/studentCreate.mjs';
-import { IMPORT_FINISHED, csvLine, failedLines, fileDigest, importFailureReason, importFinished, importRowId, rowIdentities, rowStatus, rowsToSend } from '../src/lib/studentImport.mjs';
+import { IMPORT_FINISHED, categoryProblem, csvLine, failedLines, fileDigest, importFailureReason, importFinished, importRowId, rowIdentities, rowStatus, rowsToSend } from '../src/lib/studentImport.mjs';
 
 // conflictErrors: PT409 and the legacy code are both a record conflict; nothing else is.
 assert.equal(CONFLICT_CODE, 'PT409');
@@ -191,7 +191,15 @@ assert.match(rowStatus({ status: 'deleted' }).reason, /supprimé/);
 assert.equal(rowStatus({ status: 'already_created' }).state, 'imported');
 for (const [error, reason] of [[{ code: '42501', message: 'raw' }, 'Accès refusé'], [{ code: '23505', message: 'raw' }, 'Doublon refusé par la base'],
   [{ code: '22P02', message: 'raw' }, 'Données refusées par la base'], [{ code: '23514', message: 'raw' }, 'Données refusées par la base'],
-  [new TypeError('Failed to fetch'), 'Envoi non confirmé : réessayez']]) {
+  [new TypeError('Failed to fetch'), 'Envoi non confirmé : réessayez'],
+  [{ code: '22023', hint: 'student.category_level', message: 'raw' }, 'La catégorie d’âge ne correspond pas au programme ou au niveau.'],
+  [{ code: '22023', hint: 'student.birth_date_too_recent', message: 'raw' }, 'La date de naissance doit remonter à au moins un an.']]) {
   assert.equal(importFailureReason(error), reason);
 }
+// RWR-r5 C2 (141): a row whose category does not fit its programme is a row error before sending.
+assert.equal(categoryProblem({ session_type: 'Yearly', age_category: 'Adults (18+)' }), 'age_category: La catégorie d’âge ne correspond pas au programme ou au niveau.');
+assert.equal(categoryProblem({ age_category: 'Adults (18+)' }), 'age_category: La catégorie d’âge ne correspond pas au programme ou au niveau.', 'no programme: the column default Yearly');
+assert.equal(categoryProblem({ session_type: 'Adults', age_category: 'Adults (18+)' }), null);
+assert.equal(categoryProblem({ session_type: 'Yearly', age_category: 'Young Learners (6-12)' }), null);
+assert.equal(categoryProblem({ session_type: 'Adults' }), null, 'no category: nothing to check');
 console.log('PASS import rows: only pending/failed rows re-sent, finished import locked, failed rows listed by line');

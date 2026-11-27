@@ -2,7 +2,7 @@
 // on the local stack. One synthetic prospect and one synthetic student share no number; each
 // is searched with six formats of its own number (generated per run: no phone-like literal in
 // the repository). Boxes: « Rechercher une personne » (header), the CRM prospect search, the
-// students list, the Annuaire and the Nouveau reçu picker. (The Admissions picker calls the
+// students list (table and cards views), the Annuaire (now the list's cards view, C2) and the Nouveau reçu picker. (The Admissions picker calls the
 // receipt picker's RPC, search_desk_students, from 6 digits; scripts/test-phone.sql covers it.)
 // Also: the « Ajouter un prospect » duplicate gate (nothing is created before an answer) and
 // the student form's gate. Synthetic staff, prospects and students are removed in finally.
@@ -34,6 +34,10 @@ const formats = national => {
 let browser, page, users = [], students = [], phase = 'setup';
 const errors = [];
 const dialog = () => page.getByRole('dialog').last();
+// The server's answer to exactly this query, so a list still showing the previous query's
+// rows never passes for this one (the header dialog stays open between formats).
+const answered = (rpc, key, value) => page.waitForResponse(r => r.url().includes(`/rest/v1/rpc/${rpc}`) && (() => {
+  try { return r.request().postDataJSON()?.[key] === value; } catch { return false; } })());
 
 async function login(user) {
   await page.goto(app + '/login');
@@ -48,7 +52,10 @@ try {
   users = await createStaff(env, run, ['director', 'receptionist']);
   const [director, reception] = users;
   rpc(director.id, 'create_followup_policy', LIVE_POLICY);
-  const prospectPhone = phone(), studentPhone = phone();
+  // Verify run 45889045886: a partial query whose digits start with 00 (« 003-97-23 ») lost
+  // them as if they were a prefix (fixed by 141, 5b). The student's number always has that
+  // case: its last 7 digits start with 00.
+  const prospectPhone = phone(), studentPhone = '06' + randomInt(1, 10) + '00' + String(randomInt(10_000, 100_000));
   const lead = rpc(reception.id, 'create_prospect', { display_name: 'Recherche contact synthétique', learner_name: 'Recherche prospect synthétique',
     phone: prospectPhone, source_label: 'Manuel · Téléphone' }).lead.id;
   const student = randomUUID(); students.push(student);
@@ -63,7 +70,9 @@ try {
   const boxes = [
     ['header « Rechercher une personne »', async value => {
       if (!(await page.getByRole('dialog').count())) { await page.goto(`${app}/crm/today`); await page.getByRole('button', { name: 'Rechercher une personne', exact: true }).first().click(); }
+      const answer = answered('find_people', 'p_query', value);
       await dialog().getByLabel('Nom, téléphone ou e-mail', { exact: true }).fill(value);
+      await answer;
       return dialog().getByTestId('people-results');
     }, [['prospect', lead, 'Recherche prospect synthétique'], ['student', student, 'Recherche apprenant synthétique']]],
     ['CRM prospect search', async value => {
@@ -72,13 +81,27 @@ try {
     }, [['prospect', lead, 'Recherche prospect synthétique']]],
     ['students list', async value => {
       await page.goto(`${app}/students?status=all_shown`); // « Tous les statuts »: a student with no enrollment is a Prospect
+      const answer = answered('search_students_page', 'p_search', value);
       await page.getByLabel('Rechercher un apprenant', { exact: true }).fill(value);
+      await answer;
       return page.locator('main');
     }, [['student', student, 'Recherche apprenant synthétique']]],
-    ['Annuaire', async value => {
-      await page.goto(`${app}/students-directory`);
-      await page.getByLabel("Rechercher dans l'annuaire", { exact: true }).fill(value);
-      return page.locator('main');
+    // The same list in its cards view (C2 §6.4), searched the same way.
+    ['students list (cards view)', async value => {
+      await page.goto(`${app}/students?view=cards&status=all_shown`);
+      const answer = answered('search_students_page', 'p_search', value);
+      await page.getByLabel('Rechercher un apprenant', { exact: true }).fill(value);
+      await answer;
+      return page.getByTestId('students-cards');
+    }, [['student', student, 'Recherche apprenant synthétique']]],
+    // RWR-r5 C2 (§6.4): the Annuaire is the list's cards view; its old address redirects there.
+    ['Annuaire (cards view)', async value => {
+      await page.goto(`${app}/students-directory?status=Prospect`);
+      await page.waitForURL(url => url.pathname === '/students' && url.searchParams.get('view') === 'cards' && url.searchParams.get('status') === 'Prospect');
+      const answer = answered('search_students_page', 'p_search', value);
+      await page.getByLabel('Rechercher un apprenant', { exact: true }).fill(value);
+      await answer;
+      return page.getByTestId('students-cards');
     }, [['student', student, 'Recherche apprenant synthétique']]],
     ['Nouveau reçu picker', async value => {
       await page.goto(`${app}/receipts/new`);

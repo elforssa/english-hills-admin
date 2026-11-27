@@ -87,6 +87,8 @@ assert.equal(actionErrorMessage({ code: 'PT409' }), STALE_MESSAGE);
 assert.match(actionErrorMessage({ code: '22023', hint: 'crm_exchange.attempt_gap' }), /Tentative réelle/);
 assert.match(actionErrorMessage({ code: '22023', hint: 'crm_hours.outside_opening' }), /ouverture/);
 assert.match(actionErrorMessage({ code: '22023', hint: 'crm_next_action.overlap' }), /apprenant/);
+// C2 (141): a visit whose linked test starts later is refused until the test's start.
+assert.equal(actionErrorMessage({ code: '22023', hint: 'placement.result_before_start' }), 'Le test de niveau lié commence plus tard : le résultat se saisit à partir de l’heure du test.');
 assert.match(actionErrorMessage(new Error('Choisissez la date et l’heure.')), /^Choisissez/);
 assert.match(actionErrorMessage({ code: '22023', message: 'x' }), /Vérifiez/);
 assert.equal(attemptGapLabel({ attempt_gap_ok: false, next_attempt_allowed_at: '2026-11-23T14:20:00Z' }), 'Prochain essai possible à 14:20');
@@ -114,14 +116,17 @@ console.log('PASS next-action UI helpers: plural, slots, payloads, OD-18 confirm
 
 // Re-review of #208 (owner decision 2): the test form never offers « Planifié » for a
 // prospect's test that has left it (one or two steps); a student's own test is unchanged.
-assert.deepEqual(placementStatusOptions(null), ['Planifié', 'Passé', 'Résultat saisi', 'Affecté']);
-assert.deepEqual(placementStatusOptions({ status: 'Planifié', crm_lead_id: 'x' }), ['Planifié', 'Passé', 'Résultat saisi', 'Affecté']);
+assert.deepEqual(placementStatusOptions(null), ['Planifié', 'Résultat saisi', 'Affecté']);
+assert.deepEqual(placementStatusOptions({ status: 'Planifié', crm_lead_id: 'x' }), ['Planifié', 'Résultat saisi', 'Affecté']);
 for (const status of ['Annulé', 'Absent', 'Passé', 'Résultat saisi', 'Affecté']) {
   assert.ok(!placementStatusOptions({ status, crm_lead_id: 'x' }).includes('Planifié'), `prospect test ${status}`);
   assert.ok(!placementStatusOptions({ status, is_crm: true }).includes('Planifié'), `CRM test ${status}`);
   assert.ok(placementStatusOptions({ status, crm_lead_id: null }).includes('Planifié'), `student test ${status}`);
 }
-assert.deepEqual(placementStatusOptions({ status: 'Annulé', crm_lead_id: 'x' }), ['Annulé', 'Passé', 'Résultat saisi', 'Affecté']);
+assert.deepEqual(placementStatusOptions({ status: 'Annulé', crm_lead_id: 'x' }), ['Annulé', 'Résultat saisi', 'Affecté']);
+// RWR-r5 §6.2 (141): « Passé » is derived, never offered; an old row keeps showing it.
+assert.ok(!placementStatusOptions({ status: 'Planifié', crm_lead_id: 'x' }).includes('Passé'));
+assert.deepEqual(placementStatusOptions({ status: 'Passé', crm_lead_id: 'x' }), ['Passé', 'Résultat saisi', 'Affecté']);
 console.log('PASS placement status options: no « Planifié » for a prospect test that left it');
 
 // PR A2 (migration 137): no screen calls a revoked command wrapper.

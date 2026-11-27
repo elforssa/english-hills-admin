@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, isOnlineSessionType, programmeName } from '@/lib/academicPrograms';
+import { CLASS_DAYS, classDaysText, initialClassDays, normalizeClassDays } from '@/lib/academic/classDays.mjs';
 import PersonLink from '@/components/PersonLink';
 import ProgrammePill from '@/components/operational/ProgrammePill';
 import { useAuth } from '@/context/AuthContext';
@@ -35,6 +36,9 @@ const reassignFirst = 'Réaffectez les apprenants avant de changer le programme 
 function groupSaveErrorMessage(error) {
   // The reception command (096) refuses a populated group with its own English text.
   if (error?.code === '23514' && /Reassign learners/.test(error.message || '')) return EGC_REASON_TEXT.group_level_locked;
+  // RWR-r5 (141): online groups are management's (§6.5); class days are checked.
+  if (error?.hint === 'group.online_management_only') return 'Les cours en ligne sont créés par la direction ou l’administration.';
+  if (error?.hint === 'group.class_days_invalid') return 'Cochez des jours de cours valides.';
   return membershipErrorMessage(error);
 }
 
@@ -43,8 +47,11 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
   // proposes the school year of today's centre date).
   const [form, setForm] = useState(() => {
     const initial = group || { name: '', session_type: 'Yearly', niveau: 'Pre-Child', categorie: 'Enfants', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: groupYear(currentSchoolYear()), date_debut: '', date_fin: '' };
-    return { ...initial, school_year: (initial.annee || '').replace('-', '/'), date_debut: initial.date_debut || '', date_fin: initial.date_fin || '' };
+    // RWR-r5 §6.3 (141): the class days are ticked; a group still without them starts from
+    // what its « jours » text reads as.
+    return { ...initial, school_year: (initial.annee || '').replace('-', '/'), date_debut: initial.date_debut || '', date_fin: initial.date_fin || '', class_days: initialClassDays(initial) };
   });
+  const toggleDay = day => setForm(f => ({ ...f, class_days: f.class_days.includes(day) ? f.class_days.filter(d => d !== day) : [...f.class_days, day] }));
   const levelLocked = Boolean(form.id) && memberCount > 0;
   // CDC (128, D4): a closed course keeps its dates, year, programme, level and capacity until reopened.
   const closed = Boolean(group?.closed_at);
@@ -90,7 +97,10 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
     setSaving(true);
     const payload = { name: form.name, langue: form.langue || 'Anglais', session_type: form.session_type,
       niveau: form.niveau, teacher_id: online ? null : form.teacher_id || null, salle: online ? null : form.salle || null,
-      jours: form.jours || null, horaire: form.horaire || null, capacite_max: oneToOne ? 1 : form.capacite_max,
+      // The ticked days write class_days and the « jours » text; none ticked keeps the old text.
+      ...(online ? {} : normalizeClassDays(form.class_days) ? { class_days: normalizeClassDays(form.class_days), jours: classDaysText(form.class_days) }
+        : { class_days: null, jours: form.jours || null }),
+      horaire: form.horaire || null, capacite_max: oneToOne ? 1 : form.capacite_max,
       terme: form.terme || null, annee: groupYear(form.school_year.trim()) || null, categorie: form.categorie || null,
       date_debut: online ? null : form.date_debut || null, date_fin: online ? null : form.date_fin || null };
     if (levelLocked) { delete payload.session_type; delete payload.niveau; }
@@ -122,13 +132,14 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
             <div className="col-span-2"><label htmlFor="group-name" className={labelClass}>Nom du groupe *</label><input id="group-name" className={inputClass} value={form.name} onChange={e => set('name', e.target.value)} required />
               {/* OA3: a group name never contains a learner's name. */}
               <p className="mt-1 text-xs text-muted-foreground">N’indiquez jamais le nom d’un apprenant dans le nom du groupe.</p></div>
-            <div><label className={labelClass}>Session *</label>
-              <select className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)} required disabled={levelLocked || closed}>
-                {SESSION_TYPES.map(session => <option key={session} value={session}>{programmeName(session)}</option>)}
+            <div><label htmlFor="group-session" className={labelClass}>Session *</label>
+              <select id="group-session" className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)} required disabled={levelLocked || closed}>
+                {/* §6.5 (OD-9 A): reception never creates or moves a group to an online programme (save_receptionist_group refuses it). */}
+                {SESSION_TYPES.filter(session => !receptionist || !isOnlineSessionType(session) || session === group?.session_type).map(session => <option key={session} value={session}>{programmeName(session)}</option>)}
               </select>
             </div>
-            <div><label className={labelClass}>Niveau</label>
-              <select className={inputClass} value={form.niveau} onChange={e => setCourse('niveau', e.target.value)} disabled={levelLocked || closed}>
+            <div><label htmlFor="group-level" className={labelClass}>Niveau</label>
+              <select id="group-level" className={inputClass} value={form.niveau} onChange={e => setCourse('niveau', e.target.value)} disabled={levelLocked || closed}>
                 {getLevelsForSession(form.session_type || 'Yearly', form.niveau).map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
@@ -164,7 +175,10 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
               </select>
             </div>
             <div><label className={labelClass}>Salle</label><input className={inputClass} value={form.salle || ''} onChange={e => set('salle', e.target.value)} /></div>
-            <div><label className={labelClass}>Jours</label><input className={inputClass} placeholder="Lun, Mer, Ven" value={form.jours || ''} onChange={e => set('jours', e.target.value)} /></div>
+            <div className="col-span-2"><p id="group-days-label" className={labelClass}>Jours de cours</p>
+              <div role="group" aria-labelledby="group-days-label" className="flex flex-wrap gap-1.5">{CLASS_DAYS.map(d => <button key={d.day} type="button" aria-pressed={form.class_days.includes(d.day)} aria-label={d.long} onClick={() => toggleDay(d.day)}
+                className={`min-h-11 min-w-11 rounded-md border px-2 text-sm font-medium ${form.class_days.includes(d.day) ? 'border-transparent bg-primary text-white' : 'border-border bg-white text-muted-foreground hover:bg-muted'}`}>{d.short}</button>)}</div>
+              {!form.class_days.length && form.jours && <p className="mt-1 text-xs text-amber-800">Jours enregistrés : « {form.jours} ». Cochez les jours de cours pour que les présences s’appuient dessus.</p>}</div>
             <div><label className={labelClass}>Horaire</label><input className={inputClass} placeholder="18h – 19h30" value={form.horaire || ''} onChange={e => set('horaire', e.target.value)} /></div>
             </>}
             <div><label htmlFor="group-capacity" className={labelClass}>Capacité max</label><input id="group-capacity" type="number" className={inputClass} value={oneToOne ? 1 : form.capacite_max} disabled={oneToOne || closed} onChange={e => set('capacite_max', parseInt(e.target.value))} />
@@ -365,8 +379,8 @@ export default function Groups() {
                     </div>
                   </div>
                   {role !== 'teacher' && <div className="flex items-center gap-2 mt-3">
-                    <button onClick={() => setModal(g)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
-                    {role !== 'receptionist' && <button onClick={() => handleDelete(g)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
+                    <button onClick={() => setModal(g)} aria-label={`Modifier le groupe ${g.name}`} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
+                    {role !== 'receptionist' && <button onClick={() => handleDelete(g)} aria-label={`Supprimer le groupe ${g.name}`} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
                     {closeAction(g, true)}
                   </div>}
                 </div>
@@ -406,8 +420,8 @@ export default function Groups() {
                       <td className="px-4 py-3 text-muted-foreground">{g.terme}</td>
                       <td className="px-4 py-3">
                         {role !== 'teacher' && <div className="flex items-center gap-2">
-                          <button onClick={() => setModal(g)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></button>
-                          {role !== 'receptionist' && <button onClick={() => handleDelete(g)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
+                          <button onClick={() => setModal(g)} aria-label={`Modifier le groupe ${g.name}`} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></button>
+                          {role !== 'receptionist' && <button onClick={() => handleDelete(g)} aria-label={`Supprimer le groupe ${g.name}`} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
                           {closeAction(g)}
                         </div>}
                       </td>

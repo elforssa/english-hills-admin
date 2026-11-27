@@ -105,7 +105,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td><b>Apprenants</b></td>
-<td><span className="menu">Annuaire</span><br /><span className="menu">Liste des apprenants</span><br /><span className="menu">Ajouter un apprenant</span></td>
+<td><span className="menu">Liste des apprenants</span> (vues <span className="ui">Tableau</span> et <span className="ui">Cartes</span>)<br /><span className="menu">Ajouter un apprenant</span></td>
 <td>Retrouver un apprenant, créer ou compléter un dossier, voir son solde, lui affecter un groupe.</td>
 </tr>
 <tr>
@@ -191,7 +191,7 @@ export default function GuideContent() {
 <tbody>
 <tr>
 <td>Retrouver un apprenant, même avec son téléphone</td>
-<td><span className="menu">Apprenants</span> › <span className="menu">Annuaire</span></td>
+<td><span className="menu">Apprenants</span> › <span className="menu">Liste des apprenants</span>, vue <span className="ui">Cartes</span></td>
 <td><a href="#q1">Scénario Q1</a></td>
 </tr>
 <tr>
@@ -638,9 +638,9 @@ export default function GuideContent() {
 </ol>
 <div className="callout warn">
 <strong>À retenir</strong><ul className="tight">
-<li>Ne marquez pas un test «&nbsp;Passé&nbsp;» pour le faire disparaître&nbsp;: déplacez ou annulez le rendez-vous avec <span className="ui">Changer</span>.</li>
+<li>«&nbsp;Passé&nbsp;» s’affiche tout seul une fois l’heure du test dépassée&nbsp;: il ne se choisit pas. Pour un test qui n’aura pas lieu, déplacez ou annulez le rendez-vous avec <span className="ui">Changer</span>.</li>
 <li>Un test terminé n’inscrit pas le prospect&nbsp;: il reste <span className="st st-qual">Qualifié</span>.</li>
-<li><span className="ui">Planifier un test</span> sur la page <span className="menu">Tests de niveau</span> crée un test <b>sans lien avec un prospect</b>&nbsp;: la prochaine action du prospect n’est pas mise à jour. Pour un prospect, passez toujours par sa fiche.</li>
+<li><span className="ui">Planifier un test</span> sur la page <span className="menu">Tests de niveau</span> demande d’abord la personne (nom, téléphone ou email). Pour un apprenant, le test est réservé là. Pour un prospect, sa fiche s’ouvre&nbsp;: son test se réserve avec son <span className="ui">Rendez-vous au centre</span>.</li>
 </ul>
 </div>
 </article>
@@ -771,7 +771,7 @@ export default function GuideContent() {
 <p className="when">Quelqu’un appelle ou se présente pour un apprenant déjà connu, ou vous voulez vérifier qu’il n’existe pas avant d’en créer un.</p>
 </header>
 <ol className="steps">
-<li><p>Ouvrez <span className="menu">Apprenants</span> › <span className="menu">Annuaire</span>.</p>
+<li><p>Ouvrez <span className="menu">Apprenants</span> › <span className="menu">Liste des apprenants</span> et choisissez la vue <span className="ui">Cartes</span>.</p>
 </li>
 <li><p>Tapez dans la barre de recherche le <b>nom</b>, l’<b>email</b> ou le <b>numéro de téléphone</b>. La liste se réduit à mesure que vous tapez.</p>
 </li>
@@ -781,14 +781,14 @@ export default function GuideContent() {
 </li>
 </ol>
 <figure className="fig">
-<Image src="/helpdesk/q01-annuaire.jpg" width={1700} height={1075} alt="Annuaire des apprenants avec une recherche par numéro de téléphone et la carte d’un apprenant" unoptimized tabIndex={0} role="button" /><figcaption>L’Annuaire, ici avec une recherche par numéro de téléphone.</figcaption>
+<Image src="/helpdesk/q01-annuaire.jpg" width={1700} height={1075} alt="Apprenants en cartes avec une recherche par numéro de téléphone et la carte d’un apprenant" unoptimized tabIndex={0} role="button" /><figcaption>Les apprenants en cartes, ici avec une recherche par numéro de téléphone.</figcaption>
 <ol className="legend">
 <li>La recherche accepte le nom, l’email et le <b>téléphone</b>.</li>
 <li>La carte indique la catégorie, le groupe, le téléphone et le statut du dossier. Un clic ouvre la fiche.</li>
 </ol>
 </figure>
 <div className="callout info">
-<strong>Annuaire ou Liste des apprenants&nbsp;?</strong><p>Utilisez l’<b>Annuaire</b> pour retrouver quelqu’un, surtout par son téléphone. Utilisez la <b>Liste des apprenants</b> pour travailler&nbsp;: paiement, groupe à affecter, filtres. Sa recherche porte sur le nom et l’email, pas sur le téléphone.</p>
+<strong>Cartes ou Tableau&nbsp;?</strong><p>Une seule <b>Liste des apprenants</b>, deux vues. Les <b>Cartes</b> pour retrouver quelqu’un d’un coup d’œil, le <b>Tableau</b> pour travailler&nbsp;: paiement, groupe à affecter, filtres. Dans les deux, la recherche trouve le nom, l’email et le téléphone, dans tous les formats. L’ancien lien «&nbsp;Annuaire&nbsp;» ouvre la vue Cartes.</p>
 </div>
 <p>Les statuts s’affichent en anglais (Enrolled, Prospect…)&nbsp;: la traduction est dans le <a href="#comprendre">glossaire</a>.</p>
 </article>
@@ -800,7 +800,7 @@ export default function GuideContent() {
 </header>
 <h4>Créer un dossier</h4>
 <ol className="steps">
-<li><p><b>Cherchez d’abord</b> dans l’<span className="menu">Annuaire</span> (<a href="#q1">Q1</a>)&nbsp;: ce formulaire ne détecte aucun doublon.</p>
+<li><p><b>Cherchez d’abord</b> dans la <span className="menu">Liste des apprenants</span> (<a href="#q1">Q1</a>)&nbsp;: ce formulaire ne détecte aucun doublon.</p>
 </li>
 <li><p>Ouvrez <span className="menu">Apprenants</span> › <span className="menu">Ajouter un apprenant</span>. Seul le <span className="ui">Nom complet</span> est obligatoire&nbsp;; remplissez le reste si vous le savez&nbsp;: <span className="ui">Date de naissance</span>, <span className="ui">Téléphone</span>, <span className="ui">Email apprenant</span>, <span className="ui">Email parent</span>, <span className="ui">Catégorie d’âge</span>, <span className="ui">Session</span>, <span className="ui">Niveau</span>, <span className="ui">Source</span>.</p>
 </li>
@@ -808,7 +808,7 @@ export default function GuideContent() {
 </li>
 </ol>
 <div className="callout stop">
-<strong>Ne cliquez pas deux fois</strong><p>Après une erreur ou une coupure, un nouvel envoi peut créer un second apprenant. Regardez d’abord dans l’Annuaire avant de recommencer.</p>
+<strong>Ne cliquez pas deux fois</strong><p>Après une erreur ou une coupure, un nouvel envoi peut créer un second apprenant. Regardez d’abord dans la Liste des apprenants avant de recommencer.</p>
 </div>
 <h4>Compléter ou corriger un dossier</h4>
 <ol className="steps">
@@ -870,7 +870,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td>Vous voulez seulement créer le dossier, sans paiement</td>
-<td><span className="menu">Apprenants</span> › <span className="menu">Ajouter un apprenant</span> (<a href="#q2">Q2</a>). Cherchez-le d’abord dans l’Annuaire&nbsp;: ce formulaire ne détecte aucun doublon.</td>
+<td><span className="menu">Apprenants</span> › <span className="menu">Ajouter un apprenant</span> (<a href="#q2">Q2</a>). Cherchez-le d’abord dans la Liste des apprenants&nbsp;: ce formulaire ne détecte aucun doublon.</td>
 </tr>
 </tbody>
 </table>
@@ -1094,7 +1094,7 @@ export default function GuideContent() {
 </li>
 <li><p><b>Choisissez l’<span className="ui">Enseignant</span></b>&nbsp;: c’est le champ qui <b>lie le groupe à son enseignant</b>, et il est obligatoire.</p>
 </li>
-<li><p>Renseignez la <span className="ui">Salle</span>, les <span className="ui">Jours</span> (par exemple «&nbsp;Lun, Mer, Ven&nbsp;»), l’<span className="ui">Horaire</span> (par exemple «&nbsp;18h – 19h30&nbsp;»), la <span className="ui">Capacité max</span> et le <span className="ui">Terme</span>.</p>
+<li><p>Renseignez la <span className="ui">Salle</span>, les <span className="ui">Jours de cours</span> (cliquez sur chaque jour, par exemple Lun, Mer et Ven), l’<span className="ui">Horaire</span> (par exemple «&nbsp;18h – 19h30&nbsp;»), la <span className="ui">Capacité max</span> et le <span className="ui">Terme</span>.</p>
 </li>
 <li><p>Vérifiez l’<span className="ui">Année scolaire</span>&nbsp;: elle est obligatoire et proposée automatiquement (l’année en cours, du 1<sup>er</sup> septembre au 31 août). Pour un groupe de la rentrée suivante, changez-la. Format&nbsp;: deux années qui se suivent, avec une barre, par exemple <b>2026/2027</b>.</p>
 </li>
@@ -1107,7 +1107,7 @@ export default function GuideContent() {
 <Image src="/helpdesk/q08-groupe-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouveau groupe pour une Mise à niveau avec le nom, l’enseignant, les jours, l’année scolaire 2026/2027, les dates du cours et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Nom du groupe</span>&nbsp;: obligatoire.</li>
 <li><span className="ui">Enseignant</span>&nbsp;: obligatoire. Il choisit parmi les enseignants existants.</li>
-<li><span className="ui">Jours</span>&nbsp;: du texte libre, mais l’<b>Emploi du temps</b> s’en sert (écrivez Lun, Mar, Mer, Jeu, Ven, Sam, Dim).</li>
+<li><span className="ui">Jours de cours</span>&nbsp;: un bouton par jour. Les <b>Présences</b> et l’<b>Emploi du temps</b> s’en servent.</li>
 <li><span className="ui">Année scolaire</span>&nbsp;: obligatoire, proposée automatiquement, au format 2026/2027.</li>
 <li><span className="ui">Date de début</span> et <span className="ui">Date de fin</span>&nbsp;: obligatoires pour les programmes courts.</li>
 <li><span className="ui">Enregistrer</span>.</li>
@@ -1176,7 +1176,7 @@ export default function GuideContent() {
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
 <li>La liste ne montre par défaut que les «&nbsp;Dossiers actifs&nbsp;». Pour voir aussi les prospects, choisissez <span className="ui">Tous les statuts</span>.</li>
-<li>Dans la colonne <b>Groupe</b>, «&nbsp;Groupe à affecter&nbsp;» n’apparaît que pour une inscription payée sans groupe («&nbsp;Inscrit — groupe à affecter&nbsp;»). Un dossier <b>Prospect</b>, <b>Ancien apprenant</b> ou <b>Inactif</b> sans inscription en cours affiche «&nbsp;—&nbsp;»&nbsp;: il n’y a rien à affecter. Pour l’inscrire, ouvrez sa fiche › <span className="ui">Inscrire et encaisser</span> (<a href="#q7">Q7</a>).</li>
+<li>Dans la colonne <b>Groupe</b>, «&nbsp;Groupe à affecter&nbsp;» n’apparaît que pour une inscription payée sans groupe («&nbsp;Inscrit — groupe à affecter&nbsp;»). Un dossier <b>Sans inscription</b>, <b>Ancien apprenant</b> ou <b>Inactif</b> sans inscription en cours affiche «&nbsp;—&nbsp;»&nbsp;: il n’y a rien à affecter. Pour l’inscrire, ouvrez sa fiche › <span className="ui">Inscrire et encaisser</span> (<a href="#q7">Q7</a>).</li>
 <li>Un dossier actif sans inscription payée affiche <span className="ui">Inscrire et encaisser</span>&nbsp;: c’est la voie normale, l’affectation suit le paiement. Pour l’affecter quand même, choisissez-le sur la page du groupe (il est marqué «&nbsp;sans inscription payée&nbsp;»)&nbsp;: la fenêtre «&nbsp;Affectation sans inscription payée&nbsp;» demande un <span className="ui">Motif de l’affectation sans inscription payée</span>. Le motif est noté dans le journal et l’inscription apparaît dans «&nbsp;Contrôles&nbsp;» jusqu’au paiement.</li>
 <li>L’autre voie&nbsp;: <span className="menu">Groupes &amp; niveaux</span> › le groupe › <span className="ui">Ajouter des apprenants</span>. Elle refuse certains cas (plusieurs inscriptions en attente). Le lien de la liste est plus fiable.</li>
 <li>Pour changer quelqu’un de groupe, ou le sortir d’un groupe&nbsp;: <a href="#q10">Q10</a>.</li>
@@ -1231,23 +1231,23 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Ouvrez <span className="menu">Académique</span> › <span className="menu">Présences</span>.</p>
 </li>
-<li><p>Choisissez le <span className="ui">Groupe</span>. La <span className="ui">Date de séance</span> est celle d’aujourd’hui.</p>
+<li><p>Choisissez le <span className="ui">Groupe</span>. La <span className="ui">Date de séance</span> est celle d’aujourd’hui, et la liste ne propose que les groupes qui ont cours ce jour-là (cochez <span className="ui">Tous les groupes</span> pour les voir tous).</p>
 </li>
-<li><p>Pour chaque apprenant, cliquez sur <span className="ui">Absent</span>, <span className="ui">Retard</span> ou <span className="ui">Justifié</span> si besoin.</p>
+<li><p>Chaque apprenant est «&nbsp;Non saisi&nbsp;». Cliquez sur <span className="ui">Tous présents</span>, puis sur <span className="ui">Absent</span>, <span className="ui">Retard</span> ou <span className="ui">Justifié</span> pour ceux qui le sont. Vous pouvez aussi marquer chacun un par un.</p>
 </li>
-<li><p>Cliquez sur <span className="ui">Enregistrer les présences</span>. Un message confirme «&nbsp;Présences enregistrées&nbsp;».</p>
+<li><p>Cliquez sur <span className="ui">Enregistrer les présences</span>&nbsp;: le bouton indique combien de lignes seront enregistrées. Un message confirme «&nbsp;Présences enregistrées&nbsp;».</p>
 </li>
 </ol>
 <figure className="fig narrow">
 <Image src="/helpdesk/s15-attendance.jpg" width={1700} height={1075} alt="Page Gestion des présences avec deux apprenants" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Groupe</span>.</li>
 <li><span className="ui">Date de séance</span>.</li>
-<li>Le compteur du haut ne compte que les apprenants que vous avez cliqués.</li>
+<li>Le compteur du haut compte ce qui est affiché, «&nbsp;non saisis&nbsp;» compris.</li>
 <li><span className="ui">Enregistrer les présences</span>.</li>
 </ol>
 </figure>
 <div className="callout stop">
-<strong>Tout le monde est «&nbsp;Présent&nbsp;» par défaut</strong><p>Un apprenant que vous n’avez pas touché est affiché «&nbsp;Présent&nbsp;», et <span className="ui">Enregistrer les présences</span> l’enregistre comme présent. Le compteur «&nbsp;0 présents&nbsp;» en haut de page est trompeur tant que vous n’avez rien cliqué. Vérifiez les absents avant d’enregistrer.</p>
+<strong>Rien n’est enregistré sans votre clic</strong><p>Un apprenant «&nbsp;Non saisi&nbsp;» n’est pas enregistré. Une séance ne s’enregistre pas à l’avance, ni un jour où le groupe n’a pas cours (ses <span className="ui">Jours de cours</span>), ni un jour de fermeture du centre&nbsp;: pour une séance exceptionnelle un jour de fermeture, demandez à la direction.</p>
 </div>
 <h4>Retrouver ou corriger une ancienne séance</h4>
 <ol className="steps">
@@ -1324,7 +1324,7 @@ export default function GuideContent() {
 </ol>
 </figure>
 <div className="callout info">
-<strong>En lecture seule</strong><p>L’emploi du temps ne se modifie pas ici. Un groupe apparaît les jours écrits dans son champ <span className="ui">Jours</span>&nbsp;; pour changer un horaire, modifiez le groupe (<a href="#q8">Q8</a>). Un groupe sans jours n’apparaît pas dans la grille.</p>
+<strong>En lecture seule</strong><p>L’emploi du temps ne se modifie pas ici. Un groupe apparaît les jours cochés dans ses <span className="ui">Jours de cours</span>&nbsp;; pour changer un horaire, modifiez le groupe (<a href="#q8">Q8</a>). Un groupe sans jours n’apparaît pas dans la grille.</p>
 </div>
 <p><span className="menu">Notes &amp; bulletins</span>&nbsp;: vous saisissez et corrigez les notes (apprenant, terme, oral, écrit, finale). La suppression d’une note et l’export CSV restent à la direction. Portfolios et profils d’apprentissage&nbsp;: vous les créez, sans les supprimer. Les certificats sont en lecture seule.</p>
 </article>
@@ -1511,7 +1511,8 @@ export default function GuideContent() {
 <p>Liste de tous les tests&nbsp;: apprenant, date, heure, examinateur, score, niveau, statut (<b>Planifié, Passé, Résultat saisi, Affecté</b>, et <b>Annulé</b> ou <b>Absent</b> pour un rendez-vous annulé ou manqué&nbsp;; un test de prospect qui a quitté «&nbsp;Planifié&nbsp;» (annulé, absent ou passé) n’y revient jamais&nbsp;: fixez un nouveau rendez-vous). Les tests liés à un prospect portent l’étiquette «&nbsp;Prospect CRM&nbsp;».</p>
 <ul className="tight">
 <li>Pas de suppression pour vous.</li>
-<li><span className="ui">Planifier un test</span> crée un test sans lien avec un prospect, avec le niveau A1 proposé par défaut.</li>
+<li><span className="ui">Planifier un test</span>&nbsp;: choisissez la personne. Un apprenant a un seul test «&nbsp;Planifié&nbsp;» à la fois, sans niveau d’avance. Un prospect est renvoyé à sa fiche (son test se réserve avec son rendez-vous).</li>
+<li>Le test d’un apprenant&nbsp;: <span className="ui">Déplacer</span> avant l’heure, <span className="ui">Annuler le test</span> avec un motif, puis, une fois l’heure passée, <span className="ui">Résultat</span> (niveaux de son programme et de son âge) ou <span className="ui">Absent</span>.</li>
 </ul>
 </div>
 <div className="card">
@@ -1530,16 +1531,16 @@ export default function GuideContent() {
 </ul>
 </div>
 <div className="card">
-<h4>Annuaire</h4>
-<p>Voir <a href="#q1">Q1</a>. Cartes ou liste de tous les apprenants. <b>C’est le seul écran où la recherche trouve aussi un numéro de téléphone</b>, avec le nom et l’email. Sans pagination ni boutons d’action.</p>
+<h4>Vue Cartes</h4>
+<p>Voir <a href="#q1">Q1</a>. La Liste des apprenants en cartes (bouton <span className="ui">Cartes</span>, en haut de la liste)&nbsp;: mêmes filtres et même recherche (nom, email, téléphone) que le Tableau. L’ancien menu «&nbsp;Annuaire&nbsp;» y mène.</p>
 </div>
 <div className="card">
 <h4>Liste des apprenants</h4>
-<p>L’écran de travail&nbsp;: statut du dossier (<b>Inscrit</b>, Prospect, Ancien apprenant, Inactif), paiement (Soldé, Acompte versé, En attente, En retard, Aucun engagement), groupe, niveau. 20 apprenants par page.</p>
+<p>L’écran de travail, vue <span className="ui">Tableau</span>&nbsp;: statut du dossier (<b>Inscrit</b>, Sans inscription, Ancien apprenant, Inactif), paiement (Soldé, Acompte versé, En attente, En retard, Aucun engagement), groupe, niveau. 20 apprenants par page.</p>
 <ul className="tight">
-<li>Colonne <b>Groupe</b>&nbsp;: le groupe, ou le lien <span className="ui">Groupe à affecter</span> pour une inscription payée sans groupe. «&nbsp;—&nbsp;» pour un Prospect, un Ancien apprenant ou un Inactif sans inscription en cours&nbsp;: pour l’inscrire, fiche › <span className="ui">Inscrire et encaisser</span>.</li>
-<li>La recherche porte sur le nom et l’email, pas sur le téléphone (alors que le champ dit «&nbsp;Nom ou téléphone&nbsp;»).</li>
-<li>La catégorie d’âge se change directement dans la liste, sans confirmation.</li>
+<li>Colonne <b>Groupe</b>&nbsp;: le groupe, ou le lien <span className="ui">Groupe à affecter</span> pour une inscription payée sans groupe. «&nbsp;—&nbsp;» pour un dossier Sans inscription, un Ancien apprenant ou un Inactif sans inscription en cours&nbsp;: pour l’inscrire, fiche › <span className="ui">Inscrire et encaisser</span>.</li>
+<li>La recherche trouve le nom, l’email et le téléphone, dans tous les formats.</li>
+<li>La catégorie d’âge se change dans la fiche (<span className="ui">Modifier</span>)&nbsp;: elle doit correspondre au programme (pas de catégorie Adultes dans un programme pour enfants).</li>
 <li>Pas d’import, d’export ni d’archivage.</li>
 </ul>
 </div>
@@ -1697,7 +1698,7 @@ export default function GuideContent() {
 </thead>
 <tbody>
 <tr>
-<td><b>Prospect</b></td>
+<td><b>Sans inscription</b></td>
 <td>Dossier sans inscription payée&nbsp;: nouveau dossier, ou personne qui n’a pas encore payé. Rien n’est réservé tant qu’il n’y a pas de paiement.</td>
 </tr>
 <tr>
@@ -1908,7 +1909,7 @@ export default function GuideContent() {
 </details>
 <details className="faq">
 <summary>Je ne trouve pas un apprenant avec son numéro de téléphone</summary>
-<p>Dans <span className="menu">Liste des apprenants</span>, la recherche ne couvre pas le téléphone. Utilisez <span className="menu">Annuaire</span>, ou la recherche de <span className="menu">Nouveau reçu</span> (nom, téléphone, email de l’apprenant ou du parent). Dans <span className="menu">Opportunités</span>, la recherche accepte le téléphone des prospects.</p>
+<p>Dans <span className="menu">Liste des apprenants</span>, la recherche trouve aussi le téléphone, comme celle de <span className="menu">Nouveau reçu</span> (nom, téléphone, email de l’apprenant ou du parent). Dans <span className="menu">Opportunités</span>, la recherche accepte le téléphone des prospects.</p>
 </details>
 <details className="faq">
 <summary>Un apprenant que je viens de créer n’apparaît pas dans la liste</summary>
@@ -2044,7 +2045,7 @@ export default function GuideContent() {
 <div className="card mini">
 <h4>Un apprenant</h4>
 <ul className="tight">
-<li>Chercher dans l’<span className="menu">Annuaire</span>, même par téléphone.</li>
+<li>Chercher dans la <span className="menu">Liste des apprenants</span>, même par téléphone.</li>
 <li>Compléter&nbsp;: fiche › <span className="ui">Modifier</span>, emails compris (sauf compte famille&nbsp;: direction).</li>
 <li>Changer de groupe&nbsp;: <span className="ui">Modifier l’inscription</span>.</li>
 </ul>

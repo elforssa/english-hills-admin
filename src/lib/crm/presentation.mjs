@@ -454,6 +454,9 @@ const HINT_MESSAGES = {
   'crm_next_action.enrollment_kept': 'Indiquez pourquoi l’inscription n’est plus à finaliser, ou gardez l’action actuelle.',
   'crm_next_action.overlap': 'Un autre rendez-vous ou test de cet apprenant est prévu à cette heure.',
   'crm_appointment.before_start': 'Le résultat du rendez-vous se saisit à partir de son heure de début.',
+  // RWR-r5 C2 (141): the visit's outcome also marks its linked test; a test set later than
+  // the visit refuses it until the test's own start time.
+  'placement.result_before_start': 'Le test de niveau lié commence plus tard : le résultat se saisit à partir de l’heure du test.',
   'crm_appointment.reason_required': 'Choisissez le motif : le prospect sera clôturé.',
   'crm_next_action.appointment_needs_exchange': 'Pour fixer un rendez-vous, notez l’échange (« Noter un échange » → « On a parlé ») : le prospect devient qualifié.',
   'crm_placement.not_replannable': 'Un test annulé ou absent ne se replanifie pas. Fixez un nouveau rendez-vous avec test depuis la fiche du prospect.',
@@ -463,13 +466,15 @@ const HINT_MESSAGES = {
 // Statuses the test form offers (re-review of #208, owner decision 2026-11-22): a
 // prospect's test that has left « Planifié » is never planned again, whatever the path;
 // a student's own test (no prospect) keeps today's choices.
+// RWR-r5 §6.2 (141): « Passé » is derived from the time, never chosen; it stays listed only
+// on an old row that already carries it.
 export function placementStatusOptions(test) {
   const prospectTest = Boolean(test && (test.is_crm || test.crm_lead_id));
   const replannable = !test || test.status === 'Planifié' || !prospectTest;
   return [...new Set([
-    ...(['Annulé', 'Absent'].includes(test?.status) ? [test.status] : []),
+    ...(['Annulé', 'Absent', 'Passé'].includes(test?.status) ? [test.status] : []),
     ...(replannable ? ['Planifié'] : []),
-    'Passé', 'Résultat saisi', 'Affecté'
+    'Résultat saisi', 'Affecté'
   ])];
 }
 

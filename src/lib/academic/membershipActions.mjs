@@ -5,6 +5,7 @@
 import { isRecordConflict, recordConflictMessage } from '../conflictErrors.mjs';
 import { onlineReason, ONLINE_REASON_TEXT } from '../online/reasons.mjs';
 import { courseErrorMessage } from './courseClose.mjs';
+import { STUDENT_MESSAGES } from './learnerRules.mjs';
 
 export const ENROLLMENT_CHANGED_MESSAGE = 'Cette inscription a changé, rechargez.';
 export const DUPLICATE_ENROLLMENT_MESSAGE = 'Une inscription active existe déjà pour ce programme et cette année.';
@@ -89,6 +90,8 @@ export function membershipErrorMessage(error) {
   // CDC (128): the course refusals and the close conflicts carry their own words.
   const course = courseErrorMessage(error);
   if (course) return course;
+  // RWR-r5 §6.4 (141): the learner-file rules (birth date, category vs programme).
+  if (STUDENT_MESSAGES[error.hint]) return STUDENT_MESSAGES[error.hint];
   const reason = egcReason(error.hint);
   // ADR-009: a record conflict first; its egc hint picks the precise text.
   if (isRecordConflict(error)) {

@@ -756,6 +756,7 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
     Done: a fresh verified backup; dry run `DRYRUN_OK`; **applied 13:14:35–13:15:36 UTC**; post-checks clean (merged files hidden from search, payments refused on them, kept files show both histories, one action per active prospect). Undo: `unmerge_student` per pair, with the owner's approval. 1 further pair waits until its enrollment is ended.
 - **OD-16 replaced (2026-11-26):** B2 ships with no programme prices. The director fills them in the catalogue later; amounts are typed by hand until then. The 2026/2027 prices are no longer a gate for B2.
 - **D6 and D7 placement (2026-11-26):** D6's functions ship inside PR B2 (migration 140); D7 goes with C2, which adds `groups.class_days`.
+- **C2 implementation approved (2026-11-26):** PR C2 (§6.2–6.5, item 25 leftovers, mobile acceptance at 375 px) with OD-9 = A and OD-12 « Sans inscription », as migration 141 with a rollback file and the D7 functions shipped but not run. Recorded verbatim in the plan's [C2 implementation record](../architecture/plans/receptionist-workflow.md#implementation-record-pr-c2-m-c1-academic-part-migration-141). Not authorized: Production, data steps (D7), merge, release.
 - **Batched records (2026-11-26):** from now on, release and data-step records are batched in one documentation PR instead of one docs PR each.
 - **Follow-ups (not started; each needs its own approval):**
   - a browser test that clicks « Annuler ce paiement »;

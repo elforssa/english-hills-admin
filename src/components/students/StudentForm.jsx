@@ -11,6 +11,8 @@ import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mj
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { currentSchoolYear } from '@/lib/enrollmentWorkflow.mjs';
 import { membershipErrorMessage, placeLearnerInGroup } from '@/lib/academic/membershipActions.mjs';
+import { STUDENT_MESSAGES, birthDateProblem, categoryFits, latestBirthDate } from '@/lib/academic/learnerRules.mjs';
+import { centreDate } from '@/lib/centreClock.mjs';
 import { toast } from 'sonner';
 import { ArrowLeft, Upload } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
@@ -93,6 +95,8 @@ export default function StudentForm() {
   // of a membership. Edit never writes them; programme and level follow the group.
   const [schoolYear, setSchoolYear] = useState(() => currentSchoolYear());
   const [placed, setPlaced] = useState(false);
+  // RWR-r5 §6.4 (141): as the trigger, an unchanged birth date or category is not re-checked.
+  const [loadedRules, setLoadedRules] = useState(null);
 
   useEffect(() => {
     entities.Group.listAll('name').then(setGroups).catch(() => {});
@@ -103,6 +107,7 @@ export default function StudentForm() {
           if (d[0]) {
             const row = d[0];
             setLoadedVersion(row.updated_at ?? null);
+            setLoadedRules({ birth: row.date_naissance ?? '', category: row.age_category ?? '', session: row.session_type ?? 'Yearly' });
             // Shown in the national form (B1); an unchanged number is saved exactly as stored.
             setStoredPhone(row.telephone ?? '');
             setLoadedPhone(row.telephone ? formatPhoneFr(row.telephone) : '');
@@ -233,6 +238,13 @@ export default function StudentForm() {
       notes:          fields.notes          || null,
     };
     if (isEdit && placed) { delete payload.session_type; delete payload.niveau_cefr; }
+    // §6.4: never after today, at least a year ago; the category fits the programme.
+    const birthProblem = (!isEdit || (payload.date_naissance || '') !== (loadedRules?.birth || '')) && birthDateProblem(payload.date_naissance);
+    if (birthProblem) { setErrors({ date_naissance: [STUDENT_MESSAGES[birthProblem]] }); toast.error(STUDENT_MESSAGES[birthProblem]); return; }
+    const programme = form.session_type || 'Yearly';
+    if ((!isEdit || (payload.age_category || '') !== (loadedRules?.category || '') || programme !== loadedRules?.session) && !categoryFits(payload.age_category, programme)) {
+      setErrors({ age_category: [STUDENT_MESSAGES['student.category_level']] }); toast.error(STUDENT_MESSAGES['student.category_level']); return;
+    }
     if (!isEdit || (payload.telephone || '') !== (loadedPhone || '')) {
       const phone = checkPhone(payload.telephone);
       if (!phone.ok) { setErrors({ telephone: [phone.error] }); toast.error(phone.error); return; }
@@ -386,7 +398,7 @@ export default function StudentForm() {
           </div>
           <div>
             <label htmlFor="date_naissance" className={labelClass}>Date de naissance</label>
-            <input id="date_naissance" type="date" className={fieldErr('date_naissance') ? inputErrClass : inputClass} value={form.date_naissance || ''} onChange={e => set('date_naissance', e.target.value)} />
+            <input id="date_naissance" type="date" className={fieldErr('date_naissance') ? inputErrClass : inputClass} max={latestBirthDate(centreDate())} value={form.date_naissance || ''} onChange={e => set('date_naissance', e.target.value)} />
             {fieldErr('date_naissance') && <p className="text-xs text-red-600 mt-1">{fieldErr('date_naissance')}</p>}
           </div>
           <div>
@@ -424,10 +436,12 @@ export default function StudentForm() {
           <p className="col-span-2 -mt-2 text-xs text-muted-foreground">Email parent recommandé — active l’accès au portail parent (peut être ajouté plus tard).</p>
           <div>
             <label htmlFor="age_category" className={labelClass}>Catégorie d&apos;âge</label>
-            <select id="age_category" className={inputClass} value={form.age_category || ''} onChange={e => set('age_category', e.target.value)}>
+            <select id="age_category" className={fieldErr('age_category') ? inputErrClass : inputClass} value={form.age_category || ''} onChange={e => set('age_category', e.target.value)}>
               <option value="">— Non défini —</option>
-              {AGE_CATEGORIES.map(c => <option key={c} value={c}>{AGE_CATEGORY_LABELS[c]}</option>)}
+              {/* §6.4: only the categories that fit the programme (a stored one stays shown). */}
+              {AGE_CATEGORIES.filter(c => categoryFits(c, form.session_type || 'Yearly') || c === form.age_category).map(c => <option key={c} value={c}>{AGE_CATEGORY_LABELS[c]}</option>)}
             </select>
+            {fieldErr('age_category') && <p className="text-xs text-red-600 mt-1">{fieldErr('age_category')}</p>}
           </div>
           <div>
             <label htmlFor="session_type" className={labelClass}>Session</label>

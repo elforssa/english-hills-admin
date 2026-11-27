@@ -138,7 +138,8 @@ export default function OnlineCourses() {
           <h1 className="text-2xl font-bold">Cours en ligne</h1>
           <p className="text-sm text-muted-foreground">Groupes au programme « Cours en ligne » ou « Cours individuel en ligne ».</p>
         </div>
-        <Button asChild variant="outline"><Link href="/groups"><Plus /> Nouveau groupe en ligne</Link></Button>
+        {/* RWR-r5 §6.5 (OD-9 A, NF-16): only management creates online groups. */}
+        {management && <Button asChild variant="outline"><Link href="/groups"><Plus /> Nouveau groupe en ligne</Link></Button>}
       </div>
       {management && <StatusLine />}
       {courses.isPending && <p className="text-sm text-muted-foreground">Chargement…</p>}

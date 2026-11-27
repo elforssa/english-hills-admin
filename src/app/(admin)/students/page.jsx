@@ -191,6 +191,8 @@ export default function StudentsPage() {
   const [filterSource, setFilterSource] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
   const [page, setPage] = useState(1);
+  // RWR-r5 §6.4: the former « Annuaire » is this list's cards view (/students-directory redirects here).
+  const [view, setView] = useState('table');
   const [urlReady, setUrlReady] = useState(false);
 
   useEffect(() => {
@@ -207,6 +209,7 @@ export default function StudentsPage() {
     const payment = params.get('payment') || '';
     setFilterPayment(['', 'due', 'unpaid', 'partial', 'overdue', 'paid', 'none'].includes(payment) ? payment : '');
     setPage(Math.max(1, Number.parseInt(params.get('page') || '1', 10) || 1));
+    setView(params.get('view') === 'cards' ? 'cards' : 'table');
     setUrlReady(true);
     };
     restore();
@@ -217,7 +220,7 @@ export default function StudentsPage() {
   const listUrl = listHref('/students', { q: search, status: filterStatus, group: filterGroup,
     category: filterCat, level: filterLevel, session: filterSession,
     incomplete: filterIncomplete ? '1' : '', source: filterSource,
-    payment: filterPayment, page });
+    payment: filterPayment, page, view: view === 'cards' ? 'cards' : '' });
   useEffect(() => { if (urlReady) window.history.replaceState(window.history.state, '', listUrl); }, [urlReady, listUrl]);
   const studentHref = (id) => recordHref(`/students/${id}`, listUrl);
 
@@ -328,6 +331,10 @@ export default function StudentsPage() {
   return (
     <PageFrame>
       <PageHeader title="Apprenants" description={<>{loading || isError || !result ? '—' : matchedCount} apprenants correspondants · {loading || isError || !result ? '—' : result?.total} au total</>} actions={<>
+          <div role="group" aria-label="Affichage" className="flex rounded-md border border-border">
+            {[['table', 'Tableau'], ['cards', 'Cartes']].map(([key, text]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => setView(key)}
+              className={`min-h-11 px-3 text-sm font-medium first:rounded-l-md last:rounded-r-md ${view === key ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60'}`}>{text}</button>)}
+          </div>
           {canExport && <button
             onClick={exportStudents}
             disabled={loading || isError || !result}
@@ -405,9 +412,9 @@ export default function StudentsPage() {
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <ReadState state={!urlReady ? 'loading' : queryReadState(listRead, {empty: matchedCount === 0, filtered: activeFilterCount > 0})} message={result && matchedCount === 0 && !isError && !loading ? activeFilterCount ? 'Aucun apprenant correspondant à ces filtres.' : 'Aucun dossier dans le périmètre actif. Choisissez Tous les statuts ou ajoutez un apprenant.' : undefined} onRetry={isError || (!result && !loading) ? refetch : undefined} onReset={activeFilterCount ? resetFilters : undefined}>
           {paged.length > 0 && <>
-            <div className="sm:hidden divide-y divide-border">
+            <div data-testid="students-cards" className={view === 'cards' ? 'grid grid-cols-1 gap-px bg-border sm:grid-cols-2 xl:grid-cols-3' : 'sm:hidden divide-y divide-border'}>
               {paged.map(s => (
-                <div key={s.id} className="flex items-center justify-between px-3 py-3 hover:bg-muted/40">
+                <div key={s.id} className="flex items-center justify-between bg-card px-3 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link></p>
                     <p className="text-xs text-muted-foreground mt-0.5">{ageCategoryLabel(s.age_category)} · <ProgrammePill sessionType={s.session_type} /> {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
@@ -419,7 +426,7 @@ export default function StudentsPage() {
                 </div>
               ))}
             </div>
-            <div role="region" tabIndex={0} aria-label="Tableau des apprenants, défilement horizontal" className="hidden sm:block overflow-x-auto max-w-full transition-none focus:outline focus:outline-2 focus:outline-ring focus:outline-offset-2">
+            {view === 'table' && <div role="region" tabIndex={0} aria-label="Tableau des apprenants, défilement horizontal" className="hidden sm:block overflow-x-auto max-w-full transition-none focus:outline focus:outline-2 focus:outline-ring focus:outline-offset-2">
               <table aria-label="Dossiers apprenants" className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted border-b border-border">
@@ -439,16 +446,8 @@ export default function StudentsPage() {
                       <td className="px-3 py-3 font-medium text-foreground">
                         <span className="inline-flex min-w-0 max-w-64 flex-wrap items-center gap-1.5 break-words"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link></span>
                       </td>
-                      <td className="px-3 py-3 text-muted-foreground">
-                        <InlineSelect
-                          value={s.age_category}
-                          label={`Catégorie de ${s.full_name}`}
-                          options={AGE_CATEGORIES}
-                          labelOf={ageCategoryLabel}
-                          empty="— Non défini —"
-                          onChange={v => patchStudent(s, 'age_category', v)}
-                        />
-                      </td>
+                      {/* §6.4: the category is edited in the file, where it is checked against the programme. */}
+                      <td className="px-3 py-3 text-muted-foreground">{s.age_category ? ageCategoryLabel(s.age_category) : 'Non définie'}</td>
                       <td className="px-3 py-3 text-muted-foreground">{renderGroup(s)}</td>
                       <td className="px-3 py-3">
                         {/* ACA-7: in a group, programme and level follow the group; edit from the enrollment. */}
@@ -484,7 +483,7 @@ export default function StudentsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div>}
           </>
         }</ReadState>
         {result && <Pagination pending={listRead.isFetching || isError} page={page} total={matchedCount} pageSize={PAGE_SIZE} onChange={setPage} />}

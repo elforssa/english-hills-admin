@@ -41,6 +41,12 @@
     { "stored": "06.12.34.56.78", "query": "345678", "match": true },
     { "stored": "+212612345678", "query": "06 12 34", "match": false },
     { "stored": "+212612345678", "query": "0698765432", "match": false },
-    { "stored": "", "query": "0612345678", "match": false }
+    { "stored": "", "query": "0612345678", "match": false },
+    { "stored": "+212610039723", "query": "003-97-23", "match": true },
+    { "stored": "0610039723", "query": "0039723", "match": true },
+    { "stored": "06 21 23 45 67", "query": "212-345", "match": true },
+    { "stored": "+212600123456", "query": "00 12 34", "match": true },
+    { "stored": "+212610039723", "query": "003-97-24", "match": false },
+    { "stored": "+212610612345", "query": "06 12 34", "match": false }
   ]
 }

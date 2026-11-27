@@ -12,6 +12,10 @@
     "gate": "receptionist_only",
     "receptionist": "open"
   },
+  "book_student_placement_test(p_test uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
   "business_date(p_at timestamp with time zone)": {
     "gate": "invoker",
     "receptionist": "rls"
@@ -389,6 +393,10 @@
   },
   "delete_mistaken_receipt(p_receipt_id uuid, p_reason text, p_idempotency_key uuid)": {
     "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "delete_placement_test(p_test uuid, p_expected_updated_at timestamp with time zone)": {
+    "gate": "roles:admin,director",
     "receptionist": "locked"
   },
   "end_learner(p_student uuid, p_student_updated_at timestamp with time zone, p_final_status text, p_reason text, p_enrollments uuid[])": {
@@ -780,7 +788,7 @@
     "gate": "capability:invite_family",
     "receptionist": "open"
   },
-  "save_attendance(p_student uuid, p_group uuid, p_date date, p_status text)": {
+  "save_attendance(p_student uuid, p_group uuid, p_date date, p_status text, p_override_closed boolean)": {
     "gate": "invoker",
     "receptionist": "rls"
   },
@@ -857,6 +865,10 @@
     "gate": "manual",
     "receptionist": "locked",
     "md5": "e06670a635913f34f5a3cefdda1130e0"
+  },
+  "update_placement_test_result(p_test uuid, p_expected_updated_at timestamp with time zone, p_changes jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
   },
   "void_financial_charge(p_charge_id uuid, p_reason text, p_idempotency_key uuid)": {
     "gate": "roles:director",

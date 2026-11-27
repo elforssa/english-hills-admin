@@ -31,9 +31,10 @@ import { getBrowserClient } from '@/lib/supabase';
 import { createStudentOnce } from '@/lib/studentCreate.mjs';
 import { checkPhone } from '@/lib/phone.mjs';
 import { strongMatches } from '@/lib/people.mjs';
-import { IDENTICAL_FILE_WARNING, IMPORT_FINISHED, csvLine, failedLines, importFailureReason, importFinished, rowIdentities, rowStatus, rowsToSend } from '@/lib/studentImport.mjs';
+import { IDENTICAL_FILE_WARNING, IMPORT_FINISHED, categoryProblem, csvLine, failedLines, importFailureReason, importFinished, rowIdentities, rowStatus, rowsToSend } from '@/lib/studentImport.mjs';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { ageCategoryLabel, dossierLabel } from '@/lib/ui/presentation.mjs';
 
 const CATEGORIES = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
 const STATUSES = ['Prospect','Enrolled','Trial','Inactive','Alumni'];
@@ -56,9 +57,11 @@ const HEADER_MAP = {
   niveau:         'niveau_cefr',
   level:          'niveau_cefr',
   cefr:           'niveau_cefr',
+  niveaucefr:     'niveau_cefr',   // the template's own header (« niveau_cefr »)
   categorie:      'age_category',
   category:       'age_category',
   agecategorie:   'age_category',
+  agecategory:    'age_category',  // the template's own header (« age_category »)
   session:        'session_type',
   sessiontype:    'session_type',
   statut:         'status',
@@ -139,6 +142,8 @@ function validateRows(rawRows) {
       // §5.1 (139): an invalid or placeholder phone is a row error, never stored.
       const phone = checkPhone(data.telephone);
       if (!phone.ok) return { idx, ok: false, data: row, errors: [`telephone: ${phone.error}`] };
+      const category = categoryProblem(data);
+      if (category) return { idx, ok: false, data: row, errors: [category] };
       // D3-A: Enrolled/Trial rows import as Prospect; an enrollment confirms them.
       const requested = data.status;
       data.status = importedStudentStatus(requested);
@@ -302,9 +307,9 @@ export default function StudentImportPage() {
               <li><code>email</code> · <code>parent_email</code></li>
               <li><code>telephone</code> · <code>date_naissance</code> (YYYY-MM-DD)</li>
               <li><code>niveau_cefr</code> · dépend de <code>session_type</code></li>
-              <li><code>age_category</code> · {CATEGORIES.join(' / ')}</li>
+              <li><code>age_category</code> · {CATEGORIES.map(c => `${c} (${ageCategoryLabel(c)})`).join(' / ')}</li>
               <li><code>session_type</code> · {SESSION_TYPES.join(' / ')} (défaut : Yearly)</li>
-              <li><code>status</code> · {STATUSES.join(' / ')} (Enrolled et Trial sont importés en Prospect : le statut Inscrit suit une inscription)</li>
+              <li><code>status</code> · {STATUSES.map(st => `${st} (${dossierLabel(st)})`).join(' / ')} — Enrolled et Trial sont importés « {dossierLabel('Prospect')} » : le statut « {dossierLabel('Enrolled')} » suit une inscription</li>
               <li><code>notes</code></li>
             </ul>
             <button
@@ -381,8 +386,8 @@ export default function StudentImportPage() {
               </div>
               {parsed.rows.some(r => r.coerced) && (
                 <p role="status" className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">
-                  {parsed.rows.filter(r => r.coerced).length} ligne(s) « Enrolled » ou « Trial » seront importées en Prospect :
-                  le statut Inscrit suit une inscription confirmée (paiement ou affectation).
+                  {parsed.rows.filter(r => r.coerced).length} ligne(s) « {dossierLabel('Enrolled')} » ou « {dossierLabel('Trial')} » seront importées « {dossierLabel('Prospect')} » :
+                  le statut « {dossierLabel('Enrolled')} » suit une inscription confirmée (paiement ou affectation).
                 </p>
               )}
 
@@ -411,8 +416,8 @@ export default function StudentImportPage() {
                           <td className="px-3 py-1.5">{r.data.full_name || '—'}</td>
                           <td className="px-3 py-1.5">{r.data.email || '—'}</td>
                           <td className="px-3 py-1.5">{r.data.niveau_cefr || '—'}</td>
-                          <td className="px-3 py-1.5">{r.data.age_category || '—'}</td>
-                          <td className="px-3 py-1.5">{r.data.status || '—'}</td>
+                          <td className="px-3 py-1.5">{r.data.age_category ? ageCategoryLabel(r.data.age_category) : '—'}</td>
+                          <td className="px-3 py-1.5">{r.data.status ? dossierLabel(r.data.status) : '—'}</td>
                           <td className="px-3 py-1.5">{!r.ok || !checked ? '—' : dryRun.found[csvLine(r)] ? <span className="block space-y-1">
                             <span className="block text-amber-800">{dryRun.found[csvLine(r)].map(m => m.name).join(', ')}</span>
                             <select aria-label={`Ligne ${csvLine(r)} : doublon possible`} className="rounded border px-1 py-0.5" value={choices[csvLine(r)] || ''} onChange={e => setChoices(c => ({ ...c, [csvLine(r)]: e.target.value }))}>

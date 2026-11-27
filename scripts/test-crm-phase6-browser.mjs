@@ -60,7 +60,11 @@ try {
  act('qualify_lead',lead,{conversation_channel:'phone',note:'Le parent souhaite un test puis une inscription',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
  const confirm=detail(lead).open_tasks.find(t=>t.task_type==='confirm_placement_test');
  const placement=rpc('book_placement_test',{lead_id:lead,expected_version:detail(lead).version,task_id:confirm.id,expected_task_version:confirm.version,date_test:inHours().slice(0,10),heure:'10:30'}).placement.id;
- sql(`begin;set local request.jwt.claim.sub='${actor}';set local role authenticated;update public.placement_tests set status='Résultat saisi',niveau_recommande='Child 2' where id='${placement}';commit;`);
+ // RWR-r5 C2 (141): staff no longer write the table, and a result waits for the start time, so the
+ // setup moves the test to yesterday (replica role) and records the result in a trusted session
+ // carrying the receptionist's claim (the CRM milestone names the actor).
+ sql(`begin;set local session_replication_role=replica;update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id='${placement}';set local session_replication_role=origin;
+  set local request.jwt.claim.sub='${actor}';update public.placement_tests set status='Résultat saisi',niveau_recommande='Child 2' where id='${placement}';commit;`);
  const counts=()=>JSON.parse(sql('select jsonb_build_array((select count(*) from public.students),(select count(*) from public.enrollments),(select count(*) from public.charges),(select count(*) from public.receipts),(select count(*) from public.financial_events),(select count(*) from auth.users),(select count(*) from public.profiles))'));
  const before=counts();await open(lead);await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).waitFor();await screenshot({path:join(tmpdir(), 'hills-phase6-before.png'),fullPage:false});
  await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await dialog().getByLabel('Nom de l’apprenant',{exact:true}).waitFor();assert.deepEqual(counts(),before,'opening dialog creates nothing');assert.equal(await dialog().getByLabel('Nom de l’apprenant',{exact:true}).inputValue(),'Adam inscription CRM');await screenshot({path:join(tmpdir(), 'hills-phase6-dialog.png'),fullPage:false});

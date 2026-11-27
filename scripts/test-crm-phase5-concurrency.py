@@ -98,11 +98,13 @@ commit;""")
         assert sql(f"select count(*) from public.placement_tests where crm_lead_id='{lead}'").stdout.strip()=='1'
         placement=next(r['placement'] for r in results if 'placement' in r)
         pid=placement['id']
-        def result_edit(level):
-            return sql(f"begin;set local request.jwt.claim.sub='{actor}';set local role authenticated;update public.placement_tests set status='Résultat saisi',niveau_recommande='{level}' where id='{pid}';commit;",False)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-            outcomes=list(pool.map(result_edit,['A2','B1']))
-        assert all(r.returncode==0 for r in outcomes), [r.stderr for r in outcomes]
+        # RWR-r5 C2 (141): staff record a prospect's result through crm_update_placement_test
+        # (the staff table policies are gone), and only after the start time (invariant 5):
+        # the fixture moves the test to yesterday, then two sessions race the same edit.
+        sql(f"begin;set local session_replication_role=replica;update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id='{pid}';commit;")
+        current=json.loads(sql(f"select jsonb_build_object('placement_id',t.id,'expected_updated_at',t.updated_at,'expected_version',l.version,'date_test',t.date_test,'heure',t.heure,'status','Résultat saisi') from public.placement_tests t join public.crm_leads l on l.id=t.crm_lead_id where t.id='{pid}'").stdout.strip())
+        outcomes=race('update_placement_test',[(str(uuid.uuid4()),current|{'niveau_recommande':'A2'}),(str(uuid.uuid4()),current|{'niveau_recommande':'B1'})])
+        assert sum('error' not in r for r in outcomes)==1 and sum(any(w in r.get('error','') for w in ('Stale','Concurrent')) for r in outcomes)==1, outcomes
         for event in ('placement_test_attended','placement_result_entered'):
             assert sql(f"select count(*) from public.crm_activities where placement_test_id='{pid}' and event_type='{event}'").stdout.strip()=='1'
         assert sql(f"select count(*) from public.crm_tasks where placement_test_id='{pid}' and task_type='post_test_followup'").stdout.strip()=='1'

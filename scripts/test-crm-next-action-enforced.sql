@@ -7,8 +7,8 @@
 --     prospect with none, an action or a planned test left on a closed or merged
 --     prospect, a planned test outside the open appointment or enrolment action.
 --  3. Writers of the §4.2 inventory, each followed by the commit-time check: intake
---     (manual), exchange, appointment with test, test result through the CRM command and
---     through an Admissions table update as staff, reassignment, close and reopen,
+--     (manual), exchange, appointment with test, test result through the CRM command (an
+--     Admissions table update as staff changes no row since 141), reassignment, close and reopen,
 --     enrolment start keeping the test on « Finaliser l'inscription », then conversion
 --     keeping it. Every suite that drives these writers (intake resubmission included)
 --     also runs with the same commit-time check: test-crm-next-action-enforced-suites.mjs.
@@ -120,6 +120,10 @@ do $$ declare l uuid; p uuid; t uuid; e uuid; s uuid; r jsonb; begin
  -- Appointment with a test, then the result through the CRM command.
  p:=pg_temp.with_test(l); perform pg_temp.committed('appointment with test');
  perform pg_temp.ok(pg_temp.actions(l)=1 and p is not null,'appointment carries the test');
+ -- RWR-r5 C2 (141, invariant 5): a result needs the start time to have passed; the test moves to yesterday.
+ set local session_replication_role=replica;
+ update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p;
+ set local session_replication_role=origin;
  perform public.crm_update_placement_test(gen_random_uuid(),jsonb_build_object('placement_id',p,'expected_updated_at',(select updated_at from public.placement_tests where id=p),
   'expected_version',(select version from public.crm_leads where id=l),'date_test',(select date_test from public.placement_tests where id=p),
   'heure',(select heure from public.placement_tests where id=p),'status','Résultat saisi','niveau_recommande','B1'));
@@ -133,11 +137,13 @@ do $$ declare l uuid; p uuid; t uuid; e uuid; s uuid; r jsonb; begin
  perform pg_temp.act('reopen_prospect',l,'{"reason":"Revient","next":{"task_type":"callback","due_preset":"tomorrow"}}'); perform pg_temp.committed('reopen');
  perform pg_temp.ok(pg_temp.actions(l)=1,'reopened: one action');
 
- -- An Admissions table update as staff (the receptionist's RLS policy) reaches the milestone trigger.
+ -- An Admissions table update as staff: since RWR-r5 C2 (141) the receptionist's update
+ -- policy is gone (staff use the commands), so the direct write changes no row.
  l:=pg_temp.prospect('w2'); p:=pg_temp.with_test(l); perform pg_temp.committed('appointment with test (admissions)');
  perform pg_temp.actor(3); execute 'set local role authenticated';
  update public.placement_tests set status='Passé' where id=p;
  execute 'reset role';
+ perform pg_temp.ok((select status='Planifié' from public.placement_tests where id=p),'admissions table update as staff: no row changed');
  perform pg_temp.committed('admissions table update as staff');
  perform pg_temp.ok(pg_temp.actions(l)=1,'admissions update: one action');
 

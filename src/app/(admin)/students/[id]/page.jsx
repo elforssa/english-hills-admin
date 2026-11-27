@@ -17,6 +17,7 @@ import PageHeader from '@/components/operational/PageHeader';
 import ReadState from '@/components/operational/ReadState';
 import { Button } from '@/components/ui/button';
 import { DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel, ageCategoryLabel } from '@/lib/ui/presentation.mjs';
+import { isAdultsProgramme } from '@/lib/academic/learnerRules.mjs';
 import { originLabel, studentOriginCode } from '@/lib/catalogue.mjs';
 import { serviceLine } from '@/lib/programCatalog.mjs';
 import { ArrowLeft, CircleDollarSign, Edit, FileText, Trash2 } from 'lucide-react';
@@ -348,10 +349,11 @@ function StudentDetail() {
           setReload(value => value + 1);
         }} />}
 
-      <Section title="Adultes autorisés au retrait">
+      {/* RWR-r5 §6.4: hidden for an adults programme (an adult leaves alone); adults already recorded stay shown. */}
+      {(!isAdultsProgramme(student.session_type) || adults.length > 0) && <Section title="Adultes autorisés au retrait">
         <AuthorizedAdultsEditor studentId={student.id} adults={adults} canEdit={hasCapability(role, 'canManageAuthorizedAdults')}
           onChanged={() => setReload(value => value + 1)} />
-      </Section>
+      </Section>}
 
       <Section title={`Paiements (${payments.length})`}>
         <p className="mb-3 text-xs text-muted-foreground">Le restant historique est le solde après ce paiement, à la date du reçu. Pour corriger ou annuler un reçu, contactez la direction.</p>

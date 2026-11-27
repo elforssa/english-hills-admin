@@ -5,6 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { openDaySql } from './lib/centre-days.mjs';
+import { LIVE_POLICY, createStaff, localEnv, removeStaff } from './lib/crm-next-action-local.mjs';
 
 assertLocalFeatureBranch(new URL('../', import.meta.url));
 const env = Object.fromEntries(readFileSync('.env.local', 'utf8').split('\n').flatMap(line => {
@@ -53,7 +55,7 @@ const reasonName = run + ' reason', levelName = run + ' level', occupantName = r
 const youngName = run + ' young', leaverName = run + ' leaver', createdName = run + ' created', newTeacherName = run + ' new teacher';
 // EAP (migration 127): learners created in this run through the learner form and the walk-in desk.
 const fileName = run + ' file', walkInName = run + ' walk-in', walkInGroupedName = run + ' walk-in grouped', walkInReplayName = run + ' walk-in replay';
-let user, browser, pdfStudent;
+let user, browser, pdfStudent, policyStaff = [];
 const portalUsers = [];
 try {
   const response = await fetch(base + '/auth/v1/admin/users', { method: 'POST',
@@ -177,12 +179,27 @@ try {
   await page.getByRole('heading', { name: 'Pipeline admissions', exact: true }).waitFor();
   console.log('PASS Opportunities landing and direct Today task access');
 
+  // RWR-r5 C2 (§6.2): « Planifier un test » finds the person (find_people) and books a
+  // learner's test through book_student_placement_test; no free-typed name, no level.
+  // A test is booked inside the opening hours, so a director publishes them for this step
+  // only; the policy and the director are removed right after it.
+  policyStaff = await createStaff(localEnv(), run + '-policy', ['director']);
+  sql(`begin;set local request.jwt.claim.sub='${policyStaff[0].id}';set local role authenticated;
+    select public.crm_create_followup_policy(gen_random_uuid(),'${JSON.stringify(LIVE_POLICY)}'::jsonb);commit;`);
   await page.goto(app + '/placement-tests');
   await page.getByRole('button', { name: 'Planifier un test' }).click();
-  await page.getByPlaceholder('Ou saisir le nom manuellement...').fill(run);
-  await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
-  await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  assert.equal(sql(`select count(*) from public.placement_tests where student_name='${run}' and student_id is null`), '1');
+  const peoplePicker = page.getByRole('dialog').last();
+  await peoplePicker.getByLabel('Nom, téléphone ou e-mail', { exact: true }).fill(run);
+  await peoplePicker.locator(`[data-testid=people-result][data-id="${student}"]`).click();
+  // An in-hours date from the server (centre-days.mjs).
+  const testDay = sql(`select ${openDaySql(1, ['10:00'])}`).split('\n').pop();
+  const booking = page.getByTestId('student-test-dialog');
+  await booking.getByLabel('Date', { exact: true }).fill(testDay);
+  await booking.getByLabel('Heure', { exact: true }).fill('10:00');
+  await booking.getByRole('button', { name: 'Planifier le test', exact: true }).click();
+  await booking.waitFor({ state: 'hidden' });
+  assert.equal(sql(`select count(*) from public.placement_tests where student_name='${run}' and student_id='${student}' and status='Planifié' and niveau_recommande is null`), '1');
+  removeStaff(policyStaff.map(u => u.id)); policyStaff = [];
   await page.waitForLoadState('networkidle');
   const studentsRequestStart = pageRequests.length;
   await page.goto(app + '/students');
@@ -336,12 +353,9 @@ try {
   // RPW-r2 item 2: in no group, she edits programme and level as the admin does.
   assert.equal(await readyRow.getByRole('combobox', { name: `Session de ${readyName}` }).count(), 1);
   assert.equal(await readyRow.getByRole('combobox', { name: `Niveau de ${readyName}` }).count(), 1);
-  const categorySave = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_student'));
-  const listRefresh = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/search_students_page'));
-  await readyRow.getByRole('combobox', { name: `Catégorie de ${readyName}` }).selectOption('Teens (13-17)');
-  assert.equal((await categorySave).status(), 200);
-  await listRefresh;
-  assert.equal(sql(`select age_category from public.students where id='${readyStudent}'`), 'Teens (13-17)');
+  // RWR-r5 C2 (§6.4): the category is no longer edited inline; it is edited in the file,
+  // where it is checked against the programme (test-desk-academics-browser.mjs).
+  assert.equal(await readyRow.getByRole('combobox', { name: `Catégorie de ${readyName}` }).count(), 0);
   // An active file without a paid enrollment is enrolled at the payment, never placed from the list.
   assert.equal(await readyRow.getByRole('button', { name: /Groupe à affecter/ }).count(), 0);
   assert.equal(await readyRow.getByRole('link', { name: 'Inscrire et encaisser' }).getAttribute('href'), `/receipts/new?student_id=${readyStudent}`);
@@ -1001,6 +1015,7 @@ try {
   console.log('PASS receipt PDF loader failure: print (PDF A5, Imprimer A5), bulk, parent and student portals (list and preview) each show one French toast after retries; the next click after the network returns downloads in the same document');
 } finally {
   if (browser) await browser.close();
+  if (policyStaff.length) removeStaff(policyStaff.map(u => u.id));
   if (pdfStudent) {
     const portalIds = portalUsers.map(portalUser => `'${portalUser.id}'`).join(',') || 'null';
     // Receipts are never hard-deleted outside this sanctioned local clean-up (Batch E, P2.3a).

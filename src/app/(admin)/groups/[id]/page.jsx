@@ -8,7 +8,7 @@ import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { currentSchoolYear, groupMemberIds, isMembership, schoolYearOfGroup } from '@/lib/enrollmentWorkflow.mjs';
 import { eapReason, egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
 import { groupMatchesEnrollment, programmeName } from '@/lib/academicPrograms';
-import { dossierLabel } from '@/lib/ui/presentation.mjs';
+import { ageCategoryLabel, dossierLabel } from '@/lib/ui/presentation.mjs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
@@ -350,7 +350,7 @@ export default function GroupDetail() {
                     <td className="px-4 py-3 font-medium text-foreground">
                       {canManage ? <ContextLink href={`/students/${s.id}`} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</ContextLink> : s.full_name}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{s.age_category || '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{ageCategoryLabel(s.age_category)}</td>
                     <td className="px-4 py-3">
                       {group.session_type
                         ? <ProgrammePill sessionType={group.session_type} />
