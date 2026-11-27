@@ -33,7 +33,15 @@ create function pg_temp.id(name text) returns uuid language sql as $$ select id 
 create function pg_temp.ids(prefix text) returns jsonb language sql as $$
  select coalesce(jsonb_agg(id order by k),'[]'::jsonb) from ids where k like prefix||'%' $$;
 create function pg_temp.cohort_leads() returns integer language sql as $$
- select (public.crm_get_marketing_cohort(public.business_date(),public.business_date())->'summary'->>'leads')::integer $$;
+ -- Follow-ups 142 (test only): the cohort cuts its days in the time zone it reports (« timezone »:
+ -- Africa/Casablanca without a reporting account), business_date() in the centre offset. Where the two
+ -- name different days (23:00-24:00 UTC with tzdata 2025b, CI's postgres image), a business_date()
+ -- window missed this file's prospects (Verify run 45910714942, 23:27 UTC). The window is their own
+ -- acquisition days, computed from their first submissions in the cohort's time zone, as the function does.
+ with zone as (select public.crm_get_marketing_cohort(public.business_date(),public.business_date())->>'timezone' as tz),
+ days as (select min((s.occurred_at at time zone z.tz)::date) as d0,max((s.occurred_at at time zone z.tz)::date) as d1
+  from zone z,ids i join public.crm_leads l on l.id=i.id join public.crm_submissions s on s.id=l.first_submission_id)
+ select (public.crm_get_marketing_cohort(d0,d1)->'summary'->>'leads')::integer from days $$;
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
 select ('a7140600-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'d6-'||i||'@example.invalid','authenticated','authenticated',now(),now() from generate_series(1,4)i;

@@ -2132,13 +2132,23 @@ That is 24 tables and the 2 views. On every one, `anon` loses `DELETE` and `TRUN
 - **`test-crm-phase7-concurrency.py` (item 7):** the clean-up removes the synthetic director under the local teardown guard, as phase 4 does, because on a fresh CI stack it is the only director.
 - **`test-conflicts-without-retry-upgrade.mjs` (item 6):** the « current » ceiling is the newest file in `supabase/migrations` instead of a fixed « 140 ».
 - **`test-catalogues.sql` (item 2):** the grant check adds « not executable by service_role ».
+- **`test-catalogues-d6.sql` (test defect from B2, owner instruction 2026-11-27; no function changed):** Verify run 45910714942 failed at 23:27 UTC on « the marketing cohort leaves the 9 test prospects out ». The cause is that the test read the cohort for `business_date()` to `business_date()`.
+  - `business_date()` uses the centre offset (+00:00).
+  - `crm_get_marketing_cohort` cuts its days in the time zone it reports (`timezone`: Africa/Casablanca without a reporting account).
+  - CI's image (`supabase/postgres 17.6.1.165`, tzdata 2025b) has Casablanca at +01 on that date, so between 23:00 and 24:00 UTC the two name different days and the window missed the file's prospects.
+
+  The fix is in `pg_temp.cohort_leads()`. It now reads the cohort over the prospects' own acquisition days: the first submissions of every prospect in the file, converted with the zone the function reports. The comparison checks are unchanged.
+
+  Proven on a throwaway clock-shifted copy of the private stack (a wall-clock offset preloaded into a second postgres; the copy was removed afterwards). The runs, at simulated 23:30 and 00:30 UTC, used both CI's 2025b Casablanca file and the local 17.11 one:
+  - the old test fails at 23:30 with tzdata 2025b, with CI's message, and passes in the other three cases;
+  - the new test passes in all four.
 - **The five « current » upgrade tests (item 6):** the ceiling comes from `scripts/lib/upgrade-ceiling.sql`.
 - **`test-receptionist-function-classification` fixture (item 9):** regenerated with `--write`; only the `crm_create_manual_lead` entry is removed.
 - **`test-reception-forms-browser.mjs` (item 4):** adds the one-date check on the outside-hours row.
 - **`test-payment-screens-browser.mjs` (item 3):** adds §5.
 - **Item 11, guard call only, no assertion changed:** every script listed by `git diff --stat` with the comment « follow-ups 142 (item 11) ».
 
-**Not done or not verified here:** Production, merge and release are not authorized. The coalesce case is unreachable while `enrollments_confirmed_has_programme` is validated (see §1). The result card (item 4) is not reachable from any screen today, so its fix is proven by the static check only.
+**Not done or not verified here:** Production, merge and release are not authorized. The coalesce case is unreachable while `enrollments_confirmed_has_programme` is validated (see §1). The result card (item 4) is not reachable from any screen today, so its fix is proven by the static check only. **Observation, not changed:** the cohort's day boundaries follow the database's tzdata for Africa/Casablanca. On 2026-11-27, CI's image (17.6.1.165, tzdata 2025b) gives +01, while the local CLI 2.121 image (17.11.0.004, bundled tzdata) gives +00. The centre offset is +00. Production's tzdata was not read; check it before trusting a cohort's day edge.
 
 **Release notes for 142 (for the release approval; nothing here is authorized).** Renumber to the next free number at merge (C2 holds 141). Apply after 140 (and after C2's 141 if it lands first; 142 touches no C2 object). The deployed build needs no change: no screen calls `crm_create_manual_lead`, deletes from a revoked table, or calls a catalogue function with the service key. Rollback: `142_rwr_follow_ups_restore.sql`, before any 140 restore.
 
