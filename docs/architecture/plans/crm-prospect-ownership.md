@@ -1,6 +1,6 @@
 # CRM prospect ownership — « À prendre », « Je m'en occupe », one responsable, WhatsApp link — architecture, revision CPO-r2
 
-**Status: PROPOSED (2026-11-27). Not approved. Architecture only: no code, no migration, no Production read or change was made for this plan.** The round is **one client-only PR, Tier 2, no migration**, plus three steps done by the owner or an operator. Baseline: `origin/main` `a89bac3` (ledger 001–142 per [CURRENT_STATE](../../ai/CURRENT_STATE.md)). Database bodies were read from a clean local replay of migrations 001–141 plus the text of [142](../../../supabase/migrations/142_rwr_follow_ups.sql), which re-creates none of the functions named here. Every Production figure in this plan is the owner's, not measured ([what could not be verified](#what-could-not-be-verified)).
+**Status: APPROVED FOR IMPLEMENTATION (owner, in chat, 2026-11-27, verbatim « Approved as recommended. Start the single PR. », at plan head `15fad9951beec938f12650cd7bdb0524cedc2d53`; [approval record](#approval-record)). Not implemented yet.** The round is **one client-only PR, Tier 2, no migration**, plus three steps done by the owner or an operator, each with its own approval. Baseline: `origin/main` `a89bac3` (ledger 001–142 per [CURRENT_STATE](../../ai/CURRENT_STATE.md)). Database bodies were read from a clean local replay of migrations 001–141 plus the text of [142](../../../supabase/migrations/142_rwr_follow_ups.sql), which re-creates none of the functions named here. Every Production figure in this plan is the owner's, not measured ([what could not be verified](#what-could-not-be-verified)).
 
 | Revision | Date | Change |
 | --- | --- | --- |
@@ -460,6 +460,33 @@ Each needs its own approval. None blocks the PR.
 | Q6 | The shared login. | A: one partner keeps it under their name, the other is invited. B: freeze it as « Ancien compte partagé », two new accounts. | **A** |
 
 **Needed from you for N1 and S2 only** (it does not block the PR): which accounts have no name and the name for each; which account is shared, who keeps it, and whether it is the director account.
+
+# Approval record
+
+**Approved by the owner (Maroine) in chat on 2026-11-27:** « Approved as recommended. Start the single PR. », for revision CPO-r2 at exact head `15fad9951beec938f12650cd7bdb0524cedc2d53` (required CI green on that head). Under instruction 7 this authorises implementing [the single PR](#the-single-pr) and its handoff. It does not authorise merge, deployment, steps S1, N1 or S2, any follow-up, or any Production read or change.
+
+**Answers:** Q1 A (« Tâches » opens on « Mes prospects »); Q2 A (« Je m'en occupe » on prospects nobody has, only); Q3 A (one « Responsable »; the second Tâches filter removed); Q4 A (four tabs; three views in « Filtres »; three removed from the screen); Q5 A (the « WhatsApp » button in the two lists is follow-up F1). OD-6 is reversed to « nobody » by instruction 4.
+
+**Q6, the shared login — the owner's own answer, replacing options A and B:**
+
+- The shared login is a company address that belongs to neither partner. Its role is Admin, it is not the director account, and it is named « English Hills Admin ».
+- It is **not renamed**. It stays « English Hills Admin », as a spare login.
+- Both partners move to their own existing accounts. The owner changes those two accounts' roles from Apprenant himself, in « Paramètres ».
+- The active prospects on the shared account (18, the owner's figure) are handed over by hand later, with « Changer de responsable ».
+
+So step S2 needs no invitation and no new account: it is the owner's role changes. History lines written under the shared account keep showing « English Hills Admin », which is truthful.
+
+**Inputs for N1 (staff names), given with the approval.** No e-mail address is written in the repository; the accounts are identified to the operator by the owner's message.
+
+| Account | Today | N1 |
+| --- | --- | --- |
+| the director account | no name | « Maroine El Forssa » |
+| a partner's own account | « Abderrahim Test » | « Abderrahim Omari » |
+| the other partner's own account | already named | no change |
+| a second reception account | no name | left as it is: the account is not used |
+| the shared login | « English Hills Admin » | no change |
+
+N1 therefore sets **exactly two names**, one of which replaces an existing test name (so the step identifies its two accounts explicitly, not « every blank name »). It still needs its read-only dry run and the owner's « approve N1 » before anything is written. The unused reception account keeps showing « Équipe accueil » wherever it appears in a list of names.
 
 # What could not be verified
 
