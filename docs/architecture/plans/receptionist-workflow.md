@@ -2148,6 +2148,30 @@ That is 24 tables and the 2 views. On every one, `anon` loses `DELETE` and `TRUN
 - **`test-payment-screens-browser.mjs` (item 3):** adds §5.
 - **Item 11, guard call only, no assertion changed:** every script listed by `git diff --stat` with the comment « follow-ups 142 (item 11) ».
 
+**Rebase onto C2 (owner instruction, 2026-11-27).** C2 (#223, migration 141) merged first, so this branch was rebased from `51ff79c` onto `origin/main` `cac9949`. 142 keeps its number; the header line about renumbering is removed. 13 conflicts, each resolved on C2's version with the 142 change added on top:
+- `.github/workflows/verify.yml`: both upgrade steps kept (C2's « 140 to 141 », then « Follow-ups 141 to 142 »), C2's resets moved to `local-stack.mjs db-reset`; the sql-and-concurrency shard runs C2's three suites, then `test-rwr-follow-ups.sql`;
+- `package.json`: C2's `npm test` list (with `test-academic-rules.mjs`) plus `test-local-stack-guard.mjs`;
+- this plan: C2's implementation record, then this one;
+- `scripts/rollback/140_catalogues_restore.sql`: both order checks, 142 first, then 141;
+- the five « current » upgrade tests (`test-crm-batch2-upgrade-current.sql`, `test-crm-h3-upgrade-103-current.sql`, `test-crm-r4-upgrade-100-current.sql`, `test-crm-r4-upgrade-102-current.sql`, `test-premium-retirement-upgrade-113-current.sql`) and `test-conflicts-without-retry-upgrade.mjs`: C2's fixed « 141 » ceiling replaced by the ceiling read from the migrations folder (item 6);
+- `test-online-session-evidence-upgrade.mjs` and `test-receptionist-browser.mjs`: C2's imports plus the guard call;
+- `src/components/crm/CrmActionDialog.jsx`: C2's `pluralFr` wording plus the one-date result card (item 4).
+
+Changes made after the rebase:
+- the follow-ups upgrade lane starts at 141, so the restore is proven back to the 141 catalogue;
+- C2's `test-desk-academics-141-upgrade.mjs` calls the guard (the ratchet found it);
+- the guard accepts a database-only stack (`supabase db start`) only for a session's own `project_id` and non-default ports, and only for a script that needs no API. It still refuses `hills-admin-next`, ports 54321 / 54322, and a later API call after a database-only check. New unit cases are in `test-local-stack-guard.mjs`.
+
+Local evidence on a private database-only stack (`fu142`, ports 556xx; never `hills-admin-next`):
+- the guard accepts it, and refuses an API URL, the shared stack name and the default port;
+- `db-reset --version 140` then `supabase migration up` applies 141, then 142 (ledger 139, 140, 141, 142);
+- C2's 140 → 141 lane passes, and so does the 141 → 142 lane;
+- on 142, the restore chain refuses and passes in order: the 140 restore refuses for 142; the 142 restore passes; the 140 restore refuses for 141; the 141 restore passes; the 140 restore passes;
+- the 36 SQL suites of the sql-and-concurrency shard pass on a fresh 142, `test-rwr-follow-ups.sql` included;
+- in a clean clone, `npm test` (guard and ratchet: 223 scripts), lint and build pass.
+
+The browser, concurrency and other upgrade shards are left to Verify (owner's local-replay rule).
+
 **Not done or not verified here:** Production, merge and release are not authorized. The coalesce case is unreachable while `enrollments_confirmed_has_programme` is validated (see §1). The result card (item 4) is not reachable from any screen today, so its fix is proven by the static check only. **Observation, not changed:** the cohort's day boundaries follow the database's tzdata for Africa/Casablanca. On 2026-11-27, CI's image (17.6.1.165, tzdata 2025b) gives +01, while the local CLI 2.121 image (17.11.0.004, bundled tzdata) gives +00. The centre offset is +00. Production's tzdata was not read; check it before trusting a cohort's day edge.
 
 **Release notes for 142 (for the release approval; nothing here is authorized).** Migration 142 keeps its number and applies after 141 (142 touches no 141 object). The deployed build needs no change: no screen calls `crm_create_manual_lead`, deletes from a revoked table, or calls a catalogue function with the service key. Rollback: `142_rwr_follow_ups_restore.sql`, before any 140 restore (141's restore does not depend on it).
