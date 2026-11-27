@@ -1,12 +1,13 @@
-// Destructive LOCAL synthetic upgrade rehearsal 140 → 142 (RWR-r5 follow-ups, owner approval
-// of 2026-11-26). Run after `supabase db reset --local --version 140 --no-seed`:
-//   1. seeds, at 140, an active prospect and a planned legacy placement test (no CRM link)
+// Destructive LOCAL synthetic upgrade rehearsal 141 → 142 (RWR-r5 follow-ups, owner approval
+// of 2026-11-26). Production is on 141 (C2), so the lane starts there. Run after
+// `node scripts/lib/local-stack.mjs db-reset --version 141 --no-seed`:
+//   1. seeds, at 141, an active prospect and a planned legacy placement test (no CRM link)
 //      with a malformed time, and proves « Aujourd'hui » (crm_get_today) fails on it;
-//   2. applies the 142 file (the ledger stays at 140) and proves no row changed, only the
+//   2. applies the 142 file (the ledger stays at 141) and proves no row changed, only the
 //      two bodies and the expected grants changed (no policy or trigger), and the read
 //      now answers;
 //   3. the 140 restore refuses while 142 is applied; the 142 restore brings back exactly
-//      the 140 functions and table privileges; a second run refuses;
+//      the 141 functions and table privileges; a second run refuses;
 //   4. applies 142 again on top of the restore: the same catalog as the first 142.
 //   node scripts/test-rwr-follow-ups-142-upgrade.mjs
 import assert from 'node:assert/strict';
@@ -36,7 +37,7 @@ const MIGRATION = (() => {
   return `supabase/migrations/${file}`;
 })();
 const RESTORE = MIGRATION.replace('supabase/migrations/', 'scripts/rollback/').replace('.sql', '_restore.sql');
-assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '140', 'run on a database at migration 140');
+assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '141', 'run on a database at migration 141');
 
 const catalog = () => json(`select jsonb_build_object(
  'functions',(select jsonb_object_agg(p.oid::regprocedure::text,jsonb_build_array(md5(p.prosrc),p.prosecdef,p.provolatile,p.proconfig,p.proowner::regrole::text,p.proacl::text)) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname not in ('pg_catalog','information_schema') and not exists (select 1 from pg_depend d where d.classid='pg_proc'::regclass and d.objid=p.oid and d.deptype='e')),
@@ -51,7 +52,7 @@ const staff = n => `f1420000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const as = (who, body) => `begin; select set_config('request.jwt.claim.sub','${who}',true); ${body}; commit;`;
 const today = reception => fails(as(reception, `set local role authenticated; select public.crm_get_today(30,0,0)`));
 
-// 1. Seed at 140 (synthetic; invented numbers only).
+// 1. Seed at 141 (synthetic; invented numbers only).
 sql(`insert into auth.users(id,email,aud,role,created_at,updated_at) values
  ('${staff(1)}','upg142-director@example.invalid','authenticated','authenticated',now(),now()),
  ('${staff(3)}','upg142-reception@example.invalid','authenticated','authenticated',now(),now());
@@ -62,15 +63,15 @@ sql(as(staff(1), `select public.crm_create_followup_policy(gen_random_uuid(),'${
 sql(as(staff(3), `select public.crm_create_prospect(gen_random_uuid(),'{"display_name":"Upgrade aujourd''hui","learner_name":"Upgrade apprenant","phone":"0612142001","source_label":"Manuel · Appel entrant"}'::jsonb)`));
 sql(`insert into public.placement_tests(id,student_name,date_test,heure,status,crm_lead_id)
  values('f1420000-0000-4000-8000-0000000000b1','Test ancien','${sql(`select (now() at time zone public.centre_utc_offset())::date`)}','10h','Planifié',null)`);
-assert.match(today(staff(3)), /invalid input syntax for type time/, 'at 140, a malformed legacy time fails « Aujourd\'hui »');
+assert.match(today(staff(3)), /invalid input syntax for type time/, 'at 141, a malformed legacy time fails « Aujourd\'hui »');
 assert.equal(sql(`select has_function_privilege('authenticated','public.crm_create_manual_lead(uuid,jsonb)','execute')||'|'||has_function_privilege('service_role','public.get_catalogue()','execute')||'|'||has_table_privilege('anon','public.students','delete')`),
-  'true|true|true', 'at 140: the grants 142 removes are present');
+  'true|true|true', 'at 141: the grants 142 removes are present');
 const before = catalog(), rows = hashes();
-console.log('PASS 140: a planned legacy test with a malformed time fails crm_get_today');
+console.log('PASS 141: a planned legacy test with a malformed time fails crm_get_today');
 
 // 2. Apply 142 (the file only; the ledger stays).
 psql(['-1', '-f', MIGRATION]);
-assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '140', 'the file only, the ledger stays');
+assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '141', 'the file only, the ledger stays');
 assert.deepEqual(hashes(), rows, '142 writes no row');
 const after = catalog();
 assert.deepEqual(diff(before.policies, after.policies), [], 'no policy changed');
@@ -88,16 +89,16 @@ assert.deepEqual(diff(before.relations, after.relations), ['activity_log', 'anno
   'premium_homework_submissions', 'premium_sessions', 'students', 'teachers'].map(t => `public.${t}`), 'only the 24 tables and 2 views change privileges');
 assert.equal(after.relations['public.placement_tests'][3], before.relations['public.placement_tests'][3], 'placement_tests (137) unchanged');
 assert.ok(JSON.parse(sql(as(staff(3), `set local role authenticated; select public.crm_get_today(30,0,0)::text`)).split('\n').at(-1)).needs_attention, 'the read answers on 142');
-console.log('PASS 140 → 142: no row written, no policy or trigger changed, two bodies and the expected grants only; « Aujourd\'hui » answers');
+console.log('PASS 141 → 142: no row written, no policy or trigger changed, two bodies and the expected grants only; « Aujourd\'hui » answers');
 
 // 3. Restore order, then the restore.
 assert.match(fails(readFileSync('scripts/rollback/140_catalogues_restore.sql', 'utf8')), /migration 142 is applied; run scripts\/rollback\/142_rwr_follow_ups_restore\.sql first/, '140 restore refuses while 142 is applied');
 sql(readFileSync(RESTORE, 'utf8'));
 const restored = catalog();
-for (const part of ['functions', 'relations', 'policies', 'triggers']) assert.deepEqual(diff(before[part], restored[part]), [], `${part}: back to 140`);
+for (const part of ['functions', 'relations', 'policies', 'triggers']) assert.deepEqual(diff(before[part], restored[part]), [], `${part}: back to 141`);
 assert.deepEqual(hashes(), rows, 'the restore writes no row');
 assert.match(fails(readFileSync(RESTORE, 'utf8')), /migration 142 is not applied/, 'a second restore refuses');
-console.log('PASS restore 142: the 140 functions, grants and table privileges exactly; second run refused');
+console.log('PASS restore 142: the 141 functions, grants and table privileges exactly; second run refused');
 
 // 4. Re-apply after the restore.
 psql(['-1', '-f', MIGRATION]);

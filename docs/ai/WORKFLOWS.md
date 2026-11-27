@@ -166,6 +166,8 @@ Under deployed [UIF-r1a](../architecture/plans/english-hills-ui-foundation.md#ui
 
 Every script that resets or writes to a local Supabase stack checks the stack first (`scripts/lib/local-stack.mjs`). Before running any database suite, export the name of this checkout's stack, which is its `project_id` in `supabase/config.toml`: `export HILLS_LOCAL_STACK=hills-admin-next` in the repository, or a private stack's own name. Without the export, or with another stack's name, a port or a container, the script stops before its first statement. To reset the database use `node scripts/lib/local-stack.mjs db-reset [--version N] [--no-seed]`, never `supabase db reset` directly. CI sets the variable in the local-database job.
 
+A database-only stack (`supabase db start`, no API gateway) is accepted for SQL-only work when it is the session's own: a `project_id` other than `hills-admin-next` and `[db]` / `[api]` ports other than 54322 / 54321 in that checkout's `supabase/config.toml`. A script that needs the API (it passes an API URL to the guard) still needs `supabase start`, and the shared stack and the default ports always need the full stack.
+
 ## Guarded release wrapper
 
 How a release/operator session applies a reviewed migration to Production. This is the method used for migration 125 (Batch H, [release record](../architecture/plans/audit-follow-ups.md#release-record-r0r3)), and the one the ledger records in [CURRENT_STATE](CURRENT_STATE.md) for migrations 117–124. It grants no approval: each step runs only as the owner's release approval names it, under [AGENTS](../../AGENTS.md).

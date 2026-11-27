@@ -9,6 +9,11 @@
 //      [db] / [api] ports (54322 / 54321 in the repository);
 //   3. the running containers of that stack publish exactly those ports (docker inspect), so
 //      a port that belongs to another stack on the same machine is refused.
+//   A database-only stack (« supabase db start »: the database container, no API gateway) is
+//   accepted only when it is a session's own stack: a project_id other than the shared
+//   « hills-admin-next », [db] and [api] ports other than the defaults 54322 / 54321, and a
+//   caller that needs no API (no apiUrl). The shared stack and the default ports always need
+//   the full stack, with the API gateway on the [api] port.
 // « supabase db reset » goes through resetLocalDatabase(), which runs the guard first.
 //
 // From JavaScript:  import { assertLocalStack } from './lib/local-stack.mjs';
@@ -23,6 +28,9 @@ import { fileURLToPath } from 'node:url';
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
+// The shared stack every session must leave alone, and the CLI's default ports it runs on.
+export const SHARED_STACK = 'hills-admin-next';
+export const DEFAULT_PORTS = Object.freeze({ db: '54322', api: '54321' });
 
 export class LocalStackRefusal extends Error {
   constructor(message) { super(`Local-stack guard: ${message}`); this.name = 'LocalStackRefusal'; }
@@ -58,10 +66,19 @@ function apiPortOf(url) {
 
 const defaultInspect = name => execFileSync('docker', ['inspect', '-f', '{{json .NetworkSettings.Ports}}', name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
+// The host ports a running container publishes for one inner port, or null when it is not running.
 function published(inspect, container, inner) {
   let ports;
-  try { ports = JSON.parse(inspect(container)); } catch { refuse(`container ${container} is not running (docker inspect failed); start this checkout's stack with « supabase start »`); }
+  try { ports = JSON.parse(inspect(container)); } catch { return null; }
   return [...new Set((ports?.[inner] || []).map(binding => String(binding.HostPort)))];
+}
+
+// Why this stack may not run database-only, or null when it may (see the header).
+function dbOnlyRefusal(stack, apiUrl) {
+  if (stack.projectId === SHARED_STACK) return `the shared stack ${SHARED_STACK} needs the full stack`;
+  if (stack.dbPort === DEFAULT_PORTS.db || stack.apiPort === DEFAULT_PORTS.api) return `the default ports (${DEFAULT_PORTS.db} / ${DEFAULT_PORTS.api}) need the full stack`;
+  if (apiUrl !== undefined) return `this script needs the API (${apiUrl})`;
+  return null;
 }
 
 // Returns the stack's config. Throws LocalStackRefusal (before any write) on any mismatch.
@@ -73,15 +90,24 @@ export function assertLocalStack({ dbPort, apiUrl, container, root = REPO_ROOT, 
   if (dbPort !== undefined && String(dbPort) !== stack.dbPort) refuse(`database port ${dbPort} is not stack ${stack.projectId}'s [db] port ${stack.dbPort}`);
   if (apiUrl !== undefined && apiPortOf(apiUrl) !== stack.apiPort) refuse(`API URL ${apiUrl} is not stack ${stack.projectId}'s [api] port ${stack.apiPort}`);
   if (container !== undefined && container !== stack.container) refuse(`container ${container} is not stack ${stack.projectId}'s database container ${stack.container}`);
-  // One docker check per process tree for the same stack and ports.
+  // One docker check per process tree for the same stack and ports. A database-only stack is
+  // remembered as such, so a later call that needs the API is checked again (and refused).
   const verified = `${stack.projectId}:${stack.dbPort}:${stack.apiPort}`;
-  if (env.HILLS_LOCAL_STACK_VERIFIED !== verified) {
-    const db = published(inspect, stack.container, '5432/tcp');
-    if (!db.includes(stack.dbPort)) refuse(`container ${stack.container} publishes ${db.join(', ') || 'no port'}, not the [db] port ${stack.dbPort}`);
-    const api = published(inspect, stack.apiContainer, '8000/tcp');
-    if (!api.includes(stack.apiPort)) refuse(`container ${stack.apiContainer} publishes ${api.join(', ') || 'no port'}, not the [api] port ${stack.apiPort}`);
-    if (env === process.env) process.env.HILLS_LOCAL_STACK_VERIFIED = verified;
+  const cached = env.HILLS_LOCAL_STACK_VERIFIED;
+  if (cached === verified || (cached === `${verified}:db-only` && !dbOnlyRefusal(stack, apiUrl))) return stack;
+  const db = published(inspect, stack.container, '5432/tcp');
+  if (!db) refuse(`container ${stack.container} is not running (docker inspect failed); start this checkout's stack with « supabase start »`);
+  if (!db.includes(stack.dbPort)) refuse(`container ${stack.container} publishes ${db.join(', ') || 'no port'}, not the [db] port ${stack.dbPort}`);
+  const api = published(inspect, stack.apiContainer, '8000/tcp');
+  let mark = verified;
+  if (!api) {
+    const why = dbOnlyRefusal(stack, apiUrl);
+    if (why) refuse(`container ${stack.apiContainer} is not running (a database-only stack); ${why}: start it with « supabase start »`);
+    mark = `${verified}:db-only`;
+  } else if (!api.includes(stack.apiPort)) {
+    refuse(`container ${stack.apiContainer} publishes ${api.join(', ') || 'no port'}, not the [api] port ${stack.apiPort}`);
   }
+  if (env === process.env) process.env.HILLS_LOCAL_STACK_VERIFIED = mark;
   return stack;
 }
 

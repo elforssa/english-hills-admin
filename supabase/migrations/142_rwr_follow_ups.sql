@@ -1,7 +1,6 @@
 -- RWR-r5 follow-ups (owner approval of 2026-11-26: one follow-ups PR, Tier 3 where it
--- touches grants or finance). Migration 142: C2 holds 141; this file is renumbered at
--- merge if C2 lands first. Plan: docs/architecture/plans/receptionist-workflow.md,
--- « Follow-ups PR (migration 142) ».
+-- touches grants or finance). Migration 142, after C2's 141; it touches no 141 object.
+-- Plan: docs/architecture/plans/receptionist-workflow.md, « Follow-ups PR (migration 142) ».
 --
 -- What it does:
 --  1. crm_security.evaluate_conversion: a conversion writes

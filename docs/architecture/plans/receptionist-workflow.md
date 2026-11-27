@@ -2039,7 +2039,7 @@ The superseded first backup (12:04:02–12:06:22 UTC, data 12,195,723 bytes, `e5
 >
 > Not authorized: Production, merge, release. Hand off with the PR number, exact head SHA, green run id and one status.
 
-**Tier 3** (grants and finance). Built from `origin/main` `51ff79c` (B2 merged). Migration `142_rwr_follow_ups.sql`; C2 holds 141, so the number is renumbered at merge. The upgrade test finds the file by its name (`NNN_rwr_follow_ups.sql`), so a renumber changes no test. Its restore is `scripts/rollback/142_rwr_follow_ups_restore.sql`.
+**Tier 3** (grants and finance). Built from `origin/main` `51ff79c` (B2 merged), then rebased onto `cac9949` (C2 merged; see « Rebase onto C2 » below). Migration `142_rwr_follow_ups.sql`, after C2's 141; it keeps its number. The upgrade test finds the file by its name (`NNN_rwr_follow_ups.sql`). Its restore is `scripts/rollback/142_rwr_follow_ups_restore.sql`.
 
 **Migration 142, in order:**
 - **§0 preconditions.** Refuses unless 140 is applied (`get_catalogue` and the programme catalogue exist) and the live bodies are the expected ones: `evaluate_conversion` md5 `b6dc2f58…` (140), `crm_get_today` md5 `2be1f5a0…` (140), `crm_security.calendar_time` md5 `3500aa82…` (108). Each body is rebuilt from the live cumulative definition, never an earlier snapshot.
@@ -2113,11 +2113,11 @@ That is 24 tables and the 2 views. On every one, `anon` loses `DELETE` and `TRUN
 **CI.**
 - `npm test` adds `test-local-stack-guard.mjs`.
 - The sql-and-concurrency shard adds `test-rwr-follow-ups.sql` (after `test-catalogues-d6.sql`) and `test-crm-phase7-concurrency.py` (after phase 6).
-- The 112–116 shard adds « Follow-ups 140 to 142 upgrade, restore and re-apply », which runs `test-rwr-follow-ups-142-upgrade.mjs` on a reset to 140. The test checks four things:
-  - a planned legacy test with the time `10h` fails « Aujourd'hui » at 140;
+- The 112–116 shard adds « Follow-ups 141 to 142 upgrade, restore and re-apply », which runs `test-rwr-follow-ups-142-upgrade.mjs` on a reset to 141 (140 before the rebase onto C2). The test checks four things:
+  - a planned legacy test with the time `10h` fails « Aujourd'hui » at 141;
   - 142 writes no row and changes no policy or trigger; exactly the six functions and the 26 relations change;
   - « Aujourd'hui » answers;
-  - the 140 restore refuses; the 142 restore gives back the exact 140 catalogue; a second restore refuses; a re-apply equals the first apply.
+  - the 140 restore refuses; the 142 restore gives back the exact 141 catalogue; a second restore refuses; a re-apply equals the first apply.
 
 **Existing tests changed, with the reason (checklist 4):**
 - **Fixture creates moved to a trusted session (item 9), assertions unchanged.** `crm_create_manual_lead` has no API role, so fixtures that used it now call it from the trusted `postgres` session as the same staff member (137's convention) or create through `crm_create_prospect`:
@@ -2150,7 +2150,7 @@ That is 24 tables and the 2 views. On every one, `anon` loses `DELETE` and `TRUN
 
 **Not done or not verified here:** Production, merge and release are not authorized. The coalesce case is unreachable while `enrollments_confirmed_has_programme` is validated (see §1). The result card (item 4) is not reachable from any screen today, so its fix is proven by the static check only. **Observation, not changed:** the cohort's day boundaries follow the database's tzdata for Africa/Casablanca. On 2026-11-27, CI's image (17.6.1.165, tzdata 2025b) gives +01, while the local CLI 2.121 image (17.11.0.004, bundled tzdata) gives +00. The centre offset is +00. Production's tzdata was not read; check it before trusting a cohort's day edge.
 
-**Release notes for 142 (for the release approval; nothing here is authorized).** Renumber to the next free number at merge (C2 holds 141). Apply after 140 (and after C2's 141 if it lands first; 142 touches no C2 object). The deployed build needs no change: no screen calls `crm_create_manual_lead`, deletes from a revoked table, or calls a catalogue function with the service key. Rollback: `142_rwr_follow_ups_restore.sql`, before any 140 restore.
+**Release notes for 142 (for the release approval; nothing here is authorized).** Migration 142 keeps its number and applies after 141 (142 touches no 141 object). The deployed build needs no change: no screen calls `crm_create_manual_lead`, deletes from a revoked table, or calls a catalogue function with the service key. Rollback: `142_rwr_follow_ups_restore.sql`, before any 140 restore (141's restore does not depend on it).
 
 ## IMPLEMENTATION CONTRACT
 

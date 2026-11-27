@@ -2,6 +2,8 @@
 //   1. Unit: on a temporary supabase/config.toml and a fake docker, the guard refuses a missing
 //      or wrong HILLS_LOCAL_STACK, a database port, API URL or container that is not the
 //      config's, a stopped container and a port another stack publishes; it accepts the match.
+//      A database-only stack (« supabase db start ») is accepted for a session's own stack and
+//      ports when the script needs no API; never for hills-admin-next or the default ports.
 //      resetLocalDatabase refuses before running anything.
 //   2. Ratchet: every script that hard-codes this checkout's database port, API port or
 //      database container, or runs « supabase db reset », calls the guard; no script or CI step
@@ -46,12 +48,44 @@ refused({ container: 'supabase_db_hills-admin-next' }, /container supabase_db_hi
 refused({ inspect: () => { throw new Error('No such object'); } }, /container supabase_db_demo-stack is not running/, 'stack not started');
 refused({ inspect: name => JSON.stringify(name.startsWith('supabase_db_') ? { '5432/tcp': [{ HostPort: '54322' }] } : ports[name]) }, /publishes 54322, not the \[db\] port 61322/, 'the container publishes another port');
 refused({ inspect: name => JSON.stringify(name.startsWith('supabase_kong_') ? { '8000/tcp': [] } : ports[name]) }, /supabase_kong_demo-stack publishes no port, not the \[api\] port 61321/, 'no API port');
+// A database-only stack (« supabase db start »: no API gateway container): a session's own
+// stack and ports only, and only for a script that needs no API.
+const dbOnly = name => { if (name.startsWith('supabase_kong_')) throw new Error('No such object'); return inspect(name); };
+assert.equal(ok({ dbPort: '61322', inspect: dbOnly }).projectId, 'demo-stack', 'database-only: own stack and ports, no API needed');
+refused({ dbPort: '61322', apiUrl: 'http://127.0.0.1:61321', inspect: dbOnly }, /supabase_kong_demo-stack is not running \(a database-only stack\); this script needs the API/, 'database-only refused to a script that needs the API');
+assert.equal(ok({ env: { ...env, HILLS_LOCAL_STACK_VERIFIED: 'demo-stack:61322:61321:db-only' }, inspect: () => { throw new Error('not called'); } }).projectId, 'demo-stack', 'a verified database-only stack is not inspected again');
+refused({ apiUrl: 'http://127.0.0.1:61321', env: { ...env, HILLS_LOCAL_STACK_VERIFIED: 'demo-stack:61322:61321:db-only' }, inspect: dbOnly }, /this script needs the API/, 'a database-only verification never covers an API call');
+const stackRoot = (projectId, apiPort, dbPort) => {
+  const dir = mkdtempSync(join(tmpdir(), 'hills-local-stack-'));
+  mkdirSync(join(dir, 'supabase'));
+  writeFileSync(join(dir, 'supabase', 'config.toml'), `project_id = "${projectId}"\n[api]\nport = ${apiPort}\n[db]\nport = ${dbPort}\n`);
+  return dir;
+};
+const portsOf = (projectId, apiPort, dbPort) => name => {
+  if (name === `supabase_db_${projectId}`) return JSON.stringify({ '5432/tcp': [{ HostPort: dbPort }] });
+  if (name === `supabase_kong_${projectId}`) return JSON.stringify({ '8000/tcp': [{ HostPort: apiPort }] });
+  throw new Error('No such object');
+};
+const withoutApi = full => name => { if (name.startsWith('supabase_kong_')) throw new Error('No such object'); return full(name); };
+const shared = stackRoot('hills-admin-next', '54321', '54322'), sharedEnv = { HILLS_LOCAL_STACK: 'hills-admin-next' };
+assert.equal(assertLocalStack({ root: shared, env: sharedEnv, dbPort: '54322', apiUrl: 'http://127.0.0.1:54321', container: 'supabase_db_hills-admin-next', inspect: portsOf('hills-admin-next', '54321', '54322') }).projectId,
+  'hills-admin-next', 'the full shared stack (CI) is still accepted');
+assert.throws(() => assertLocalStack({ root: shared, env: sharedEnv, dbPort: '54322', inspect: withoutApi(portsOf('hills-admin-next', '54321', '54322')) }),
+  /supabase_kong_hills-admin-next is not running \(a database-only stack\); the shared stack hills-admin-next needs the full stack/, 'database-only shared stack refused');
+const sharedMoved = stackRoot('hills-admin-next', '61421', '61422');
+assert.throws(() => assertLocalStack({ root: sharedMoved, env: sharedEnv, dbPort: '61422', inspect: withoutApi(portsOf('hills-admin-next', '61421', '61422')) }),
+  /the shared stack hills-admin-next needs the full stack/, 'database-only refused under the shared project_id, even on other ports');
+for (const [api, db] of [['54321', '61522'], ['61521', '54322']]) {
+  const own = stackRoot('demo-defaults', api, db);
+  assert.throws(() => assertLocalStack({ root: own, env: { HILLS_LOCAL_STACK: 'demo-defaults' }, dbPort: db, inspect: withoutApi(portsOf('demo-defaults', api, db)) }),
+    /the default ports \(54322 \/ 54321\) need the full stack/, `database-only refused on a default port (api ${api}, db ${db})`);
+}
 assert.throws(() => resetLocalDatabase(['--linked'], { root, env }), /local stack only/, 'never a linked project');
 assert.throws(() => resetLocalDatabase(['--db-url=postgresql://x'], { root, env }), /local stack only/, 'never a database URL');
 assert.throws(() => resetLocalDatabase(['--no-seed'], { root, env: {} }), /HILLS_LOCAL_STACK is not set/, 'reset refused before the CLI runs');
 writeFileSync(join(root, 'supabase', 'config.toml'), '[db]\nport = 61322\n');
 refused({}, /no valid project_id/, 'config without project_id');
-console.log('PASS local-stack guard: stack name, ports, container and published ports; reset refused before the CLI');
+console.log('PASS local-stack guard: stack name, ports, container and published ports; database-only only for an own stack on own ports with no API; reset refused before the CLI');
 
 // 2. Ratchet over the repository (built from this checkout's own config, so a renamed clone
 // is checked against its own stack).

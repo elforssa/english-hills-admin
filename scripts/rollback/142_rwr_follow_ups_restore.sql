@@ -12,7 +12,8 @@
 -- It refuses, changing nothing, if 142 is not applied (crm_create_manual_lead still
 -- executable by authenticated, or either body is not the 142 one). Restore order: this
 -- file before scripts/rollback/140_catalogues_restore.sql, which refuses while 142 is
--- applied. The ledger row is removed by the operator wrapper, not here.
+-- applied; 141's restore does not depend on it (142 touches no 141 object, and 141 left
+-- both bodies as 140 had them). The ledger row is removed by the operator wrapper, not here.
 begin;
 
 do $$ begin

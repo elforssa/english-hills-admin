@@ -471,7 +471,7 @@ Open items:
 
 ## Receptionist workflow follow-ups (RWR-r5) — implemented on a pull request, migration 142 not applied, not merged — 2026-11-26
 
-**IMPLEMENTED ON A PULL REQUEST; NOT APPLIED, NOT MERGED, NOT DEPLOYED.** Approved by the owner on 2026-11-26: one Tier 3 PR, migration 142 (C2 holds 141; renumbered at merge). Full record, the approval verbatim and the decision for each table: [follow-ups record](../architecture/plans/receptionist-workflow.md#implementation-record-follow-ups-pr-migration-142).
+**IMPLEMENTED ON A PULL REQUEST; NOT APPLIED, NOT MERGED, NOT DEPLOYED.** Approved by the owner on 2026-11-26: one Tier 3 PR, migration 142 (after C2's 141; rebased on 2026-11-27 onto main `cac9949`, where C2 is merged). Full record, the approval verbatim and the decision for each table: [follow-ups record](../architecture/plans/receptionist-workflow.md#implementation-record-follow-ups-pr-migration-142).
 
 - **Migration 142:**
   - `evaluate_conversion` falls back to the prospect's programme (defence in depth: the validated `enrollments_confirmed_has_programme` makes the case unreachable today);
@@ -487,7 +487,7 @@ Open items:
   - the upgrade lanes read their ceiling from the migrations folder;
   - the 139 restore header is corrected;
   - `test-crm-phase7-concurrency.py` is rebuilt and wired into CI; `test-crm-phase3-concurrency.py` is deleted (covered by the phase 4 and 5 concurrency suites, `test-crm-concurrency-local.mjs` and `test-no-retry-conflicts-local.mjs`);
-  - the local-stack guard `scripts/lib/local-stack.mjs`, under which local database suites need `HILLS_LOCAL_STACK` ([WORKFLOWS](WORKFLOWS.md#local-stack-guard-follow-ups-142)).
+  - the local-stack guard `scripts/lib/local-stack.mjs`, under which local database suites need `HILLS_LOCAL_STACK` (C2's `test-desk-academics-141-upgrade.mjs` included; a session's own database-only stack is accepted for SQL-only scripts) ([WORKFLOWS](WORKFLOWS.md#local-stack-guard-follow-ups-142)).
 - **Production database ledger and deployed source unchanged** by this entry.
 
 ## Receptionist workflow — batched record 2026-11-26 (hotfix #220, data steps D3 and D5)
