@@ -454,6 +454,9 @@ const HINT_MESSAGES = {
   'crm_next_action.enrollment_kept': 'Indiquez pourquoi l’inscription n’est plus à finaliser, ou gardez l’action actuelle.',
   'crm_next_action.overlap': 'Un autre rendez-vous ou test de cet apprenant est prévu à cette heure.',
   'crm_appointment.before_start': 'Le résultat du rendez-vous se saisit à partir de son heure de début.',
+  // RWR-r5 C2 (141): the visit's outcome also marks its linked test; a test set later than
+  // the visit refuses it until the test's own start time.
+  'placement.result_before_start': 'Le test de niveau lié commence plus tard : le résultat se saisit à partir de l’heure du test.',
   'crm_appointment.reason_required': 'Choisissez le motif : le prospect sera clôturé.',
   'crm_next_action.appointment_needs_exchange': 'Pour fixer un rendez-vous, notez l’échange (« Noter un échange » → « On a parlé ») : le prospect devient qualifié.',
   'crm_placement.not_replannable': 'Un test annulé ou absent ne se replanifie pas. Fixez un nouveau rendez-vous avec test depuis la fiche du prospect.',

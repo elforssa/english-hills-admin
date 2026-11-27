@@ -87,6 +87,8 @@ assert.equal(actionErrorMessage({ code: 'PT409' }), STALE_MESSAGE);
 assert.match(actionErrorMessage({ code: '22023', hint: 'crm_exchange.attempt_gap' }), /Tentative réelle/);
 assert.match(actionErrorMessage({ code: '22023', hint: 'crm_hours.outside_opening' }), /ouverture/);
 assert.match(actionErrorMessage({ code: '22023', hint: 'crm_next_action.overlap' }), /apprenant/);
+// C2 (141): a visit whose linked test starts later is refused until the test's start.
+assert.equal(actionErrorMessage({ code: '22023', hint: 'placement.result_before_start' }), 'Le test de niveau lié commence plus tard : le résultat se saisit à partir de l’heure du test.');
 assert.match(actionErrorMessage(new Error('Choisissez la date et l’heure.')), /^Choisissez/);
 assert.match(actionErrorMessage({ code: '22023', message: 'x' }), /Vérifiez/);
 assert.equal(attemptGapLabel({ attempt_gap_ok: false, next_attempt_allowed_at: '2026-11-23T14:20:00Z' }), 'Prochain essai possible à 14:20');

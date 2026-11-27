@@ -219,13 +219,16 @@ try {
   await expect(page.getByRole('button',{name:'Rouvrir l’inscription'}).first()).toBeVisible();
   // CSV: Enrolled rows import as Prospect, with a notice (RWR-r5 C2, OD-12: shown « Sans inscription »).
   await page.goto('http://localhost:3101/students/import');
-  await page.locator('textarea').fill('full_name,session_type,status\n'+run+' imported,Yearly,Enrolled');
+  // RWR-r5 C2 (§6.4, 141): a row whose category does not fit its programme is a row error, never sent.
+  await page.locator('textarea').fill('full_name,session_type,status,age_category\n'+run+' imported,Yearly,Enrolled,\n'+run+' mismatch,Yearly,Prospect,Adults (18+)');
   await expect(page.getByText('seront importées « Sans inscription »',{exact:false})).toBeVisible();
+  await expect(page.getByText('age_category: La catégorie d’âge ne correspond pas au programme ou au niveau.',{exact:true})).toBeVisible();
   // RWR-r5 B1 (§5.2): the duplicate dry run comes first; a row with no match imports as before.
   await page.getByRole('button',{name:'Vérifier les doublons',exact:true}).click();
   await expect(page.getByText('0 ligne(s) avec un doublon possible',{exact:false})).toBeVisible();
   await page.getByRole('button',{name:'Importer 1 apprenant(s)',exact:true}).click();
   await expect.poll(() => sql(`select status from public.students where full_name='${run} imported'`).trim()).toBe('Prospect');
+  assert.equal(sql(`select count(*) from public.students where full_name='${run} mismatch'`).trim(),'0','the mismatched row is not imported');
   // Reception (Q3 = B): paid learners are placed from « Groupe à affecter » and the
   // group page; an unpaid one is refused with the French message and stays unplaced.
   sql(`update public.profiles set role='receptionist' where id='${userId}'`);

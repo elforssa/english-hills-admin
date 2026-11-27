@@ -15,8 +15,13 @@
 --  4. The trigger on every row (direct postgres writes stand in for teachers and
 --     system paths): no result before the start, no pre-filled result, one planned test
 --     per person across a prospect and its linked learner.
+--  4b. A future « Planifié » test holding a pre-141 level (« A1 » from the old form):
+--     cancel (command and CRM close), move, « Absent » after start; a new level or a
+--     score before the start is still refused.
 --  5. crm_update_placement_test: « Passé » never chosen; the level follows the
 --     prospect's programme and age.
+--  5b. A visit outcome whose linked test is set later than the visit: refused until the
+--     test's start, nothing written; recorded once the test's time has come.
 --  6. delete_placement_test: admin and director, a learner's own test only, stale refused.
 --  7. Age bounds 141 derived from the programme audience.
 \set ON_ERROR_STOP on
@@ -202,6 +207,51 @@ do $$ declare p uuid; l uuid; r jsonb; h text; begin
 end $$;
 \echo PASS 4 trigger on every row: no result before start, no pre-filled result, one planned per person across a prospect and its learner
 
+-- ===== 4b. A future « Planifié » test that already holds a level (review B1): the pre-C2
+-- booking form sent « A1 » by default, so such rows exist before 141. A level or score
+-- counts as a result only when this update writes or changes it: the test can still be
+-- cancelled (both paths), moved and marked « Absent » after its start; a new level or a
+-- score before the start is still refused.
+do $$ declare t uuid; r jsonb; begin
+ insert into ids select 'legacy_'||i,gen_random_uuid() from generate_series(0,3) i;
+ insert into ids select 'legacy_test_'||i,gen_random_uuid() from generate_series(0,3) i;
+ insert into public.students(id,full_name,status,session_type,date_naissance,age_category)
+  select pg_temp.id('legacy_'||i),'Synthetic legacy learner '||i,'Prospect','Adults',(pg_temp.today()-interval '30 years')::date,'Adults (18+)' from generate_series(0,3) i;
+ -- As the pre-141 form left them (written past the 141 trigger, as a pre-141 row is):
+ -- three tomorrow 10:00, one yesterday 10:00.
+ set local session_replication_role=replica;
+ insert into public.placement_tests(id,student_id,student_name,date_test,heure,status,niveau_recommande)
+  select pg_temp.id('legacy_test_'||i),pg_temp.id('legacy_'||i),'Synthetic legacy learner '||i,
+   pg_temp.today()+case when i=3 then -1 else 1 end,'10:00','Planifié','A1' from generate_series(0,3) i;
+ set local session_replication_role=origin;
+ perform pg_temp.actor(3);
+ -- Cancel through the learner command.
+ t:=pg_temp.id('legacy_test_0');
+ r:=pg_temp.edit(t,'{"status":"Annulé","cancel_reason":"Famille indisponible"}');
+ perform pg_temp.ok((select status='Annulé' and cancel_reason='Famille indisponible' and niveau_recommande='A1' from public.placement_tests where id=t),
+  'a future test with a stored level is cancelled through update_placement_test_result');
+ -- Cancel through the CRM close path.
+ t:=pg_temp.id('legacy_test_1');
+ perform crm_security.cancel_planned_test(t,'Prospect fermé');
+ perform pg_temp.ok((select status='Annulé' and cancel_reason='Prospect fermé' from public.placement_tests where id=t),
+  'a future test with a stored level is cancelled through crm_security.cancel_planned_test');
+ -- Move it; then a new level or a score before the start is still refused, through the command and the table.
+ t:=pg_temp.id('legacy_test_2');
+ r:=pg_temp.edit(t,jsonb_build_object('date_test',pg_temp.today()+2,'heure','11:00'));
+ perform pg_temp.ok(r->'placement'->>'date_test'=(pg_temp.today()+2)::text and r->'placement'->>'heure'='11:00','a future test with a stored level is moved');
+ perform pg_temp.denied(format($q$select pg_temp.edit(%L,'{"status":"Résultat saisi","niveau_recommande":"Intermediate 1"}')$q$,t),'22023','placement.result_before_start');
+ perform pg_temp.denied(format($q$update public.placement_tests set niveau_recommande='A2' where id=%L$q$,t),'22023','placement.result_before_start');
+ perform pg_temp.denied(format($q$update public.placement_tests set score=40 where id=%L$q$,t),'22023','placement.result_before_start');
+ perform pg_temp.denied(format($q$update public.placement_tests set status='Absent' where id=%L$q$,t),'22023','placement.result_before_start');
+ update public.placement_tests set notes='Keeping the stored level is no new result' where id=t;
+ perform pg_temp.ok((select niveau_recommande='A1' and status='Planifié' from public.placement_tests where id=t),'the stored level stays, the test stays planned');
+ -- After its start: « Absent » on a test with a stored level.
+ t:=pg_temp.id('legacy_test_3');
+ r:=pg_temp.edit(t,'{"status":"Absent"}');
+ perform pg_temp.ok(r->'placement'->>'status'='Absent','« Absent » after the start on a test with a stored level');
+end $$;
+\echo PASS 4b a future planned test with a stored level: cancelled (command and CRM close), moved, absent after start; a new level or score before start refused
+
 -- ===== 5. crm_update_placement_test (live 136 body + 141 rules).
 do $$ declare l uuid; p uuid; q jsonb; r jsonb; begin
  perform pg_temp.actor(3);
@@ -228,6 +278,41 @@ do $$ declare l uuid; p uuid; q jsonb; r jsonb; begin
  perform pg_temp.ok((select status='Résultat saisi' and niveau_recommande='Beginning 2' from public.placement_tests where id=p),'a prospect''s result in its programme');
 end $$;
 \echo PASS 5 CRM test edit: Passé never chosen, result after start, level of the prospect programme
+
+-- ===== 5b. A visit outcome when the linked test is set later than the visit: refused until
+-- the test's start (the outcome marks the test « Passé »), with its own hint; nothing is
+-- written; once the test's time has come, the same outcome is recorded.
+do $$ declare l uuid; a uuid; p uuid; h text; m text; v integer; begin
+ perform pg_temp.actor(3);
+ l:=(public.crm_create_manual_lead(gen_random_uuid(),jsonb_build_object('display_name','Synthetic visit prospect','learner_name','Synthetic visit prospect',
+  'email','placement-rules-'||gen_random_uuid()||'@example.invalid','source_label','Manual','session_type','Adults'))->'lead'->>'id')::uuid;
+ perform public.crm_log_exchange(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),'channel','phone','result','spoke',
+  'next',jsonb_build_object('task_type','center_visit','with_test',true,'due_at',((pg_temp.today()+3)+time '10:00') at time zone public.centre_utc_offset())));
+ a:=crm_security.next_action_id(l);
+ p:=(select placement_test_id from public.crm_tasks where id=a);
+ -- The visit's time has come (an hour ago); the test stays in three days.
+ set local session_replication_role=replica;
+ update public.crm_tasks set due_at=now()-interval '1 hour' where id=a;
+ set local session_replication_role=origin;
+ v:=(select version from public.crm_leads where id=l);
+ begin
+  perform public.crm_record_appointment_outcome(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',v,'action_id',a,'outcome_code','came_will_return'));
+  raise exception 'FAIL: a visit outcome recorded before its linked test starts';
+ exception when others then
+  get stacked diagnostics h=pg_exception_hint, m=message_text;
+  if h is distinct from 'placement.result_before_start' then raise; end if;
+ end;
+ perform pg_temp.ok(m='Le résultat se saisit après l’heure du test.','the refusal names the test''s start');
+ perform pg_temp.ok((select version=v from public.crm_leads where id=l) and (select status='Planifié' from public.placement_tests where id=p)
+  and crm_security.next_action_id(l)=a,'nothing written by the refused outcome');
+ -- The test's time has come too: the same outcome is recorded and the test is « Passé ».
+ set local session_replication_role=replica;
+ update public.placement_tests set date_test=pg_temp.today()-1 where id=p;
+ set local session_replication_role=origin;
+ perform public.crm_record_appointment_outcome(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',v,'action_id',a,'outcome_code','came_will_return'));
+ perform pg_temp.ok((select status='Passé' from public.placement_tests where id=p),'after the test''s start the outcome marks the test « Passé »');
+end $$;
+\echo PASS 5b visit outcome with a later linked test: refused until the test starts (hint placement.result_before_start), nothing written; recorded after
 
 -- ===== 6. delete_placement_test.
 do $$ declare p uuid:=pg_temp.past_test(pg_temp.id('other')); begin

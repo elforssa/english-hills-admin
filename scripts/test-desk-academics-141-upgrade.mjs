@@ -3,11 +3,15 @@
 //   1. seeds, at 140, staff, the hours, a learner with a planned test and one with a past
 //      result, a prospect with its appointment and test, a group with « jours » text and
 //      attendance, and a learner whose category does not fit its programme (an old row);
+//      both learners' future « Planifié » tests carry the level « A1 », as the pre-C2
+//      booking form wrote it (one through the receptionist's 140 insert policy);
 //   2. applies the 141 file (the ledger stays at 140) and proves no existing row changed
 //      (groups.class_days is new and NULL), the age bounds come from the audience, the
 //      placement policies are the commands' set, and D7 is present but neither run nor
 //      granted; an old file still saves an unrelated edit;
-//   3. under 141, cancels the learner's test with a reason and gives a group class days;
+//   3. under 141, cancels the learner's test (level « A1 ») with a reason, moves the other
+//      « A1 » test, refuses a new level on it before its start, cancels it through the CRM
+//      close path, and gives a group class days;
 //      the 140 restore refuses while 141 is applied; the 141 restore brings the 140
 //      functions, triggers, policies and columns back, keeps every row, and a second run
 //      refuses;
@@ -63,7 +67,7 @@ sql(`insert into auth.users(id,email,aud,role,created_at,updated_at) values
  update public.profiles set role='receptionist',full_name='Upgrade reception' where id='${staff(3)}';`);
 const hours = Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(d => [d, [['08:00', '21:00']]]));
 sql(as(staff(1), `select public.crm_create_followup_policy(gen_random_uuid(),'${JSON.stringify({ weekly_hours: hours, attempt_offsets: [0, 0, 1, 3, 5] })}'::jsonb)`));
-const learner = staff(101), mismatch = staff(102), group = staff(201), planned = staff(301), done = staff(302);
+const learner = staff(101), mismatch = staff(102), group = staff(201), planned = staff(301), done = staff(302), legacy = staff(303);
 sql(`insert into public.students(id,full_name,status,session_type,niveau_cefr,date_naissance) values
   ('${learner}','Upgrade learner','Enrolled','Yearly','Child 1',(${today}-interval '9 years')::date),
   ('${mismatch}','Upgrade old category','Prospect','Yearly',null,null);
@@ -75,7 +79,11 @@ sql(`insert into public.students(id,full_name,status,session_type,niveau_cefr,da
  insert into public.placement_tests(id,student_id,student_name,date_test,heure,status) values
   ('${planned}','${learner}','Upgrade learner',${today}+2,'10:00','Planifié'),
   ('${done}','${mismatch}','Upgrade old category',${today}-3,'10:00','Résultat saisi');
- update public.placement_tests set niveau_recommande='A1' where id='${done}';`);
+ update public.placement_tests set niveau_recommande='A1' where id in ('${done}','${planned}');`);
+// The pre-C2 booking form: the receptionist inserts a planned test with the default level « A1 ».
+sql(`begin; select set_config('request.jwt.claim.sub','${staff(3)}',true); set local role authenticated;
+ insert into public.placement_tests(id,student_id,student_name,date_test,heure,status,niveau_recommande,examinateur)
+  values('${legacy}','${mismatch}','Upgrade old category',${today}+1,'10:00','Planifié','A1','Upgrade examiner'); commit;`);
 sql(as(staff(3), `select public.save_attendance('${learner}','${group}',${today}-1,'Présent')`));
 const lead = sql(as(staff(3), `select public.crm_create_prospect(gen_random_uuid(),jsonb_build_object('source_label','Manuel · Appel entrant','display_name','Upgrade prospect','phone','0612141001','learner_name','Upgrade prospect child'))->'lead'->>'id'`))
   .split('\n').filter(l => /^[0-9a-f-]{36}$/.test(l)).at(-1);
@@ -116,7 +124,14 @@ console.log('PASS 140 → 141: no row written, bounds from the audience, placeme
 // 3. Under 141, then the restores.
 sql(as(staff(3), `select public.update_placement_test_result('${planned}',(select updated_at from public.placement_tests where id='${planned}'),'{"status":"Annulé","cancel_reason":"Famille absente"}')`));
 sql(as(staff(3), `select * from public.save_receptionist_group('${group}',(select updated_at from public.groups where id='${group}'),'{"class_days":[1,3]}')`));
-assert.equal(sql(`select status||':'||cancel_reason from public.placement_tests where id='${planned}'`), 'Annulé:Famille absente');
+assert.equal(sql(`select status||':'||cancel_reason||':'||niveau_recommande from public.placement_tests where id='${planned}'`), 'Annulé:Famille absente:A1',
+  'a future test with the old default level is cancelled through the learner command');
+// The other « A1 » test (booked by the 140 form): moved, no new level before its start, cancelled by the CRM close path.
+sql(as(staff(3), `select public.update_placement_test_result('${legacy}',(select updated_at from public.placement_tests where id='${legacy}'),jsonb_build_object('date_test',${today}+2,'heure','11:00'))`));
+assert.equal(sql(`select status||':'||heure||':'||(date_test-${today})||':'||niveau_recommande from public.placement_tests where id='${legacy}'`), 'Planifié:11:00:2:A1', 'moved, level kept');
+assert.match(fails(`update public.placement_tests set niveau_recommande='A2' where id='${legacy}'`), /Le résultat se saisit après l’heure du test/, 'a new level before the start is refused');
+sql(as(staff(3), `select crm_security.cancel_planned_test('${legacy}','Prospect fermé')`));
+assert.equal(sql(`select status||':'||cancel_reason from public.placement_tests where id='${legacy}'`), 'Annulé:Prospect fermé', 'cancelled through crm_security.cancel_planned_test');
 assert.match(fails(readFileSync('scripts/rollback/140_catalogues_restore.sql', 'utf8')), /migration 141 is applied; run scripts\/rollback\/141_desk_academics_restore\.sql first/, '140 restore refuses before 141 is restored');
 sql(readFileSync(RESTORE, 'utf8'));
 const restored = catalog();

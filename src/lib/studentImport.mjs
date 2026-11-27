@@ -3,6 +3,7 @@
 // the same file again (even after a reload mid-import) re-sends the same ids and
 // rows that already went in are replays. Any edit to the file changes every id.
 // Pure: the import page holds the state, the node tests exercise these rules.
+import { STUDENT_MESSAGES, categoryFits } from './academic/learnerRules.mjs';
 export const IMPORT_NAMESPACE = 'english-hills/student-import/v1';
 export const IDENTICAL_FILE_WARNING = 'Seul un fichier identique est reconnu : si le fichier est modifié, même d’un caractère, les lignes déjà importées seront créées une seconde fois.';
 export const IMPORT_FINISHED = 'Import terminé';
@@ -49,10 +50,20 @@ export function failedLines(statuses) {
 
 // Safe, fixed reasons only: never raw database text.
 export function importFailureReason(error) {
+  // RWR-r5 C2 (141): the learner-file rules name their refusal (category, birth date).
+  if (STUDENT_MESSAGES[error?.hint]) return STUDENT_MESSAGES[error.hint];
   if (error?.code === '42501') return 'Accès refusé';
   if (error?.code === '23505') return 'Doublon refusé par la base';
   if (typeof error?.code === 'string' && /^(22|23)[0-9A-Z]{3}$/.test(error.code)) return 'Données refusées par la base';
   return 'Envoi non confirmé : réessayez';
+}
+
+// RWR-r5 §6.4 (141): a row whose age category does not fit its programme (the column
+// default « Yearly » when the file names none) is a row error before anything is sent;
+// the database refuses it anyway (student.category_level).
+export function categoryProblem(data) {
+  return data.age_category && !categoryFits(data.age_category, data.session_type || 'Yearly')
+    ? `age_category: ${STUDENT_MESSAGES['student.category_level']}` : null;
 }
 
 // Outcome of createStudentOnce for one row.

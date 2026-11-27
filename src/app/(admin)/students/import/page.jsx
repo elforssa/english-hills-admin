@@ -31,7 +31,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { createStudentOnce } from '@/lib/studentCreate.mjs';
 import { checkPhone } from '@/lib/phone.mjs';
 import { strongMatches } from '@/lib/people.mjs';
-import { IDENTICAL_FILE_WARNING, IMPORT_FINISHED, csvLine, failedLines, importFailureReason, importFinished, rowIdentities, rowStatus, rowsToSend } from '@/lib/studentImport.mjs';
+import { IDENTICAL_FILE_WARNING, IMPORT_FINISHED, categoryProblem, csvLine, failedLines, importFailureReason, importFinished, rowIdentities, rowStatus, rowsToSend } from '@/lib/studentImport.mjs';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { ageCategoryLabel, dossierLabel } from '@/lib/ui/presentation.mjs';
@@ -57,9 +57,11 @@ const HEADER_MAP = {
   niveau:         'niveau_cefr',
   level:          'niveau_cefr',
   cefr:           'niveau_cefr',
+  niveaucefr:     'niveau_cefr',   // the template's own header (« niveau_cefr »)
   categorie:      'age_category',
   category:       'age_category',
   agecategorie:   'age_category',
+  agecategory:    'age_category',  // the template's own header (« age_category »)
   session:        'session_type',
   sessiontype:    'session_type',
   statut:         'status',
@@ -140,6 +142,8 @@ function validateRows(rawRows) {
       // §5.1 (139): an invalid or placeholder phone is a row error, never stored.
       const phone = checkPhone(data.telephone);
       if (!phone.ok) return { idx, ok: false, data: row, errors: [`telephone: ${phone.error}`] };
+      const category = categoryProblem(data);
+      if (category) return { idx, ok: false, data: row, errors: [category] };
       // D3-A: Enrolled/Trial rows import as Prospect; an enrollment confirms them.
       const requested = data.status;
       data.status = importedStudentStatus(requested);

@@ -265,8 +265,12 @@ set search_path = pg_catalog, pg_temp as $$
 $$;
 
 -- Every row, whoever writes it (CRM commands, the two learner commands, teachers):
---  * no result, score or outcome before the start time (invariant 5), checked only when
---    the status, score or level is written, so an old row's other edits keep working;
+--  * no result, score or outcome before the start time (invariant 5). A result is what
+--    this write sets: a status moved to « Passé », « Résultat saisi », « Affecté » or
+--    « Absent », or a score or level written or changed (compared with OLD). A level or
+--    score already stored is never a result by itself: before C2 the learner form stored
+--    « A1 » by default on planned tests, and such a test must still move, cancel
+--    (« Annulé », crm_security.cancel_planned_test) or be marked « Absent » after its start;
 --  * a new planned test carries no result (no pre-filled level);
 --  * one « Planifié » test per person: the learner, or the prospect and its linked learner
 --    (the prospect alone is already unique, 083:5). Serialised on the same lock as the
@@ -279,8 +283,9 @@ begin
   if tg_op = 'INSERT' and new.status = 'Planifié' and (new.score is not null or new.niveau_recommande is not null) then
     raise exception 'Un test planifié n’a pas encore de niveau ni de score.' using errcode = '22023', hint = 'placement.no_prefilled_result';
   end if;
-  if (tg_op = 'INSERT' or (new.status, new.score, new.niveau_recommande) is distinct from (old.status, old.score, old.niveau_recommande))
-     and (new.status in ('Passé', 'Résultat saisi', 'Affecté', 'Absent') or new.score is not null or new.niveau_recommande is not null)
+  if ((new.status in ('Passé', 'Résultat saisi', 'Affecté', 'Absent') and (tg_op = 'INSERT' or new.status is distinct from old.status))
+      or (new.score is not null and (tg_op = 'INSERT' or new.score is distinct from old.score))
+      or (new.niveau_recommande is not null and (tg_op = 'INSERT' or new.niveau_recommande is distinct from old.niveau_recommande)))
      and academic_security.test_starts(new) > now() then
     raise exception 'Le résultat se saisit après l’heure du test.' using errcode = '22023', hint = 'placement.result_before_start';
   end if;
