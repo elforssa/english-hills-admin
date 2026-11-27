@@ -1,6 +1,6 @@
 # CRM prospect ownership — « À prendre », « Je m'en occupe », one responsable, WhatsApp link — architecture, revision CPO-r2
 
-**Status: APPROVED FOR IMPLEMENTATION (owner, in chat, 2026-11-27, verbatim « Approved as recommended. Start the single PR. », at plan head `15fad9951beec938f12650cd7bdb0524cedc2d53`; [approval record](#approval-record)). Not implemented yet.** The round is **one client-only PR, Tier 2, no migration**, plus three steps done by the owner or an operator, each with its own approval. Baseline: `origin/main` `a89bac3` (ledger 001–142 per [CURRENT_STATE](../../ai/CURRENT_STATE.md)). Database bodies were read from a clean local replay of migrations 001–141 plus the text of [142](../../../supabase/migrations/142_rwr_follow_ups.sql), which re-creates none of the functions named here. Every Production figure in this plan is the owner's, not measured ([what could not be verified](#what-could-not-be-verified)).
+**Status: APPROVED FOR IMPLEMENTATION (owner, in chat, 2026-11-27, verbatim « Approved as recommended. Start the single PR. », at plan head `15fad9951beec938f12650cd7bdb0524cedc2d53`; [approval record](#approval-record)). IMPLEMENTED on PR #227 on 2026-11-27 ([implementation record](#implementation-record)); not merged, not deployed.** The round is **one client-only PR, Tier 2, no migration**, plus three steps done by the owner or an operator, each with its own approval. Baseline: `origin/main` `a89bac3` (ledger 001–142 per [CURRENT_STATE](../../ai/CURRENT_STATE.md)). Database bodies were read from a clean local replay of migrations 001–141 plus the text of [142](../../../supabase/migrations/142_rwr_follow_ups.sql), which re-creates none of the functions named here. Every Production figure in this plan is the owner's, not measured ([what could not be verified](#what-could-not-be-verified)).
 
 | Revision | Date | Change |
 | --- | --- | --- |
@@ -222,7 +222,7 @@ No database change: the three tabs are three of the filter values the read alrea
 | « À prendre » | actions that nobody holds | assignee = unassigned |
 | « Toute l'équipe » | everything; a person picker narrows it | assignee = all, or one person |
 
-« À prendre » is defined by the **action** having no one, not by the prospect. Otherwise an owned prospect whose action is unassigned (a few exist: 126 actions against 122 prospects) would be in no tab at all. Tapping « Je m'en occupe » on such a row repairs it. Together the first two tabs are exactly today's « Moi + non attribué », split in two. The counter on « À prendre » is one more small read of the same function.
+« À prendre » is defined by the **action** having no one, not by the prospect. Otherwise an owned prospect whose action is unassigned (a few exist: 126 actions against 122 prospects) would be in no tab at all. Such a row names its responsable and reads « action sans responsable »; it carries no « Je m'en occupe », because a take never replaces an existing responsable (corrected at implementation: CPO-r2 first said the button would repair it). It is repaired from « ··· ». Together the first two tabs are exactly today's « Moi + non attribué », split in two. The counter on « À prendre » is one more small read of the same function.
 
 ## Opportunités: four tabs
 
@@ -512,6 +512,32 @@ Found while reading, for the owner:
 - **The cousin.** The code allows both ways (a third learner under the mother's contact, or his own prospect with his parents as contact). Nothing in the code says which is intended. The guide says: under the mother when she answers and pays for him, otherwise his own prospect. To confirm.
 - **A test taken on the spot.** The appointment only offers hours to come, and a result is refused before the test's start time. A walk-in who takes the test immediately is booked on the next slot and the result is entered after that hour. The guide says so. A « test now » path would be a change of rule, not display.
 - **Order of the two results.** After « Venu · reviendra » the next action is « En attente du prospect »; entering the test result then does not change it to « Proposer l'inscription ». The guide uses that order, which fits a family that comes back later. The other order is not covered by a test.
+
+# Implementation record
+
+**Implemented on 2026-11-27 on branch `feat/crm-prospect-ownership`, PR #227 (Tier 2, client only). Not merged, not deployed.** The branch starts from the approved plan head, so it carries the plan's commits; PR #226 (the plan alone) becomes redundant if #227 is merged.
+
+**What the PR contains:** everything in [The single PR](#the-single-pr) and the [ten display clean-ups](#ten-display-clean-ups-same-pr-display-only), the help guide (texts, three screenshots retaken, scenario C8, version 2.6), PRODUCT_RULES and WORKFLOWS.
+
+**What it does not contain:** any file under `supabase/`, any SQL script, any new RPC, grant, role or capability. The new code calls `crm_reassign`, `crm_get_work_queue` and `crm_list_staff`, all with values they accepted before. Checked on the final diff: 0 files under `supabase/`.
+
+**Differences from the plan text, and choices made while building:**
+
+1. **No take on an owned prospect.** An owned prospect whose action is unassigned sits in « À prendre » and reads « Responsable : X · action sans responsable », with no « Je m'en occupe »: the invariant « a take never replaces an existing responsable » wins over the sentence in « Tâches: three tabs », which is corrected above.
+2. **Where the four Opportunités tabs sit depends on the screen**, so the first results stay inside the RCC-B1 height limits (first card at most 300 px on a computer, 340 px on a tablet, 360 px on a phone) and no tab is clipped: under the title on a computer, in the filter row on a tablet (where the « Vue » select was), on a row of their own on a phone. Measured after the change: 240 px at 1440 and 1280, 296 px at 1024, 328 px at 768, 348 px at 390. To make room, the count line (« N prospects correspondants · N clôturés ») is shown on a tablet and from 1280 px only; on a phone « Tous n » shows the total, and « Clôturés » is a tab. Between 1024 and 1279 px the « Tableau / Liste » buttons show their icons only, and on a phone the search field's label is for screen readers only.
+3. **Tâches has no « Effacer les filtres »**: tabs are not filters. An empty tab says « … Choisissez une autre échéance ou un autre onglet. »
+4. **The Tâches row menu** has « Changer de responsable » as well as « Confier cette action à… », so workflow line 5 is true from that page too.
+5. **« À prendre » on a narrow list** opens on « Nouveau » and shows the four active stage chips; its count is the count of the stage shown. As a board, the « Inscription confirmée » column is not shown.
+6. **History titles.** « Je m'en occupe » writes the same history entry as any change of responsable. Its title read « Action enregistrée »; it now reads « Responsable modifié » (and « Prospect créé », « Fiche modifiée » for the two other commands that had no title).
+7. **A Tâches row's contact and learner** were on one line on a phone (an older defect of the touch layout); they are stacked again.
+8. **At 320 px** the three Tâches tabs and the panel's three buttons wrap onto a second line. At 390 px, the width asked for, each is on one line.
+9. **Shared code touched:** `SearchField` gets an opt-in label class; `useCrmCommand` gets two opt-in options (`onError`, `refreshOnConflict`) used only by « Je m'en occupe ».
+10. **One test harness change:** `test-crm-work-calendar-browser.mjs` no longer counts as a page error a read whose page navigated away before its body was read (the « À prendre » counter is a second read of the same function).
+11. **One WebKit keyboard step:** `test-ui-foundation-browser.mjs` presses Alt+Tab in WebKit after the phone search field. Safari's plain Tab skips buttons, and the next control is now the « Filtres » button instead of the removed « Vue » select.
+
+**Local results on the final code (private local stack, clean database, production build, 2026-11-27):** all 21 CRM and reception browser suites pass in Chromium and WebKit (Tâches, staff labels, UI foundation, Opportunités, phases 4–6, 11, RCC-A1, RCC-A2, RCC-B1, reception forms and day scripts, payment screens, people search, French labels, desk academics, mobile reception, batch 2, intake admin, receptionist); `npm test` (107 checks), `test:crm-intake`, `test:crm-lifecycle`, `test:crm-insights`, `test:navigation`, `test:crm-opportunities`, `test:crm-work-calendar`, `lint` and `build` pass; the database concurrency test passes, including the new case (two people take the same prospect at once: one owner, one refusal, one history line). GitHub Verify on the PR head is the reference.
+
+**Phone width:** every changed screen was checked at 390 px and 320 px (Opportunités board and list, the four tabs, the prospect panel, « Autres actions », the responsable picker, Tâches and its three tabs): no horizontal overflow, no page error. Not verified: a real phone, a real WhatsApp app opening the link, and the Production data on the preview.
 
 # Approval record
 
