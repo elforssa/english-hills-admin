@@ -1,6 +1,6 @@
 # Receptionist workflow — one next action, one identity, one rule per form
 
-**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); **PR A2 released on 2026-11-24** (PR #214, merge `0bb8f27`, migration 137 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a2--2026-11-24)): release A (A1, D1, A2) is complete and « exactly one next action » is enforced in the database; `d1_revert` is gone with 137. **PR C1 released on 2026-11-26** (PR #216, merge `a7f63c4`, migration 138 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-c1--2026-11-26)): desk payments. **PR B1 released on 2026-11-26** (PR #217, merge `15909d6`, migration 139 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-b1--2026-11-26)): people identity. **Hotfix PR #220** (merge `b730234`, 2026-11-26) repaired the director's « Annuler ce paiement » ([record](#release-record-hotfix-pr-220--2026-11-26)). **Data step D3 run on 2026-11-26** (applied 12:35:16–12:36:18 UTC, 229 changes; [D3 record](#release-record-data-step-d3--2026-11-26)); **data step D5 run on 2026-11-26** (2 pairs approved by the owner, applied 13:14:35–13:15:36 UTC; [D5 record](#release-record-data-step-d5--2026-11-26)). Next: B2 (with D6's functions, migration 140; no prices, OD-16 replaced), then C2 (with D7; implemented on its pull request as migration 141, [C2 implementation record](#implementation-record-pr-c2-m-c1-academic-part-migration-141)) and D4 ([gates](#owner-decisions-follow-ups-and-gates--2026-11-26)). Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
+**Status: COMPLETED (2026-11-27)** ([closing record](#closing-record--2026-11-27)). Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); **PR A2 released on 2026-11-24** (PR #214, merge `0bb8f27`, migration 137 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a2--2026-11-24)): release A (A1, D1, A2) is complete and « exactly one next action » is enforced in the database; `d1_revert` is gone with 137. **PR C1 released on 2026-11-26** (PR #216, merge `a7f63c4`, migration 138 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-c1--2026-11-26)): desk payments. **PR B1 released on 2026-11-26** (PR #217, merge `15909d6`, migration 139 applied first and Production verified with bounded acceptance; [release record](#release-record-pr-b1--2026-11-26)): people identity. **Hotfix PR #220** (merge `b730234`, 2026-11-26) repaired the director's « Annuler ce paiement » ([record](#release-record-hotfix-pr-220--2026-11-26)). **Data step D3 run on 2026-11-26** (applied 12:35:16–12:36:18 UTC, 229 changes; [D3 record](#release-record-data-step-d3--2026-11-26)); **data step D5 run on 2026-11-26** (2 pairs approved by the owner, applied 13:14:35–13:15:36 UTC; [D5 record](#release-record-data-step-d5--2026-11-26)). **PR B2 released on 2026-11-26** (PR #222, merge `51ff79c`, migration 140; [B2 record](#release-record-pr-b2--2026-11-26)); **data step D6 run on 2026-11-26** ([D6 record](#release-record-data-step-d6--2026-11-26)); **PR C2 released on 2026-11-27** (PR #223, merge `cac9949`, migration 141; [C2 record](#release-record-pr-c2--2026-11-27)); **data steps D7 and D4 run on 2026-11-27** ([D7 record](#release-record-data-step-d7--2026-11-27), [D4 record](#release-record-data-step-d4--2026-11-27)); **follow-ups PR released on 2026-11-27** (PR #224, merge `0556eb1`, migration 142; [follow-ups record](#release-record-follow-ups-pr-migration-142--2026-11-27)). Every PR and data step of the plan is done; open desk work and parked items are in the [closing record](#closing-record--2026-11-27). Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
 
 - **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q30.
 - **Decision record:** [ADR-019 (accepted)](../decisions/ADR-019-one-next-action-per-prospect.md).
@@ -2175,6 +2175,94 @@ The browser, concurrency and other upgrade shards are left to Verify (owner's lo
 **Not done or not verified here:** Production, merge and release are not authorized. The coalesce case is unreachable while `enrollments_confirmed_has_programme` is validated (see §1). The result card (item 4) is not reachable from any screen today, so its fix is proven by the static check only. **Observation, not changed:** the cohort's day boundaries follow the database's tzdata for Africa/Casablanca. On 2026-11-27, CI's image (17.6.1.165, tzdata 2025b) gives +01, while the local CLI 2.121 image (17.11.0.004, bundled tzdata) gives +00. The centre offset is +00. Production's tzdata was not read; check it before trusting a cohort's day edge.
 
 **Release notes for 142 (for the release approval; nothing here is authorized).** Migration 142 keeps its number and applies after 141 (142 touches no 141 object). The deployed build needs no change: no screen calls `crm_create_manual_lead`, deletes from a revoked table, or calls a catalogue function with the service key. Rollback: `142_rwr_follow_ups_restore.sql`, before any 140 restore (141's restore does not depend on it).
+
+### Batched record — 2026-11-27 (B2, D6, C2, D7, D4, follow-ups)
+
+One documentation record for every release and data step since the [2026-11-26 batched record](#owner-decisions-follow-ups-and-gates--2026-11-26), as the owner decided on 2026-11-26. Counts only: no customer name, id, phone digit or old free text. Backups, wrappers, probes and private exports are in the operator's release kits outside the repository.
+
+#### Release record: PR B2 — 2026-11-26
+
+- **Approval:** the owner's « Go » (16:31:13 UTC), inside reception hours as the owner chose. Approved head `184ef61`; independent verdict READY FOR FINAL REVIEW at that head.
+- **Pre-checks (read-only, 16:17 UTC):** ledger 001–139 and the whole-app fingerprint equal to the post-139 pin; the 7 bodies 140 re-creates matched; no 140 object existed; open actions 205, one-action exceptions 0.
+- **Backup:** 16:17–16:19 UTC, restored privately, every app table's count equal to Production.
+- **Apply:** guarded dry run `DRYRUN_OK` (89 tables) at 16:31:19 UTC; committed 16:31:32–34 UTC. Ledger 001–140, row 140 `b3b7d0c2…` (`catalogues`). Seeds: 10 programmes, 78 levels, 0 prices, 11 origins, 14 close reasons.
+- **Merge and deploy:** squash-merged as `51ff79c` (16:31:50 UTC, tree equal to `184ef61`); GitHub `Production` deployment `8090856652` success at 16:33:33 UTC. `sendReceiptEmail` redeployed from `51ff79c` with `--no-verify-jwt` (v20 ACTIVE, `verify_jwt` false; unauthenticated and wrong-secret calls answered by the function's own 401).
+- **Probes (rolled back):** `PROBE_OK`. The 37 results of the B1 probe unchanged; catalogue reads by role; price and programme writes director-only; « Mauvais numéro » closes as not qualified with no open action; D4 and D6 not executable by any API role. Section 16 (conversion) first stopped at its setup because `crm_qualify_lead` and `crm_start_enrollment` are not granted to `authenticated` on Production (the restored copy's grants had hidden this); re-run as the owner with the receptionist's claims, `PROBE_OK`: programme and learner origin written, 0 open actions. No receipt written, counter unchanged.
+- **Logs:** only the wrapper statements and the sentinels; edge logs clean.
+- **Not yet observed:** an e-mail for a real receipt after v20 (no receipt was taken during the release).
+
+#### Release record: data step D6 — 2026-11-26
+
+- **Owner decision (16:41 UTC):** EH-2026-00423 voided first by the director in the app; the online group « TEST R4 — ne pas utiliser » left out of D6 (D6 refuses online groups) and closed by hand by the owner; « approve D6 and go ».
+- **Plan (read-only, 16:43 UTC):** 3 learner files archived; 9 prospects and 9 contacts excluded from reports; 0 groups; 4 receipts already voided, 0 live; no blocker.
+- **Backup:** 16:43–16:45 UTC, after the void, restored privately and verified.
+- **Apply:** dry run `DRYRUN_OK` at 16:52:43 UTC. The first apply (16:54:03 UTC) was refused and rolled back by its own post-check, because an unrelated reception edit committed inside its window. The second apply committed at 16:55:13–16:56:14 UTC.
+- **Post-checks (16:57 UTC):** 3 files archived and their enrollments ended; 21 report exclusions; journal 333 (3 `d6`); receipts 361, counter unchanged; no prospect reopened; one-action exceptions 0. As the receptionist, the 3 files are absent from every search. `d6_revert()` stays available to the director.
+
+#### Release record: PR C2 — 2026-11-27
+
+- **Approval:** the owner, 2026-11-27: « Approved: verified backup, the read-only pre-check, migration 141, merge #223 and the app deploy. Then D7 Part 1 read-only only, and stop for my approval of the list. » Head `75e1f28`, Verify `45957617558` (attempt 2 green; attempt 1 failed only browser-security, a stalled run on a docs-only commit). Independent verdicts READY FOR FINAL REVIEW at `9d1845c` (full) and `75e1f28` (focused).
+- **Backup:** 08:22–08:24 UTC, restored privately, every app table's count equal to Production.
+- **Pre-check query 0 (read-only, counts only):** a) 2 future planned tests, 0 holding a level or score; b) 0 future tests with a result; c) 7 learner files whose category does not fit the programme's audience; d) 1 birth date less than a year ago, none in the future. None is changed by 141. The four queries ran as four statements about 6 seconds apart (the database API returns only the last result).
+- **Apply:** dry run `DRYRUN_OK` at 08:34:12 UTC; committed 08:34:34–38 UTC. Ledger 001–141, row 141 `575baeda…` (`desk_academics`); fingerprint equal to a clean local build.
+- **Merge and deploy:** squash-merged as `cac9949` (08:35:11 UTC, tree equal to `75e1f28`); Vercel deployment `8105374510` success at 08:36:49 UTC. No edge function changed.
+- **Probes (rolled back):** phone search with the 00, 212 and 00212 prefixes in both search paths; a planned test that kept « A1 » cancelled with a reason required and a new level refused before its start; an adult category on « Yearly » refused; one open next action for each of 216 active prospects; nothing left behind (receipts 361, voided 18, counter unchanged). To create the old « A1 » test, the probe switched the test-rules trigger off for about a second inside its transaction; it is back on.
+- **Browser (director session, read-only):** tests, the people search, calendar, attendance, groups, the learners list (one Tableau/Cartes view) and the guide, with no console errors. The import template's `niveau_cefr` and `age_category` columns are read in the preview; nothing imported.
+- **Reviewer note kept as a known gap:** the category check lets any category through when the stored level is not one of the programme's levels; saved levels are validated, so only an already-invalid level is affected.
+
+#### Release record: data step D7 — 2026-11-27
+
+- **Plan (read-only, 08:39 UTC):** parsed 8, unparseable 0, empty 0; the online test group excluded.
+- **Owner approval, verbatim:** « approve D7 ».
+- **Apply:** no Production write after the 08:22 UTC backup, so it stayed current. Rehearsed on a fresh restore, `d7_revert()` included. Dry run `DRYRUN_OK` at 08:43:57 UTC; applied 08:44:03–08 UTC as the director.
+- **Post-checks:** 8 in-person groups have `class_days` equal to the approved list (Tuesday 3, Wednesday 3, Friday 2); journal 341 (8 `d7`); no other table changed; one-action exceptions 0. Attendance on a Friday offers only the two Friday groups (plus the online group, which has no class days). `d7_revert()` is not callable by any app role and must run before any 141 rollback.
+
+#### Release record: data step D4 — 2026-11-27
+
+- **Plan (read-only):** Q25 run on Production; the distinct old values exported to a private file in the release kit only. The mapping was proposed from the live catalogue and `d4_plan` was run inside a rolled-back read-only transaction: 440 changes, mapping hash `64770f70997592c7e5a885097de1117a`.
+- **Owner decisions:** the « annuel » answers go to « Programme annuel »; « Formation entreprise » stays unmapped (no company programme in the catalogue).
+- **Owner approval, verbatim:** « approve D4 — counts as shown (440 changes; programme: Adultes 309, Programme annuel 11, Stage d'été 1, 9 unmapped; origin: Appel entrant 11, Autre 6, Passage devant le centre 5, Recommandation 2, 0 unmapped; without mapping: 3 converted prospects, 92 learner files), mapping hash 64770f70997592c7e5a885097de1117a. »
+- **Apply:** a fresh backup after D7's writes (08:52–08:55 UTC), restored privately and verified. `d4_plan` was re-run and matched the approved plan and hash. Rehearsed with `d4_revert()`. Dry run `DRYRUN_OK changed=440` at 08:58:02–05 UTC; applied at 08:58:12–14 UTC as the director. The 142 release was confirmed not running before and during.
+- **Post-checks (08:58:38 UTC):** programme on 321 prospects plus 3 converted prospects; origin on 24 prospects and 92 learner files; 9 prospect rows left unmapped by owner decision; journal 781 (440 `d4`); `activity_log` gained only the expected 92 rows; no other table changed; one-action exceptions 0; `d4_plan`, `d4_apply` and `d4_revert` not executable by any app role.
+
+#### Release record: follow-ups PR (migration 142) — 2026-11-27
+
+- **Rebase:** #224 conflicted with C2 in 13 files. After C2 merged, it was rebased onto `cac9949` with C2's version kept as the base; 142 kept its number. C2's `test-desk-academics-141-upgrade.mjs` now calls the local-stack guard, and the guard accepts a database-only stack under the session's own project id and ports (still refusing the shared stack and the default ports).
+- **Review:** READY FOR FINAL REVIEW at `2839c1a` (full) and at `4d7a017` (focused, after the rebase). Verify `45987253404` green on attempt 1.
+- **Approval:** the owner, 2026-11-27: « Approved: fresh verified backup, migration 142, merge #224 and the app deploy. »
+- **Backup:** 11:54–12:00 UTC, restored privately. Five app tables differed by one reception write at 11:59:30 UTC, made after the dump's snapshot.
+- **Apply:** rehearsed on a clean 001–141 chain (fingerprint equal to Production) and on the backup. Dry run `DRYRUN_OK` (95 tables) at 12:10:11 UTC; committed 12:10:25–37 UTC. Ledger 001–142, row 142 `d368b9f7…` (`rwr_follow_ups`), no data row written.
+- **Merge and deploy:** squash-merged as `0556eb1` (12:11:17 UTC, tree equal to `4d7a017`); deployment `8109453819` success at 12:12:52 UTC. No edge function changed.
+- **Probes (rolled back), all passed:**
+  - `anon` and `authenticated` lost DELETE and TRUNCATE on the 26 relations, except `authenticated` DELETE on the 10 keep-list tables;
+  - the privileged delete paths still work;
+  - the catalogue functions run for `authenticated` only, and `crm_create_manual_lead` runs for no app role;
+  - « Aujourd'hui » answers with a legacy « 10h » test time;
+  - one-action exceptions 0 among 218 active prospects; nothing left behind, counter unchanged.
+  - `service_role` keeps DELETE and TRUNCATE, by design: 142 and its plan leave it unchanged. It is the server-only key.
+- **Browser (director, read-only):** « Aujourd'hui », a prospect panel showing the D4 programme and origin, and the void form opened and left without voiding. No console errors.
+- **Recovery:** `142_rwr_follow_ups_restore.sql`, then remove ledger row 142, before any 141 or 140 restore.
+
+### Closing record — 2026-11-27
+
+**Status: COMPLETED.** Every PR (A1, A2, C1, B1, #220, B2, C2, follow-ups) and every data step (D1, D3, D4, D5, D6, D7) is released and verified on Production. Ledger 001–142; deployed source `0556eb1`. The plan stays here as the design and release record.
+
+**Owner decision — time zone (2026-11-27, parked):** Production's time-zone data puts Africa/Casablanca at UTC+1, while the centre clock is fixed at UTC+0 (H7, ADR-014). Reception's lists, tasks and calendar use the fixed offset and are not affected. Only the marketing cohort (and the Meta report day, when the account's zone is Africa/Casablanca) counts a prospect arriving between 23:00 and 24:00 UTC on the next day. A read-only count found 0 of the 43 « Rattrapage EGC » enrollments (cleanup of 2026-10-26) dated a day late. Parked as a known item; a later fix would make the cohort use the centre's fixed offset.
+
+**Known gaps (not scheduled):**
+- the race between two simultaneous creates with the same request key (the phase 3 script was removed);
+- the action result card's single-date view is covered by a static check only;
+- the category check accepts any category for an already-invalid stored level;
+- an e-mail for a real receipt after `sendReceiptEmail` v20 is not yet observed.
+
+**Desk work (owner, counts only):**
+- 11 unreadable phones left by D3;
+- the 3 follow-ups after D5, including the third pair, which waits for its enrollment to end;
+- the online group « TEST R4 » to close by hand;
+- 7 learner files whose category does not fit the programme, and 1 birth date less than a year ago (C2 pre-check);
+- 9 prospects with no programme (D4);
+- programme prices in the catalogue (OD-16 replaced);
+- the CSV export label and column changes, to pass on to whoever uses the exports.
 
 ## IMPLEMENTATION CONTRACT
 

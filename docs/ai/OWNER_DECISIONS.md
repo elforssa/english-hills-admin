@@ -770,8 +770,23 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
   - `crm_get_today` on malformed legacy times;
   - revoke `crm_create_manual_lead` (deviation 3);
   - desk work: the 11 unreadable phones left by D3 and the 3 desk follow-ups after D5 (counts only).
-- **Follow-ups PR — APPROVED (Maroine, 2026-11-26), IMPLEMENTED ON A PULL REQUEST (migration 142; not applied, not merged).** One Tier 3 PR from fresh `origin/main`, migration 142 (C2 holds 141; renumber at merge), with the standing checklist. It covers the first ten follow-ups above, plus two B2 items: the conversion programme fallback and the catalogue `service_role` revoke. The approval verbatim and the decision for each table are in the plan's [follow-ups record](../architecture/plans/receptionist-workflow.md#implementation-record-follow-ups-pr-migration-142). **Not authorized:** Production, merge, release. The desk work stays with the desk.
-- **Status:** A1, D1, A2, C1, B1, D3 and D5 done. **Next:** B2 (with D6's functions, migration 140), then C2 (with D7) and D4. Each needs the owner's separate approval. The plan stays ACTIVE.
+- **Follow-ups PR — APPROVED (Maroine, 2026-11-26), IMPLEMENTED ON A PULL REQUEST; RELEASED 2026-11-27 (PR #224, merge `0556eb1`, migration 142; see below).** One Tier 3 PR from fresh `origin/main`, migration 142 (after C2's 141; C2 merged first, so 142 kept its number), with the standing checklist. It covers the first ten follow-ups above, plus two B2 items: the conversion programme fallback and the catalogue `service_role` revoke. The approval verbatim and the decision for each table are in the plan's [follow-ups record](../architecture/plans/receptionist-workflow.md#implementation-record-follow-ups-pr-migration-142). **Not authorized:** Production, merge, release. The desk work stays with the desk.
+- **B2 release (2026-11-26):** « Go » (16:31 UTC). Released as PR #222, merge `51ff79c`, migration 140 ([B2 record](../architecture/plans/receptionist-workflow.md#release-record-pr-b2--2026-11-26)).
+- **D6 (2026-11-26):** EH-2026-00423 voided first by the director; the online group « TEST R4 » left out of D6 and closed by hand by the owner; « approve D6 and go ». 3 test learner files archived ([D6 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d6--2026-11-26)).
+- **C2 release (2026-11-27), verbatim:**
+
+    > Approved: verified backup, the read-only pre-check, migration 141, merge #223 and the app deploy. Then D7 Part 1 read-only only, and stop for my approval of the list.
+
+  Released as PR #223, merge `cac9949`, migration 141 ([C2 record](../architecture/plans/receptionist-workflow.md#release-record-pr-c2--2026-11-27)).
+- **D7 (2026-11-27), verbatim:** « approve D7 ». 8 groups received their class days ([D7 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d7--2026-11-27)).
+- **D4 (2026-11-27):** « annuel » answers go to « Programme annuel »; « Formation entreprise » stays unmapped. Approved verbatim with the counts (440 changes) and mapping hash `64770f70997592c7e5a885097de1117a` ([D4 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d4--2026-11-27)).
+- **Follow-ups release (2026-11-27), verbatim:**
+
+    > Approved: fresh verified backup, migration 142, merge #224 and the app deploy.
+
+  Released as PR #224, merge `0556eb1`, migration 142 ([follow-ups record](../architecture/plans/receptionist-workflow.md#release-record-follow-ups-pr-migration-142--2026-11-27)). `service_role` keeps its table privileges by design (server-only key).
+- **Time zone — PARKED (2026-11-27):** Production's time-zone data puts Africa/Casablanca at UTC+1 while the centre clock is fixed at UTC+0. Only the marketing cohort and the Meta report day can move a prospect arriving between 23:00 and 24:00 UTC to the next day; reception's lists, tasks and calendar are not affected. Recorded as a known item; a later fix is optional ([closing record](../architecture/plans/receptionist-workflow.md#closing-record--2026-11-27)).
+- **Status: the receptionist workflow plan (RWR-r5) is COMPLETED (2026-11-27).** Every PR and data step is released and verified; ledger 001–142. Desk work stays with the desk ([closing record](../architecture/plans/receptionist-workflow.md#closing-record--2026-11-27)).
 
 ## Deferred backlog after RCC-r1
 
