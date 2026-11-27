@@ -36,7 +36,7 @@ let page,phase;
 const dialog=()=>page.getByRole('dialog').last();
 async function open(id){await page.waitForLoadState('networkidle');await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
 async function closeDrawer(){await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.getByRole('dialog').waitFor({state:'hidden'});await page.waitForLoadState('networkidle');}
-async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));await page.getByRole('heading',{name:'Pipeline admissions',exact:true}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();await page.waitForLoadState('networkidle');}
+async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));await page.getByRole('heading',{name:'Opportunités',exact:true}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();await page.waitForLoadState('networkidle');}
 try {
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean local synthetic baseline');
  for(const role of ['director','receptionist','receptionist']) {
@@ -107,17 +107,22 @@ end $fixture$;commit;
   await ctx.route(url=>!['localhost','127.0.0.1'].includes(url.hostname),route=>{external.push(new URL(route.request().url()).hostname);return route.abort();});
   page=await ctx.newPage();page.setDefaultTimeout(60000);const fetches=cancelledFetches(page);page.on('pageerror',e=>{if(fetches.take(e,`${phase}: ${e.message}`))return;errors.push(e.message);console.error('BROWSER_ERROR',phase,e.message);});
   page.on('request',r=>{if(r.url().includes('/rest/v1/'))requests.push({path:new URL(r.url()).pathname,url:r.url(),args:r.postDataJSON()});});
-  const payloadReads=new Set();
+  const payloadReads=new Set();let closing=false;
   page.on('response',r=>{
    const target=r.url().endsWith('/rpc/crm_get_admissions_calendar')?eventPayloads:r.url().endsWith('/rpc/crm_get_work_queue')?workPayloads:null;
    if(!r.ok()||!target)return;
    const pending=r.json().then(payload=>target.push(payload));payloadReads.add(pending);
-   pending.then(()=>payloadReads.delete(pending),error=>{errors.push(error.message);payloadReads.delete(pending);});
+   // A read still in flight when the page navigates has no body to inspect (the « À prendre » counter is a
+   // second work-queue read, so one is often in flight): that is not a page error. Nor is a body the test itself
+   // abandons by closing this engine's browser (`closing`, set only right before that close). Any other failure is.
+   pending.then(()=>payloadReads.delete(pending),error=>{if(!closing&&!/navigated away|No resource with given identifier/.test(error.message))errors.push(error.message);payloadReads.delete(pending);});
   });
   await page.clock.install();await login(users[1]);phase=engine.name()+' Tasks';await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
-  for(const label of ['Responsable de la tâche','Responsable du prospect']) {
-   for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel(label).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
-  }
+  // CPO-r2: one person picker, under « Toute l'équipe » only.
+  assert.equal(await page.getByLabel('Personne',{exact:true}).count(),0,'no person picker under « Mes prospects »');
+  await page.getByRole('button',{name:/^Toute l’équipe/}).click();
+  for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel('Personne',{exact:true}).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
+  for(const gone of ['Responsable de la tâche','Responsable du prospect'])assert.equal(await page.getByLabel(gone).count(),0,gone+' filter removed');
   await page.goto(app+'/crm/leads');await page.getByRole('button',{name:/^Filtres/}).click();await page.getByLabel('Responsable',{exact:true}).waitFor();
   for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel('Responsable',{exact:true}).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
   // Same center visit in Calendar, Tasks and drawer; browser ICU is wrong.
@@ -133,29 +138,59 @@ end $fixture$;commit;
   await dialog().getByTestId('next-action-label').filter({hasText:expected}).waitFor();await closeDrawer();
   console.log('PASS identical server Casablanca display under deliberately divergent browser tzdata; shared distinguishable staff labels');
   await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
-  // RWR-r5 invariant 10 / §4.6: the default view is « Moi + non attribué ».
-  assert.equal(await page.getByLabel('Responsable de la tâche').inputValue(),'me_or_unassigned');assert.equal(await page.getByTestId('work-row').count(),25,'bounded page, one row per prospect');
+  // CPO-r2 (Q1): Tâches opens on « Mes prospects »; what nobody holds is one tab away, with its counter.
+  assert.equal(await page.getByRole('button',{name:/^Mes prospects/}).getAttribute('aria-pressed'),'true');assert.deepEqual(await page.getByRole('navigation',{name:'Périmètre des tâches'}).getByRole('button').evaluateAll(ns=>ns.map(n=>n.textContent.replace(/[0-9—]+$/,''))),['Mes prospects','À prendre','Toute l’équipe']);assert.equal(await page.getByTestId('work-row').count(),25,'bounded page, one row per prospect');
   const first=await page.getByTestId('work-row').first().getAttribute('data-task-id');
   await page.getByRole('button',{name:'Suivant',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,first);
   const second=await page.getByTestId('work-row').evaluateAll(ns=>ns.map(n=>n.dataset.taskId));assert(!second.includes(first));
   await page.getByRole('button',{name:'Précédent',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,first);
   for(const label of ['Premier contact','Appel de suivi','Rappel','À faire par nous (WhatsApp)','Confirmer le test de niveau','Proposer l’inscription','Rendez-vous au centre','Finaliser l’inscription'])assert(await page.getByTestId('work-row').filter({hasText:label}).count()>0,label);
-  await page.getByLabel('Responsable du prospect').selectOption('me');await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();
-  await page.getByLabel('Responsable du prospect').selectOption(users[0].id);await page.getByTestId('work-row').first().waitFor();
-  await page.getByLabel('Responsable de la tâche').selectOption('unassigned');await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
-  await page.getByLabel('Responsable de la tâche').selectOption('me');await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===25);
+  // « À prendre »: the one action nobody holds. Its prospect has a responsable, so no take is offered:
+  // a take never replaces an existing responsable. (Both engines start from the same fixture state.)
+  sql(`update public.crm_tasks set assigned_to=null where lead_id='${unassignedLead}' and status='open';update public.crm_leads set owner_id='${users[0].id}',version=version+1 where id='${unassignedLead}';`);
+  // The change above was made behind the screen: reload so the counter's own read is fresh too (it may still hold its value).
+  await page.getByRole('button',{name:/^À prendre/}).click();await page.reload();await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
+  await page.getByTestId('work-to-take-count').filter({hasText:/^1$/}).waitFor();
+  const toTake=page.locator(`[data-testid=work-row][data-lead-id="${unassignedLead}"]`);
+  await toTake.getByTestId('work-row-responsable').filter({hasText:'Responsable : '+labels[0]+' · action sans responsable'}).waitFor();
+  assert.equal(await toTake.getByTestId('take-prospect').count(),0,'no take on a prospect that has a responsable');
+  // Nobody has it, and a colleague takes it first (the same command, from her own session): this screen is now out of
+  // date. « Je m'en occupe » here is refused (PT409), never retried, writes nothing, and the list refreshes.
+  sql(`update public.crm_leads set owner_id=null,version=version+1 where id='${unassignedLead}'`);await page.reload();await toTake.getByTestId('work-row-responsable').filter({hasText:/^À prendre/}).waitFor();
+  const colleague=users[2].id,takes=()=>sql(`select count(*) from public.crm_activities where lead_id='${unassignedLead}' and event_type='lead_reassigned'`);
+  const takesBefore=Number(takes());
+  rpc('reassign',{lead_id:unassignedLead,expected_version:detail(unassignedLead).version,owner_id:colleague},colleague);
+  await toTake.getByTestId('take-prospect').click();await page.getByText('Déjà pris ou modifié. La liste est à jour.',{exact:true}).waitFor();
+  assert.equal(sql(`select l.owner_id||':'||t.assigned_to from public.crm_leads l join public.crm_tasks t on t.lead_id=l.id and t.status='open' where l.id='${unassignedLead}'`),colleague+':'+colleague,'the colleague keeps the prospect and its action');
+  assert.equal(Number(takes()),takesBefore+1,'one change of responsable recorded, the colleague’s');
+  // The refreshed list no longer offers it; under « Toute l'équipe » the row carries the colleague's name and no take.
+  await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:/^Toute l’équipe/}).click();await page.getByLabel('Personne',{exact:true}).selectOption(colleague);const taken=page.locator(`[data-testid=work-row][data-lead-id="${unassignedLead}"]`);
+  await taken.getByTestId('work-row-responsable').filter({hasText:'Responsable : '+labels[2]}).waitFor();assert.equal(await taken.getByTestId('take-prospect').count(),0);
+  // Nobody has it again: one tap takes it.
+  sql(`update public.crm_tasks set assigned_to=null where lead_id='${unassignedLead}' and status='open';update public.crm_leads set owner_id=null,version=version+1 where id='${unassignedLead}';`);
+  await page.getByRole('button',{name:/^À prendre/}).click();await page.reload();await toTake.getByTestId('take-prospect').waitFor();
+  await toTake.getByTestId('take-prospect').click();await page.getByText('Ce prospect est le vôtre',{exact:true}).waitFor();
+  assert.equal(sql(`select l.owner_id||':'||t.assigned_to||':'||(select count(*) from public.crm_tasks x where x.lead_id=l.id and x.status='open') from public.crm_leads l join public.crm_tasks t on t.lead_id=l.id and t.status='open' where l.id='${unassignedLead}'`),actor+':'+actor+':1','the taker is responsable, holds the action, and there is still one action');
+  await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.',{exact:true}).waitFor();
+  await page.getByTestId('work-to-take-count').filter({hasText:/^0$/}).waitFor();
+  await page.getByRole('button',{name:/^Mes prospects/}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===25);
+  assert.equal(await page.getByTestId('work-row-responsable').filter({hasText:'Responsable : '}).count(),25,'rows owned by a colleague name that colleague');
   // Independent cursors: leaving and returning to a bucket preserves its page.
   await page.getByRole('button',{name:'Suivant',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,first);
   const remembered=await page.getByTestId('work-row').first().getAttribute('data-task-id');
-  await page.getByRole('button',{name:/^Demain/}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
+  // « Demain » under « Mes prospects » holds the visit and, when tomorrow is an open day, the booked test: the rows are what the counter says.
+  await page.getByRole('button',{name:/^Demain/}).click();await page.locator(`[data-testid=work-row][data-task-id="${visit}"]`).waitFor();assert.equal(String(await page.getByTestId('work-row').count()),await page.getByTestId('work-count-tomorrow').textContent());
   await page.getByRole('button',{name:/^En retard/}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,remembered);
-  await page.getByRole('link',{name:/À traiter/}).click();await page.waitForURL(url=>url.searchParams.get('view')==='attention');
+  // CPO-r2 (Q4): the « À traiter » link is gone; an old link to that removed view opens « Tous ».
+  assert.equal(await page.getByRole('link',{name:/À traiter/}).count(),0);
+  await page.goto(app+'/crm/leads?view=attention&layout=list');assert.equal(await page.getByRole('navigation',{name:'Vues des opportunités'}).getByRole('button',{name:'Tous',exact:true}).getAttribute('aria-pressed'),'true');
   // The 40 overdue queue prospects fill the first page; the search narrows to the taskless one.
   await page.getByRole('searchbox',{name:'Rechercher un prospect'}).fill('Sans prochaine action');await page.getByTestId('opportunity-row').filter({hasText:'Sans prochaine action'}).first().waitFor();
   await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
   // Exact chosen task, including stale rejection and explicit renewed confirmation.
   const reassigned=engine===chromium?taskIds[1]:taskIds[2];
-  const row=page.locator(`[data-task-id="${reassigned}"]`);await row.getByRole('button',{name:/^Plus d’options/}).click();await page.getByRole('menuitem',{name:'Réattribuer l’action',exact:true}).click();await dialog().getByLabel('Responsable de l’action').waitFor();
+  const row=page.locator(`[data-task-id="${reassigned}"]`);await row.getByRole('button',{name:/^Plus d’options/}).click();await page.getByRole('menuitem',{name:'Confier cette action à…',exact:true}).click();await dialog().getByLabel('Responsable de l’action').waitFor();
   sql(`update public.crm_tasks set version=version+1 where id='${reassigned}'`);
   await dialog().getByLabel('Responsable de l’action').selectOption(users[0].id);await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByRole('alert').waitFor();
   assert.equal(sql(`select assigned_to from crm_tasks where id='${reassigned}'`),actor,'stale intent denied');
@@ -202,14 +237,14 @@ end $fixture$;commit;
   await page.getByRole('alert').filter({hasText:'Impossible de charger ces informations.'}).waitFor();
   await page.unroute(readUrl);
   await page.getByRole('alert').getByRole('button',{name:'Réessayer',exact:true}).click();
-  await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();
+  await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.',{exact:true}).waitFor();
   // Real query interval; the server still owns all scheduling and bucket logic.
   await page.goto(app+'/crm/today?bucket=overdue');await page.waitForLoadState('networkidle');
   const minuteRead=page.waitForResponse(r=>r.url().endsWith('/rpc/crm_get_work_queue')&&r.ok());
   await page.clock.fastForward(61000);await minuteRead;
   const focusRead=page.waitForResponse(r=>r.url().endsWith('/rpc/crm_get_work_queue')&&r.ok());
   await page.clock.fastForward(16000);await page.evaluate(()=>window.dispatchEvent(new Event('visibilitychange')));await focusRead;
-  await page.waitForLoadState('networkidle');await Promise.allSettled([...payloadReads]);assert.deepEqual(errors,[]);assert.deepEqual(fetches.uncancelled(),[],'every WebKit fetch error is a cancelled request');await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} task types/pages/AND filters/exact-task stale guards/Calendar/legacy/Back/responsive/reduced motion`);
+  await page.waitForLoadState('networkidle');await Promise.allSettled([...payloadReads]);assert.deepEqual(errors,[]);assert.deepEqual(fetches.uncancelled(),[],'every WebKit fetch error is a cancelled request');closing=true;await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} task types/pages/AND filters/exact-task stale guards/Calendar/legacy/Back/responsive/reduced motion`);
  }
  assert.deepEqual(external,[],'no external browser/provider requests');
  assert(!requests.some(r=>r.path.endsWith('/rpc/crm_get_lead_detail')||r.path.endsWith('/rpc/crm_get_submission_attribution')));

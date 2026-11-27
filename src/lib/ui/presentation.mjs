@@ -30,6 +30,53 @@ export function answerValue(answer) {
   const label = item => typeof item === 'boolean' ? item ? 'Oui' : 'Non' : String(item ?? '—');
   return Array.isArray(value) ? value.map(label).join(' · ') : label(value);
 }
+// Display clean-ups (CPO-r2). A form answer whose label was never configured carries the
+// provider's field name (« program interest », « deplacement centre »): it gets a French
+// label here. A label configured in the form mapping is shown as it is.
+const plain = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const ANSWER_LABELS = {
+  programinterest: 'Programme souhaité', programmeinterest: 'Programme souhaité', program: 'Programme souhaité', programme: 'Programme souhaité',
+  programmesouhaite: 'Programme souhaité', interet: 'Programme souhaité', cours: 'Programme souhaité', formation: 'Programme souhaité',
+  deplacementcentre: 'Peut se déplacer au centre', deplacementaucentre: 'Peut se déplacer au centre',
+  currentlevel: 'Niveau actuel', niveauactuel: 'Niveau actuel', level: 'Niveau actuel', niveau: 'Niveau actuel',
+  age: 'Âge', childage: 'Âge de l’enfant', ageenfant: 'Âge de l’enfant', learnerage: 'Âge de l’apprenant',
+  childname: 'Nom de l’enfant', nomenfant: 'Nom de l’enfant', learnername: 'Nom de l’apprenant',
+  fullname: 'Nom complet', firstname: 'Prénom', lastname: 'Nom', phonenumber: 'Téléphone', phone: 'Téléphone', whatsapp: 'WhatsApp', email: 'E-mail',
+  city: 'Ville', ville: 'Ville', quartier: 'Quartier', objectif: 'Objectif', objective: 'Objectif', goal: 'Objectif',
+  preferredtime: 'Horaire souhaité', horaire: 'Horaire souhaité', disponibilite: 'Disponibilité', availability: 'Disponibilité',
+  message: 'Message', comment: 'Message', commentaire: 'Message'
+};
+const PROGRAMME_ANSWERS = ['programinterest', 'programmeinterest', 'program', 'programme', 'programmesouhaite', 'interet', 'cours', 'formation'];
+export function answerLabel(answer) {
+  const key = String(answer?.key ?? ''), label = String(answer?.label ?? '').trim();
+  // The intake stores the field name with « _ » and « - » turned into spaces when no label is configured.
+  if (label && plain(label) !== plain(key)) return label;
+  const text = (label || key).replace(/[_-]+/g, ' ').trim();
+  return ANSWER_LABELS[plain(key || label)] || (text ? text.charAt(0).toUpperCase() + text.slice(1) : 'Réponse');
+}
+export function isProgrammeAnswer(answer) {
+  return PROGRAMME_ANSWERS.includes(plain(answer?.key || answer?.label));
+}
+// When the prospect has no programme of its own but a form answer names one, that answer
+// is what the panel shows (the most recent submission that has one).
+export function answerProgramme(submissions) {
+  for (const submission of [...(Array.isArray(submissions) ? submissions : [])].reverse()) {
+    const answer = (submission?.answers || []).find(a => isProgrammeAnswer(a) && answerValue(a).trim() && answerValue(a) !== '—');
+    if (answer) return answerValue(answer);
+  }
+  return null;
+}
+// « Meta • Anglais enfants » repeats the programme shown beside it: the origin is then
+// « Meta ». A source whose second part is something else (a form name) is kept whole.
+export function sourceWithoutProgramme(label, ...programmes) {
+  const text = String(label ?? ''), at = text.indexOf(' • ');
+  if (at < 0) return text;
+  const tail = plain(text.slice(at + 3));
+  return programmes.some(value => value && plain(value) === tail) ? text.slice(0, at) : text;
+}
+export function sameText(a, b) {
+  return plain(a) === plain(b);
+}
 // Pick labelled answers in one submission only; never infer identity or combine submissions.
 export function inquirySummary(submission) {
   const answers = submission?.answers || [];

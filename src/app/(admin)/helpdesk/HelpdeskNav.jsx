@@ -15,6 +15,7 @@ export const TOC = [
   { id: 'c5', label: 'C5 · Changer la prochaine action', sub: true },
   { id: 'c6', label: 'C6 · Inscrire un prospect', sub: true },
   { id: 'c7', label: 'C7 · Clôturer ou rouvrir', sub: true },
+  { id: 'c8', label: 'C8 · Une famille, du test à l’inscription', sub: true },
   { group: 'Partie 2 · Au quotidien' },
   { id: 'q1', label: 'Q1 · Retrouver un apprenant', sub: true },
   { id: 'q2', label: 'Q2 · Créer ou compléter un dossier', sub: true },

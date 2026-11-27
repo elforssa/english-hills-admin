@@ -16,9 +16,9 @@ import { useCrmCommand } from './useCrmCommand';
 export const control = 'operational-control font-normal';
 const KIND_HELP = {
   center_visit: 'Date et heure convenues avec le contact, dans les horaires d’ouverture.',
-  callback: 'Heure exacte convenue avec le contact, dans les horaires d’appel. Elle ne sera jamais déplacée.',
-  our_step: 'Envoyer le prix, confirmer un groupe… L’heure est choisie par le calendrier de suivi.',
-  reminder: 'Rappel pour l’équipe : aucune heure n’a été promise au contact.',
+  callback: 'Le contact attend votre appel à cette heure, dans les horaires d’appel. Elle ne sera jamais déplacée.',
+  our_step: 'C’est à nous d’agir : envoyer le prix, confirmer un groupe… Le contact n’attend pas d’appel. L’heure est choisie par le calendrier de suivi.',
+  reminder: 'Un rappel pour vous : aucune heure n’a été promise au contact.',
   awaiting: 'Le contact doit revenir vers nous. Relance par défaut dans 5 jours.',
   enrol: 'Prochaine action : « Finaliser l’inscription », demain.'
 };

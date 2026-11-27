@@ -11,7 +11,10 @@ import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 // the same `intent` resends the first payload with its key, never a payload rebuilt
 // from the screen. A definitive refusal (stale version, validation, access) or a
 // success ends the submission: the next call is a new one with a new key.
-export function useCrmCommand() {
+// Options (CPO-r2, « Je m'en occupe »): `onError` receives the refusal as it happens, so a
+// caller that disappears with the refreshed list can still tell the user; `refreshOnConflict`
+// reloads the lists after a stale-version refusal, since the screen is then known to be old.
+export function useCrmCommand({ refreshOnConflict = false, onError } = {}) {
   const request = useRef(null), locked = useRef(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState(null);
   const refresh = useCrmRefresh();
@@ -33,6 +36,9 @@ export function useCrmCommand() {
       // gateway body) keeps the request so the retry resends the same key and payload.
       if (isRecordConflict(err) || ['22023', '42501', '23514'].includes(err?.code)) request.current = null;
       setError(err);
+      // Refresh first: the message then says « La liste est à jour » about a list that is.
+      if (refreshOnConflict && isRecordConflict(err)) await refresh();
+      onError?.(err);
       return null;
     } finally {
       locked.current = false;

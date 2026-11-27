@@ -78,3 +78,27 @@ const sqlstate = r => (r.stderr.match(/ERROR:\s+([0-9A-Z]{5}):/) || [])[1];
   assert.match(results.find(r => r.status !== 0).stderr, /overlaps/);
   console.log('PASS overlapping appointments for one student: one wins under the student lock');
 }
+
+// 6. CPO-r2 « Je m'en occupe »: two people take the same unowned prospect at the same moment.
+//    The take is crm_reassign with the version on screen and the caller as owner: one wins, the
+//    other is refused with PT409, and the prospect has one owner, one action and one history line.
+{
+  const lead = createLead(staff.receptionist, 'Race take');
+  sql(`update public.crm_tasks set assigned_to=null where lead_id=${q(lead)} and status='open';update public.crm_leads set owner_id=null,version=version+1 where id=${q(lead)};`);
+  const before = state(lead);
+  const take = who => sqlAsync(`\\set VERBOSITY verbose
+begin;${SET}${actor(who)}select public.crm_reassign(${q(crypto.randomUUID())},${q(JSON.stringify({ lead_id: lead, expected_version: before.version, owner_id: who }))}::jsonb);select pg_sleep(0.4);commit;`);
+  const results = await Promise.all([take(staff.receptionist), take(staff.director)]);
+  assert.equal(results.filter(r => r.status === 0).length, 1, results.map(r => r.stderr).join('\n'));
+  assert.equal(sqlstate(results.find(r => r.status !== 0)), 'PT409');
+  const winner = results[0].status === 0 ? staff.receptionist : staff.director;
+  const after = JSON.parse(sql(`select jsonb_build_object('owner',l.owner_id,'holder',(select assigned_to from public.crm_tasks t where t.lead_id=l.id and t.status='open'),
+   'open',(select count(*) from public.crm_tasks t where t.lead_id=l.id and t.status='open'),
+   'changes',(select count(*) from public.crm_activities a where a.lead_id=l.id and a.event_type='lead_reassigned'),'version',l.version) from public.crm_leads l where id=${q(lead)}`));
+  assert.deepEqual([after.owner, after.holder, after.open, after.changes, after.version], [winner, winner, 1, 1, before.version + 1]);
+  // A screen that still shows the old version can never take it from the winner.
+  const late = await take(winner === staff.director ? staff.receptionist : staff.director);
+  assert.equal(sqlstate(late), 'PT409', late.stderr);
+  assert.equal(sql(`select owner_id from public.crm_leads where id=${q(lead)}`), winner);
+  console.log('PASS two simultaneous takes: one owner, one PT409, one action, one history line; a stale screen cannot take over');
+}

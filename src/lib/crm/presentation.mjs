@@ -2,6 +2,7 @@ import { centreDateTimeInput, centreFormatter, centreInstant, CENTRE_UTC_OFFSET_
 import { isRecordConflict } from '../conflictErrors.mjs';
 import { PEOPLE_MESSAGES } from '../people.mjs';
 import { CATALOGUE_MESSAGES, CLOSE_REASON_LABELS, closeChoice, closeReasonLabel } from '../catalogue.mjs';
+import { PROGRAMMES } from '../programCatalog.mjs';
 
 export const STATUS = {
   NEW: 'Nouveau',
@@ -233,11 +234,53 @@ export function activityBody(body) {
 }
 
 export const BOARD_STAGES = [...ACTIVE, 'CONVERTED'];
-export const OPPORTUNITY_VIEWS = {
-  all: 'Tous les prospects', mine: 'Mes prospects', new_today: 'Nouveaux aujourd’hui',
-  attention: 'À traiter', follow_up_today: 'Suivi aujourd’hui', placement: 'Tests de niveau',
-  qualified: 'Qualifiés', no_response: 'Sans réponse', closed: 'Clôturés'
-};
+// CPO-r2: four tabs. Three views live in « Filtres »; the three removed ones (« À traiter »,
+// « Suivi aujourd'hui », « Qualifiés ») stay on the server and open « Tous » here.
+export const OPPORTUNITY_TABS = { all: 'Tous', mine: 'Mes prospects', to_take: 'À prendre', closed: 'Clôturés' };
+export const OPPORTUNITY_FILTER_VIEWS = { new_today: 'Arrivés aujourd’hui', placement: 'Tests de niveau', no_response: 'Sans réponse' };
+export const OPPORTUNITY_VIEWS = { ...OPPORTUNITY_TABS, ...OPPORTUNITY_FILTER_VIEWS };
+export function opportunityView(value) {
+  return Object.hasOwn(OPPORTUNITY_VIEWS, value || '') ? value : 'all';
+}
+// A view chosen in « Filtres » refines « Tous ».
+export function opportunityTab(view) {
+  return Object.hasOwn(OPPORTUNITY_TABS, view || '') ? view : 'all';
+}
+// What the read receives. « À prendre » is not a server view: it is every prospect with
+// no owner, shown for the four active stages only (the caller picks the stage or hides
+// « Converti »). « Mes prospects » ignores the owner filter, which would always give zero.
+export function opportunityScope(view, owner) {
+  if (view === 'to_take') return { p_view: 'all', p_owner_mode: 'unassigned', p_owner: null };
+  if (view === 'mine') return { p_view: 'mine', p_owner_mode: 'all', p_owner: null };
+  return { p_view: opportunityView(view), p_owner_mode: ['all', 'me', 'unassigned'].includes(owner) ? owner : UUID.test(owner || '') ? 'staff' : 'all', p_owner: UUID.test(owner || '') ? owner : null };
+}
+export function toTakeStage(stage) {
+  return ACTIVE.includes(stage) ? stage : 'NEW';
+}
+// Tâches (CPO-r2): three tabs on the action's holder. Every open action is in exactly
+// one person's « Mes prospects » or in « À prendre ».
+export const WORK_SCOPES = { me: 'Mes prospects', unassigned: 'À prendre', all: 'Toute l’équipe' };
+export function workAssignee(value) {
+  return ['unassigned', 'all'].includes(value) || UUID.test(value || '') ? value : 'me';
+}
+export function workScope(assignee) {
+  return ['me', 'unassigned'].includes(assignee) ? assignee : 'all';
+}
+export function workAssigneeArgs(assignee) {
+  return UUID.test(assignee) ? { p_assignee_mode: 'staff', p_assignee: assignee } : { p_assignee_mode: assignee, p_assignee: null };
+}
+// One visible « Responsable » (CPO-r2). The action's holder is named only when it is
+// someone else; a prospect nobody has reads « À prendre » and can be taken while active.
+export const TAKEN_MESSAGE = 'Déjà pris ou modifié. La liste est à jour.';
+export function ownership({ ownerId, ownerLabel, assigneeId, assigneeLabel, hasAction = true, active = true }) {
+  const name = label => label || 'Responsable indisponible';
+  return {
+    owner: ownerId ? name(ownerLabel) : null,
+    main: ownerId ? `Responsable : ${name(ownerLabel)}` : active ? 'À prendre' : 'Sans responsable',
+    action: !hasAction ? null : assigneeId && assigneeId !== ownerId ? `Action confiée à ${name(assigneeLabel)}` : ownerId && !assigneeId ? 'Action sans responsable' : null,
+    takeable: !ownerId && active
+  };
+}
 // Presentation routing only. The server command owns evidence and resulting stage.
 export function opportunityAction(from, to) {
   if (from === to) return null;
@@ -261,6 +304,7 @@ export function resolvePresentation({ band, layout }) {
 }
 // Display/navigation only: chips set the existing stage filter and never a command.
 export function stageChips(view, stage) {
+  if (view === 'to_take') return [...ACTIVE];
   const chips = view === 'closed' ? ['LOST', 'NOT_QUALIFIED'] : [...BOARD_STAGES];
   return STATUS[stage] && !chips.includes(stage) ? [...chips, stage] : chips;
 }
@@ -271,6 +315,27 @@ export const MEANINGFUL_EVENTS = new Set([
   'placement_test_booked', 'placement_test_rescheduled', 'placement_test_attended', 'placement_result_entered',
   'enrollment_started', 'lead_converted', 'conversion_review_required', 'conversion_review_cleared'
 ]);
+// A prospect that arrives by Meta or the website writes three system rows at the same
+// instant (prospect created, request received, first action planned). They read as one
+// line, « Nouveau prospect arrivé ». Rows of a user command are never touched.
+const ARRIVAL_EVENTS = ['lead_created', 'submission_received', 'task_created'];
+export function collapseArrival(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const created = list.find(row => row?.event_type === 'lead_created' && !row.is_primary);
+  if (!created) return list;
+  const same = row => !row.is_primary && ARRIVAL_EVENTS.includes(row.event_type) && row.occurred_at === created.occurred_at && (row.merged_from || null) === (created.merged_from || null);
+  if (list.filter(same).length < 2) return list;
+  return list.filter(row => row === created || !same(row)).map(row => row === created ? { ...row, arrival: true } : row);
+}
+// A card's learner line. With no learner name on an adult programme the contact is the
+// learner, so the placeholder « Apprenant à préciser » is not shown.
+const ADULT_PROGRAMMES = PROGRAMMES.filter(programme => programme.audience === 'adultes').map(programme => programme.code);
+export function learnerLine(lead) {
+  const age = lead?.learner_age != null ? `${lead.learner_age} ans` : null;
+  if (lead?.learner_name) return [lead.learner_name, age].filter(Boolean).join(' · ');
+  if (ADULT_PROGRAMMES.includes(lead?.program)) return age;
+  return ['Apprenant à préciser', age].filter(Boolean).join(' · ');
+}
 // Collapsed history: the latest meaningful exchanges of the first loaded page, else the latest entries.
 export function historySummary(rows, size = 3) {
   const list = Array.isArray(rows) ? rows : [];
@@ -344,9 +409,9 @@ export function exchangeResults(channel) {
 export const NEXT_KINDS = {
   keep: 'Garder l’action actuelle',
   center_visit: 'Rendez-vous au centre',
-  callback: 'Rappel convenu',
-  our_step: 'À faire par nous',
-  reminder: 'Rappel pour l’équipe',
+  callback: 'Rappeler à l’heure convenue',
+  our_step: 'À faire de notre côté (prix, groupe…)',
+  reminder: 'Rappeler plus tard, sans heure promise',
   awaiting: 'En attente du prospect',
   enrol: 'Inscrire maintenant',
   close: 'Clôturer'
@@ -356,7 +421,8 @@ export const OUR_STEP_PRESETS = { tomorrow: 'Demain', in_2_days: 'Dans 2 jours',
 export const APPOINTMENT_OUTCOMES = { came_enrolled: 'Venu · s’inscrit', came_will_return: 'Venu · reviendra', came_not_interested: 'Venu · pas intéressé', no_show: 'Absent' };
 export const COMMAND_LABELS = {
   log_exchange: 'Échange', change_next_action: 'Prochaine action changée', appointment_outcome: 'Résultat du rendez-vous',
-  close_prospect: 'Prospect clôturé', reopen_prospect: 'Prospect rouvert', create_manual_lead: 'Prospect créé'
+  close_prospect: 'Prospect clôturé', reopen_prospect: 'Prospect rouvert', create_manual_lead: 'Prospect créé',
+  create_prospect: 'Prospect créé', reassign: 'Responsable modifié', update_prospect: 'Fiche modifiée'
 };
 const CALL_ACTIONS = ['first_contact', 'contact_attempt', 'callback'];
 export function isCallAction(action) {

@@ -9,13 +9,13 @@ import { CircleDollarSign, Columns3, List, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
-import { STATUS, UUID, resolvePresentation, stageChips } from '@/lib/crm/presentation.mjs';
+import { ACTIVE, OPPORTUNITY_FILTER_VIEWS, STATUS, UUID, opportunityScope, opportunityView, resolvePresentation, stageChips, toTakeStage } from '@/lib/crm/presentation.mjs';
 import { retryingImport } from '@/lib/retryingImport.mjs';
 import LazyOverlay from './LazyOverlay';
 import WorkQueue from './WorkQueue';
 import OpportunitiesBoard from './OpportunitiesBoard';
 import OpportunitiesList from './OpportunitiesList';
-import OpportunityFilters from './OpportunityFilters';
+import OpportunityFilters, { OpportunityTabs } from './OpportunityFilters';
 import ScrollRow from './ScrollRow';
 import useResponsiveBand from './useResponsiveBand';
 // The drawer and the manual-create dialog are needed only after a click. Load them
@@ -23,10 +23,10 @@ import useResponsiveBand from './useResponsiveBand';
 const leadDetailSheet = retryingImport(() => import('./LeadDetailSheet'));
 const crmActionDialog = retryingImport(() => import('./CrmActionDialog'));
 // Navigation only: a chip sets the existing stage filter; counts are display data.
-function StageChips({ view, stage, counts, total, onSelect }) {
+function StageChips({ view, stage, counts, total, onSelect, all = true }) {
   const count = value => Number.isFinite(value) ? value : '—';
   return <ScrollRow role="group" aria-label="Étapes">
-    <Button type="button" variant={stage ? 'outline' : 'default'} className="shrink-0" aria-pressed={!stage} onClick={() => onSelect('')}>Tous <span className="tabular-nums">{count(total)}</span></Button>
+    {all && <Button type="button" variant={stage ? 'outline' : 'default'} className="shrink-0" aria-pressed={!stage} onClick={() => onSelect('')}>Tous <span className="tabular-nums">{count(total)}</span></Button>}
     {stageChips(view, stage).map(key => <Button key={key} type="button" variant={stage === key ? 'default' : 'outline'} className="shrink-0" aria-pressed={stage === key} onClick={() => onSelect(key)}>{STATUS[key]} <span className="tabular-nums">{count(counts?.[key])}</span></Button>)}
   </ScrollRow>;
 }
@@ -50,9 +50,15 @@ export default function CrmWorkspace({
   }, []);
   // Shared sm/lg queries decide the band; the default moves from 768 to the lg board (D7).
   const band = useResponsiveBand({ stableScrollbar: mode === 'leads' });
-  const filters = Object.fromEntries(['view','q','owner','channel','source','program','stage'].map(key => [key, params.get(key) ?? ({view:'all',owner:'all'}[key] || '')]));
+  // Removed or unknown views open « Tous » (CPO-r2).
+  const filters = Object.fromEntries(['view','q','owner','channel','source','program','stage'].map(key => [key, key === 'view' ? opportunityView(params.get(key)) : params.get(key) ?? ({owner:'all'}[key] || '')]));
   const preferredLayout = params.get('layout') || (band === 'desktop' ? 'board' : 'list');
   const layout = filters.view === 'closed' ? 'list' : preferredLayout;
+  // « À prendre »: prospects with no owner, for the four active stages only. As a list it
+  // always reads one active stage; as a board the « Converti » column is not shown. Closed
+  // and enrolled prospects, which mostly never had an owner, never appear under it.
+  const taking = filters.view === 'to_take';
+  const stage = taking ? toTakeStage(filters.stage) : filters.stage;
   const presentation = band ? resolvePresentation({ band, layout }) : undefined;
   const [cursors, setCursors] = useState([null]);
   const cursorFilter = useRef(null);
@@ -73,14 +79,15 @@ export default function CrmWorkspace({
   function resetFilters() {
     const next = new URLSearchParams(window.location.search);
     ['q','owner','channel','source','program','stage','contact'].forEach(key => next.delete(key));
-    if (mode === 'today') next.delete('assignee');
+    // A view chosen in « Filtres » is a refinement; the four tabs are kept.
+    if (Object.hasOwn(OPPORTUNITY_FILTER_VIEWS, next.get('view') || '')) next.delete('view');
     setCursors([null]);
     window.history.replaceState(null, '', `${pathname}${next.size ? '?' + next : ''}`);
     window.dispatchEvent(new Event('crm:filter-reset'));
   }
   const parseFacet = value => { try { return value ? JSON.parse(value) : null; } catch { return {kind:'invalid',value:'invalid'}; } };
   const source = parseFacet(filters.source), program = parseFacet(filters.program);
-  const args = {p_view:filters.view,p_query:filters.q,p_contact:contact,p_owner_mode:['all','me','unassigned'].includes(filters.owner) ? filters.owner : 'staff',p_owner:UUID.test(filters.owner) ? filters.owner : null,p_channel:filters.channel || source?.kind || null,p_source_label:source?.value || null,p_program_kind:program?.kind === 'unspecified' ? 'unspecified' : program?.kind || 'all',p_program:program?.value || null,p_layout:layout,p_stage:layout === 'list' ? filters.stage || null : null,p_limit:25};
+  const args = {...opportunityScope(filters.view, filters.owner),p_query:filters.q,p_contact:contact,p_channel:filters.channel || source?.kind || null,p_source_label:source?.value || null,p_program_kind:program?.kind === 'unspecified' ? 'unspecified' : program?.kind || 'all',p_program:program?.value || null,p_layout:layout,p_stage:layout === 'list' ? stage || null : null,p_limit:25};
   // Read once the band is known, so a phone never fetches the desktop board default first.
   const opportunities = useCrmRead('crm_get_opportunities', {...args,p_cursor:cursorFilter.current === filterKey ? cursors.at(-1) : null}, mode === 'leads' && !!band);
   const [manual, setManual] = useState(false);
@@ -105,28 +112,35 @@ export default function CrmWorkspace({
   }
   function openLead(id) { setInitialAction(null); setInitialTask(null); selectLead(id); }
   function routeAction(id, name, task = null) { setInitialAction(name); setInitialTask(task); selectLead(id); }
-  const opportunityPage = opportunities.data?.pages?.[filters.stage || 'list'];
-  const matchedCount = layout === 'list' && filters.stage ? opportunities.data?.counts?.[filters.stage] : opportunities.data?.total;
+  const opportunityPage = opportunities.data?.pages?.[stage || 'list'];
   const counts = opportunities.data?.counts;
+  const toTakeTotal = ACTIVE.every(key => Number.isFinite(counts?.[key])) ? ACTIVE.reduce((sum, key) => sum + counts[key], 0) : undefined;
+  const matchedCount = layout === 'list' && stage ? counts?.[stage] : taking ? toTakeTotal : opportunities.data?.total;
   const closedCount = Number.isFinite(counts?.LOST) && Number.isFinite(counts?.NOT_QUALIFIED) ? counts.LOST + counts.NOT_QUALIFIED : '—';
   const filtered = filters.view !== 'all' || !!contact || Object.entries(filters).some(([key,value]) => !['view','owner'].includes(key) && value) || filters.owner !== 'all';
   const closedHref = () => { const next = new URLSearchParams(params.toString()); next.set('view', 'closed'); return `${pathname}?${next}`; };
-  const toggle = <div role="group" aria-label="Présentation" className="flex shrink-0 gap-1"><Button variant={layout === 'board' ? 'default' : 'outline'} disabled={filters.view === 'closed'} aria-pressed={layout === 'board'} onClick={() => setFilter('layout','board')}><Columns3 size={16} /><span className="max-sm:sr-only">Tableau</span></Button><Button variant={layout === 'list' ? 'default' : 'outline'} aria-pressed={layout === 'list'} onClick={() => setFilter('layout','list')}><List size={16} /><span className="max-sm:sr-only">Liste</span></Button></div>;
+  const toggle = <div role="group" aria-label="Présentation" className="flex shrink-0 gap-1"><Button variant={layout === 'board' ? 'default' : 'outline'} disabled={filters.view === 'closed'} aria-pressed={layout === 'board'} onClick={() => setFilter('layout','board')}><Columns3 size={16} /><span className="max-sm:sr-only lg:max-xl:sr-only">Tableau</span></Button><Button variant={layout === 'list' ? 'default' : 'outline'} aria-pressed={layout === 'list'} onClick={() => setFilter('layout','list')}><List size={16} /><span className="max-sm:sr-only lg:max-xl:sr-only">Liste</span></Button></div>;
   // The count line replaces the former count row and board notice.
-  const countLine = <p><span className="tabular-nums">{matchedCount ?? '—'}</span> prospects correspondants{filters.view === 'closed' ? ' · Les clôtures sont affichées en Liste.' : <> · <a className="font-medium text-blue-800 underline underline-offset-4" href={closedHref()} onClick={event => { event.preventDefault(); setFilter('view','closed'); }}><span className="tabular-nums">{closedCount}</span> clôturés</a> (Liste)</>}</p>;
+  const countLine = taking ? <p><span className="tabular-nums">{matchedCount ?? '—'}</span> prospects à prendre{layout === 'list' ? ` · ${STATUS[stage]}` : ''}</p> : <p><span className="tabular-nums">{matchedCount ?? '—'}</span> prospects correspondants{filters.view === 'closed' ? ' · Les clôtures sont affichées en Liste.' : <> · <a className="font-medium text-blue-800 underline underline-offset-4" href={closedHref()} onClick={event => { event.preventDefault(); setFilter('view','closed'); }}><span className="tabular-nums">{closedCount}</span> clôturés</a> (Liste)</>}</p>;
+  // « Mes prospects » and « À prendre » replace the owner filter, so choosing one clears it.
+  const selectTab = key => { if (['mine', 'to_take'].includes(key)) setFilter('owner', ''); setFilter('view', key); };
+  const tabs = <OpportunityTabs view={filters.view} onSelect={selectTab} compact={band === 'desktop'} />;
+  // The count line shows where there is room for it: on a tablet and from 1280 px.
+  const headerLine = band === 'desktop' ? <div className="space-y-1 max-xl:-mb-1">{tabs}<div className="max-xl:hidden">{countLine}</div></div> : band === 'tablet' ? countLine : undefined;
   return <PageFrame width="wide" data-band={band || undefined} data-presentation={mode === 'leads' ? presentation : undefined}>
   {mode === 'today' ? <PageHeader headingRef={headingRef} title="Tâches · Mon travail" description="Vos prochaines actions, une tâche à la fois." actions={<div className="flex flex-wrap gap-2">
     {/* RPW-r2 item 24: the learners with a balance due, per learner, no totals. */}
     <Button asChild variant="outline"><Link href="/students?payment=due"><CircleDollarSign size={16} />À relancer</Link></Button>
     {/* One line at 320 px: the first task stays where it was before item 24. */}
     <Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></div>} />
-    : <PageHeader compact headingRef={headingRef} title="Pipeline admissions" description={countLine} actions={<>{band === 'desktop' && toggle}<Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
-  {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onReset={resetFilters} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
-    <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} onReset={resetFilters} />
+    : <PageHeader compact headingRef={headingRef} title="Opportunités" description={headerLine} actions={<>{band === 'desktop' && toggle}<Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
+  {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
+    {band === 'phone' && tabs}
+    <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} tabs={band === 'tablet' ? tabs : null} onReset={resetFilters} />
     {contact && <p className="text-sm">Opportunités de ce contact · Les apprenants restent séparés. <Button variant="link" onClick={() => { const next = new URLSearchParams(window.location.search); next.delete('contact'); window.history.replaceState(null, '', `${pathname}?${next}`); }}>Tous les contacts</Button></p>}
-    {presentation === 'stage-list' && <StageChips view={filters.view} stage={filters.stage} counts={counts} total={opportunities.data?.total} onSelect={value => setFilter('stage', value)} />}
+    {(presentation === 'stage-list' || (taking && layout === 'list')) && <StageChips view={filters.view} stage={stage} counts={counts} total={opportunities.data?.total} all={!taking} onSelect={value => setFilter('stage', value)} />}
     <div role="status" className="sr-only">Les vues sont actualisées après chaque action ; les prospects qui ne correspondent plus aux filtres quittent la vue.</div>
-    {layout === 'board' ? <OpportunitiesBoard key={filterKey + generation} query={opportunities} filtered={filtered} onReset={resetFilters} args={args} onOpen={openLead} onAction={routeAction} regionRef={boardRegion} restore={boardScroll} filterKey={filterKey} /> : <div className="space-y-3 pt-1"><OpportunitiesList query={opportunities} filtered={filtered} onReset={resetFilters} stage={filters.stage} onOpen={openLead} onAction={routeAction} /><CursorPager hasPrevious={cursors.length > 1} hasMore={opportunityPage?.has_more} pending={opportunities.isFetching} onPrevious={() => setCursors(x => x.slice(0,-1))} onNext={() => setCursors(x => [...x,opportunityPage.next_cursor])} /></div>}
+    {layout === 'board' ? <OpportunitiesBoard key={filterKey + generation} query={opportunities} filtered={filtered} onReset={resetFilters} args={args} stages={taking ? ACTIVE : undefined} onOpen={openLead} onAction={routeAction} regionRef={boardRegion} restore={boardScroll} filterKey={filterKey} /> : <div className="space-y-3 pt-1"><OpportunitiesList query={opportunities} filtered={filtered} onReset={resetFilters} stage={stage} onOpen={openLead} onAction={routeAction} /><CursorPager hasPrevious={cursors.length > 1} hasMore={opportunityPage?.has_more} pending={opportunities.isFetching} onPrevious={() => setCursors(x => x.slice(0,-1))} onNext={() => setCursors(x => [...x,opportunityPage.next_cursor])} /></div>}
   </section>}
 
   {selected && <LazyOverlay key={`${selected}:${initialAction || "detail"}`} loader={leadDetailSheet} kind="lead" onClose={() => selectLead(null)} onRestoreFocus={restoreLeadFocus}>

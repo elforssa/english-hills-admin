@@ -154,7 +154,7 @@ try {
     }
   }
   assert(signedIn, 'Login did not complete after three page loads');
-  await page.getByRole('heading', { name: 'Pipeline admissions', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Opportunités', exact: true }).waitFor();
   assert.equal(sql(`select role from public.profiles where id='${user}'`), 'receptionist');
   assert(authHeader, 'Authenticated receptionist requests were not observed');
   const authHeaders = { apikey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY, Authorization: authHeader };
@@ -178,7 +178,7 @@ try {
   await page.getByRole('heading', { name: 'Tâches · Mon travail', exact: true }).waitFor();
   await page.goto(app + '/crm/leads');
   await page.waitForURL(app + '/crm/leads');
-  await page.getByRole('heading', { name: 'Pipeline admissions', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Opportunités', exact: true }).waitFor();
   console.log('PASS Opportunities landing and direct Today task access');
 
   // RWR-r5 C2 (§6.2): « Planifier un test » finds the person (find_people) and books a

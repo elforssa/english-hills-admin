@@ -1,31 +1,28 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import FilterBar from '@/components/operational/FilterBar';
 import FormField from '@/components/operational/FormField';
 import CursorPager from '@/components/operational/CursorPager';
 import { programmeLabel } from '@/lib/ui/presentation.mjs';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 import { useCrmRead } from '@/lib/crm/queries';
 import { MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { CALL_TASKS, SCHEDULE_KINDS, UUID, WORK_BUCKETS, actionErrorMessage, scheduledLabel, staffLabel } from '@/lib/crm/presentation.mjs';
+import { CALL_TASKS, SCHEDULE_KINDS, UUID, WORK_BUCKETS, WORK_SCOPES, actionErrorMessage, learnerLine, ownership, scheduledLabel, staffLabel, workAssignee, workAssigneeArgs, workScope } from '@/lib/crm/presentation.mjs';
 import { pluralFr } from '@/lib/ui/pluralFr.mjs';
 import AppointmentOutcome from './AppointmentOutcome';
 import { LifecycleBadge, ReadState } from './CrmShared';
 import CrmIntakeReview from './CrmIntakeReview';
+import TakeProspectButton from './TakeProspectButton';
 import { useCrmCommand } from './useCrmCommand';
 
 const buckets = WORK_BUCKETS;
-const MODES = ['all', 'me', 'unassigned', 'me_or_unassigned'];
 const control = 'operational-control';
-function ownerArgs(value, prefix) {
-  // « Moi + non attribué » is the assignee default (§4.6); the owner filter has no such mode.
-  const mode = prefix === 'owner' && value === 'me_or_unassigned' ? 'all' : MODES.includes(value) ? value : 'staff';
-  return { [`p_${prefix}_mode`]: mode, [`p_${prefix}`]: UUID.test(value) ? value : null };
-}
+// CPO-r2: Tâches filters on who holds the action, in three tabs. The prospect's owner is
+// never a second filter here (the read's owner parameters stay « all »).
+const ANY_OWNER = { p_owner_mode: 'all', p_owner: null };
 // « Pas de réponse » in one tap from the Tâches row (RWR-r5 §4.9, OD-20; day script « appel sans
 // réponse »: 1 action). Inside the 3-hour gap the server refuses; the exchange form then opens
 // with the result kept, showing the gap and « Tentative réelle (hors délai) » (invariant 15).
@@ -60,14 +57,18 @@ function OutsideHours({ onOpen, onAction }) {
   </section>;
 }
 
-export default function WorkQueue({ params, setFilter, onOpen, onAction, onReset }) {
-  const bucket = WORK_BUCKETS[params.get('bucket')] ? params.get('bucket') : 'today', assignee = params.get('assignee') || 'me_or_unassigned', owner = params.get('owner') || 'all';
+// Tabs are not filters: an empty tab says so and offers no « Effacer les filtres ».
+export default function WorkQueue({ params, setFilter, onOpen, onAction }) {
+  const { user } = useAuth();
+  const bucket = WORK_BUCKETS[params.get('bucket')] ? params.get('bucket') : 'today', assignee = workAssignee(params.get('assignee')), scope = workScope(assignee);
   const [staffOffset, setStaffOffset] = useState(0), [pages, setPages] = useState({});
-  const filterKey = JSON.stringify([assignee,owner]);
-  const pageKey = `${filterKey}:${bucket}`;
+  const pageKey = `${assignee}:${bucket}`;
   const cursors = pages[pageKey] || [null];
-  const query = useCrmRead('crm_get_work_queue', { p_bucket:bucket, ...ownerArgs(assignee,'assignee'), ...ownerArgs(owner,'owner'), p_cursor:cursors.at(-1), p_limit:25 });
-  const staff = useCrmRead('crm_list_staff', {p_limit:50,p_offset:staffOffset});
+  const query = useCrmRead('crm_get_work_queue', { p_bucket:bucket, ...workAssigneeArgs(assignee), ...ANY_OWNER, p_cursor:cursors.at(-1), p_limit:25 });
+  // The « À prendre » counter: the same read for one row; its counts cover the five buckets.
+  const toTake = useCrmRead('crm_get_work_queue', { p_bucket:'today', p_assignee_mode:'unassigned', p_assignee:null, ...ANY_OWNER, p_cursor:null, p_limit:1 });
+  const toTakeCount = toTake.data?.counts ? Object.values(toTake.data.counts).reduce((sum, n) => sum + (Number(n) || 0), 0) : null;
+  const staff = useCrmRead('crm_list_staff', {p_limit:50,p_offset:staffOffset}, scope === 'all');
   const day = useRef(null);
   useEffect(() => {
     const nextDay = query.data?.boundaries?.d1;
@@ -76,28 +77,30 @@ export default function WorkQueue({ params, setFilter, onOpen, onAction, onReset
   }, [query.data?.boundaries?.d1]);
   useEffect(() => { const reset=()=>setPages({}); window.addEventListener('crm:refresh',reset); return ()=>window.removeEventListener('crm:refresh',reset); }, []);
   function select(key,value) { setPages({}); setFilter(key,value); }
-  function staffSelect(label,key,value) {
-    return <div className="min-w-0 flex-1 basis-32"><FormField label={label}><select disabled={staff.isPending || staff.isError || !Array.isArray(staff.data?.rows)} aria-label={label} className={control} value={value} onChange={e=>select(key,e.target.value)}>
-      {key==='assignee' && <option value="me_or_unassigned">Moi + non attribué</option>}<option value="me">{key==='assignee' ? 'Mes tâches' : 'Moi'}</option><option value="all">Toute l’équipe</option><option value="unassigned">Non attribué</option>
-      {!MODES.includes(value) && !staff.data?.rows?.some(p=>p.id===value) && <option value={value}>Responsable sélectionné</option>}
-      {staff.data?.rows?.map(p=><option key={p.id} value={p.id}>{staffLabel(p)}</option>)}
-    </select></FormField></div>;
-  }
   return <section className="space-y-4 min-w-0">
-    <FilterBar activeCount={Number(assignee!=='me_or_unassigned') + Number(owner!=='all')} summary={`Tâches · ${buckets[bucket]} · ${assignee === 'me_or_unassigned' ? 'Moi + non attribué' : assignee === 'me' ? 'Mes tâches' : 'Équipe filtrée'}`} onReset={() => { setPages({}); onReset(); }}>{staffSelect('Responsable de la tâche','assignee',assignee)}{staffSelect('Responsable du prospect','owner',owner)}
-      <Link data-touch-target href="/crm/leads?view=attention&layout=list" className="ml-auto inline-flex min-h-9 items-center rounded-md border bg-white px-3 text-sm text-blue-800 hover:bg-blue-50">À traiter · prospects nécessitant un suivi</Link>
-    </FilterBar>
-    <p className="text-xs text-slate-500">Une ligne par contact : sa prochaine action (plusieurs apprenants du même contact sont regroupés). Les deux filtres se combinent.</p>
+    <nav aria-label="Périmètre des tâches" className="flex flex-wrap gap-1 sm:gap-2">{Object.entries(WORK_SCOPES).map(([key,label])=><Button key={key} variant={scope===key ? 'default' : 'outline'} className="min-h-9 max-sm:px-2" aria-pressed={scope===key} onClick={()=>select('assignee',key==='me' ? '' : key)}>{label}{key==='unassigned' && <span data-testid="work-to-take-count" className="ml-1.5 rounded bg-slate-100 px-1.5 text-xs tabular-nums text-slate-700">{toTakeCount ?? '—'}</span>}</Button>)}</nav>
+    {scope==='all' && <div className="max-w-xs"><FormField label="Personne"><select disabled={staff.isPending || staff.isError || !Array.isArray(staff.data?.rows)} aria-label="Personne" className={control} value={UUID.test(assignee) ? assignee : 'all'} onChange={e=>select('assignee',e.target.value)}>
+      <option value="all">Toute l’équipe</option>
+      {UUID.test(assignee) && !staff.data?.rows?.some(p=>p.id===assignee) && <option value={assignee}>Responsable sélectionné</option>}
+      {staff.data?.rows?.map(p=><option key={p.id} value={p.id}>{staffLabel(p)}</option>)}
+    </select></FormField></div>}
+    <p className="text-xs text-slate-500">Une ligne par contact : sa prochaine action (plusieurs apprenants du même contact sont regroupés).</p>
     <OutsideHours onOpen={onOpen} onAction={onAction} />
-    {(staff.isError || (!staff.isPending && !Array.isArray(staff.data?.rows))) && <p role={staff.isError ? "alert" : "status"} className="text-sm">Équipe indisponible. <Button variant="ghost" onClick={()=>staff.refetch()}>Réessayer</Button></p>}
-    {(staffOffset>0 || staff.data?.total>50) && <div className="flex gap-2"><Button variant="ghost" disabled={!staffOffset} onClick={()=>setStaffOffset(x=>x-50)}>Équipe précédente</Button><Button variant="ghost" disabled={staffOffset+50>=staff.data?.total} onClick={()=>setStaffOffset(x=>x+50)}>Équipe suivante</Button></div>}
+    {scope==='all' && (staff.isError || (!staff.isPending && !Array.isArray(staff.data?.rows))) && <p role={staff.isError ? "alert" : "status"} className="text-sm">Équipe indisponible. <Button variant="ghost" onClick={()=>staff.refetch()}>Réessayer</Button></p>}
+    {scope==='all' && (staffOffset>0 || staff.data?.total>50) && <div className="flex gap-2"><Button variant="ghost" disabled={!staffOffset} onClick={()=>setStaffOffset(x=>x-50)}>Équipe précédente</Button><Button variant="ghost" disabled={staffOffset+50>=staff.data?.total} onClick={()=>setStaffOffset(x=>x+50)}>Équipe suivante</Button></div>}
     <nav aria-label="Échéances des tâches" className="flex flex-wrap gap-1 border-b pb-2">{Object.entries(buckets).map(([key,label])=><Button key={key} variant={bucket===key ? 'default' : 'ghost'} className="min-h-9" aria-pressed={bucket===key} onClick={()=>setFilter('bucket',key)}>{label}<span data-testid={`work-count-${key}`} className="ml-2 rounded bg-slate-100 px-1.5 text-xs tabular-nums text-slate-700">{query.data?.counts?.[key] ?? '—'}</span></Button>)}</nav>
     <p className="text-xs text-slate-500">Heures de Casablanca · En retard inclut les actions dues plus tôt aujourd’hui ; « En attente » n’est jamais en retard. Actualisation chaque minute.</p>
-    <div className="overflow-hidden rounded-lg border bg-white"><ReadState query={query} available={Array.isArray(query.data?.rows)} filtered={assignee !== 'all' || owner !== 'all'} onReset={() => { setPages({}); onReset(); }} empty="Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.">{Array.isArray(query.data?.rows) && query.data.rows.length ? query.data.rows.map(row=>{ const action=row.next_action || row; return <article data-testid="work-row" data-task-id={row.id} data-lead-id={row.lead_id} key={row.id} className="border-b border-slate-100 px-4 py-3 last:border-0">
+    <div className="overflow-hidden rounded-lg border bg-white"><ReadState query={query} available={Array.isArray(query.data?.rows)} empty="Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou un autre onglet.">{Array.isArray(query.data?.rows) && query.data.rows.length ? query.data.rows.map(row=>{ const action=row.next_action || row;
+      // One « Responsable »; the action's holder only when it is someone else. Under
+      // « Mes prospects » a line that would only say « vous » is left out.
+      const who=ownership({ ownerId:row.lead.owner_id, ownerLabel:row.lead.owner_display_label, assigneeId:row.assigned_to, assigneeLabel:row.assignee_display_label });
+      const whoLine=row.lead.owner_id && row.lead.owner_id===user?.id && !who.action ? null : `${who.main}${who.action ? ` · ${who.action.charAt(0).toLowerCase()}${who.action.slice(1)}` : ''}`;
+      const failed=row.lead.failed_attempts > 0 ? pluralFr(row.lead.failed_attempts, 'appel infructueux', 'appels infructueux') : null;
+      return <article data-testid="work-row" data-task-id={row.id} data-lead-id={row.lead_id} key={row.id} className="border-b border-slate-100 px-4 py-3 last:border-0">
       <div className="flex flex-wrap items-start justify-between gap-2"><p className="font-semibold">{action.label}{SCHEDULE_KINDS[row.schedule_kind] && <span className="ml-2 text-xs font-medium text-blue-900">{SCHEDULE_KINDS[row.schedule_kind]}</span>}</p><p className="flex flex-wrap gap-1 text-xs">{action.overdue && <span className="rounded bg-red-50 px-1.5 font-medium text-red-800">En retard</span>}{action.relance_due && <span className="rounded bg-amber-50 px-1.5 font-medium text-amber-900">À relancer</span>}{row.review_flag === 'd1_review' && <span className="rounded bg-slate-100 px-1.5 text-slate-700">À vérifier</span>}</p></div>
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-2"><button className="min-w-0 text-left" onClick={()=>onOpen(row.lead.id)}><span className="block break-words text-sm font-medium">{row.lead.contact_name}{row.siblings > 1 && <span className="ml-2 text-xs font-normal text-slate-600">{pluralFr(row.siblings, 'apprenant')}</span>}</span><span className="block break-words operational-secondary">{row.lead.learner_name || 'Apprenant à préciser'} · {programmeLabel(row.lead.program)}</span>{row.family?.length > 0 && <span data-testid="work-row-family" className="block break-words text-xs text-slate-600">Aussi : {row.family.map(f => `${f.learner_name || 'Apprenant à préciser'}${f.next_action?.label ? ` (${f.next_action.label})` : ''}`).join(', ')}</span>}</button><LifecycleBadge status={row.lead.status}/></div>
-      <p className="mt-1 text-xs text-slate-500">Responsable de la tâche : {row.assigned_to ? row.assignee_display_label || 'Responsable indisponible' : 'Non attribuée'} · Responsable du prospect : {row.lead.owner_id ? row.lead.owner_display_label || 'Responsable indisponible' : 'Non attribué'}{row.lead.failed_attempts > 0 ? ` · ${pluralFr(row.lead.failed_attempts, 'appel infructueux', 'appels infructueux')}` : ''}</p>
-      <div className="mt-2 flex flex-wrap gap-2">{CALL_TASKS.includes(action.task_type) && <RowNoAnswer lead={row.lead} action={action} onGap={()=>onAction(row.lead.id,'no_answer')} />}<Button size="sm" onClick={()=>onAction(row.lead.id,'exchange')}>Noter un échange</Button><Button size="sm" variant="ghost" className="min-h-9" onClick={()=>onAction(row.lead.id,'change')}>Changer</Button><Button size="sm" variant="ghost" className="min-h-9" onClick={()=>onOpen(row.lead.id)}>Voir le prospect</Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="ghost" className="min-h-9 px-2" aria-label={`Plus d’options · ${row.lead.contact_name}`}><MoreHorizontal size={16} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={()=>onAction(row.lead.id,'reassign',row)}>Réattribuer l’action</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2"><button className="min-w-0 text-left" onClick={()=>onOpen(row.lead.id)}>{/* One span child keeps contact and learner stacked when the touch rule makes the button inline-flex. */}<span className="block min-w-0 text-left"><span className="block break-words text-sm font-medium">{row.lead.contact_name}{row.siblings > 1 && <span className="ml-2 text-xs font-normal text-slate-600">{pluralFr(row.siblings, 'apprenant')}</span>}</span><span className="block break-words operational-secondary">{[learnerLine(row.lead), programmeLabel(row.lead.program)].filter(Boolean).join(' · ')}</span>{row.family?.length > 0 && <span data-testid="work-row-family" className="block break-words text-xs text-slate-600">Aussi : {row.family.map(f => `${f.learner_name || 'Apprenant à préciser'}${f.next_action?.label ? ` (${f.next_action.label})` : ''}`).join(', ')}</span>}</span></button><LifecycleBadge status={row.lead.status}/></div>
+      {(whoLine || failed) && <p data-testid="work-row-responsable" className="mt-1 text-xs text-slate-500">{[whoLine, failed].filter(Boolean).join(' · ')}</p>}
+      <div className="mt-2 flex flex-wrap gap-2">{who.takeable && <TakeProspectButton lead={row.lead} primary />}{CALL_TASKS.includes(action.task_type) && <RowNoAnswer lead={row.lead} action={action} onGap={()=>onAction(row.lead.id,'no_answer')} />}<Button size="sm" variant={who.takeable ? 'outline' : 'default'} className="min-h-9" onClick={()=>onAction(row.lead.id,'exchange')}>Noter un échange</Button><Button size="sm" variant="ghost" className="min-h-9" onClick={()=>onAction(row.lead.id,'change')}>Changer</Button><Button size="sm" variant="ghost" className="min-h-9" onClick={()=>onOpen(row.lead.id)}>Voir le prospect</Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="ghost" className="min-h-9 px-2" aria-label={`Plus d’options · ${row.lead.contact_name}`}><MoreHorizontal size={16} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={()=>onAction(row.lead.id,'reassign')}>Changer de responsable</DropdownMenuItem><DropdownMenuItem onSelect={()=>onAction(row.lead.id,'reassign',row)}>Confier cette action à…</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
       {action.task_type === 'center_visit' && <div className="mt-2"><AppointmentOutcome compact leadId={row.lead.id} version={row.lead.version} action={action} /></div>}
     </article>; }) : null}</ReadState></div>
     <CursorPager hasPrevious={cursors.length>1} hasMore={query.data?.has_more} pending={query.isFetching} onPrevious={()=>setPages(x=>({...x,[pageKey]:cursors.slice(0,-1)}))} onNext={()=>setPages(x=>({...x,[pageKey]:[...cursors,query.data.next_cursor]}))}/>

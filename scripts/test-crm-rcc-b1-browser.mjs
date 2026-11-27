@@ -85,6 +85,8 @@ async function drawerShape(label,ordinary=false){
  assert(shape.bodyBelow,`${label}: the body never sits under the header`);
  if(ordinary)assert(shape.header<=(m.sm?140:168),`${label}: drawer header height ${shape.header} with ordinary text`);
  assert.equal(await fermer().count(),1,`${label}: exactly one Fermer`);
+ // CPO-r2: the status and contact lines use the header's full width, so they must start below « Fermer ».
+ {const close=await fermer().boundingBox(),rows=await sheet().evaluate(el=>['header-status','header-contact'].map(id=>el.querySelector(`[data-testid=${id}]`)?.getBoundingClientRect().top).filter(v=>v!=null));assert(rows.every(top=>top>=close.y+close.height),`${label}: header lines start below Fermer ${JSON.stringify({close,rows})}`);}
  return {m,shape};
 }
 async function fermerPinned(label){
@@ -130,7 +132,7 @@ async function escapeSequences(label,reopen,restored){
  await page.locator('[role=menu]').waitFor({state:'detached'});assert(await sheet().isVisible(),label+' E1: the drawer stays open');
  await focusIs(()=>document.activeElement?.textContent?.trim()==='Autres actions','E1 focus returns to Autres actions');await settle();await noPopup(label+' E1 focus return');
  await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});await page.waitForURL(url=>!url.searchParams.has('lead'));await restored();
- phase=label+' E2';await reopen();await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Attribuer un responsable',exact:true}).click();
+ phase=label+' E2';await reopen();await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Changer de responsable',exact:true}).click();
  await top().getByLabel('Responsable du prospect',{exact:true}).waitFor();await top().getByRole('button',{name:'Annuler',exact:true}).click();
  await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await focusIs(()=>document.activeElement?.textContent?.trim()==='Autres actions','E2 focus returns to Autres actions');await settle();await noPopup(label+' E2');
  await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});await restored();
@@ -175,8 +177,23 @@ try {
   update public.crm_leads set latest_submission_id=(select id from n) where id='${distinct}'`);
  const total=Number(sql(`select count(*) from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by='${actor}')`));
  const ordinaryCard=fresh[5];
+ // CPO-r2: an ordinary (owned) card names its responsable on its origin line, so it stays within 150px; a card
+ // nobody has carries « Je m'en occupe » on a row of its own and has its own, separate limit (TAKE_CARD_MAX).
+ const takeCard=fresh[6];sql(`update public.crm_tasks set assigned_to=null where lead_id='${takeCard}' and status='open';update public.crm_leads set owner_id=null,version=version+1 where id='${takeCard}';`);
  console.log(`fixture: ${total} synthetic prospects (27+1 Nouveau incl. distinct inquiries, 4+1 Contact en cours, 3+1 En discussion incl. long identity, 6 Qualifié, 1 Perdu, 1 Non qualifié, overdue task, booked test)`);
 
+ // The take card's own limit: the ordinary 150px plus its one extra row (6px gap + the 36px « Je m'en occupe » button).
+ const TAKE_CARD_MAX=192;
+ const cardShapes=async label=>{const card=id=>page.locator(`[data-testid=opportunity-card][data-lead-id="${id}"]`);
+  const ordinary=await card(ordinaryCard).evaluate(c=>{const owner=c.querySelector('[data-testid=card-owner]'),line=owner?.parentElement,before=c.getBoundingClientRect().height;if(!owner)return {before,without:null};const shown=[...owner.getClientRects()].every(r=>r.bottom<=line.getBoundingClientRect().bottom+1);const html=line.innerHTML;owner.nextSibling?.remove();owner.remove();line.classList.remove('line-clamp-2');const without=c.getBoundingClientRect().height;line.classList.add('line-clamp-2');line.innerHTML=html;return {before,without,shown,take:!!c.querySelector('[data-testid=card-take]')};});
+  assert(ordinary.without!==null&&!ordinary.take,`${label}: the ordinary card names its responsable on its origin line, with no take button`);
+  assert(ordinary.shown,`${label}: the responsable's name is never in the part cut off by the two-line cap`);
+  assert(ordinary.before<=ordinary.without,`${label}: the responsable's name adds no height (${ordinary.before}px with it, ${ordinary.without}px as before CPO-r2: no name, no cap)`);
+  const take=await card(takeCard).evaluate(c=>({h:c.getBoundingClientRect().height,owner:c.querySelector('[data-testid=card-owner]')?.textContent,take:!!c.querySelector('[data-testid=card-take] [data-testid=take-prospect]')}));
+  assert(take.owner==='À prendre'&&take.take,`${label}: the take card reads « À prendre » and carries « Je m'en occupe » ${JSON.stringify(take)}`);
+  assert(take.h<=TAKE_CARD_MAX,`${label}: card with « Je m'en occupe » ${take.h}px ≤ ${TAKE_CARD_MAX}`);
+  assert(take.h<=ordinary.before+43,`${label}: the take card is taller than an ordinary card by its button row only (${take.h}px vs ${ordinary.before}px)`);
+  console.log(`HEIGHTS ${label}: ordinary ${ordinary.before}px (without name ${ordinary.without}px), take ${take.h}px`);};
  // B1_ENGINES narrows a local iteration; the acceptance run uses both engines.
  for(const engine of (process.env.B1_ENGINES||'chromium,webkit').split(',').map(name=>({chromium,webkit})[name])){
   const E=engine.name();browser=await engine.launch({headless:true});await newContext(engine);
@@ -202,11 +219,14 @@ try {
    if(m.lg)assert(await page.locator('.operational-sidebar:not(#mobile-sidebar)').first().isVisible());else await page.getByRole('button',{name:'Ouvrir le menu',exact:true}).waitFor();
    // Card readability: long names wrap; ordinary desktop board card ≤ 150px.
    const longCard=page.locator(`[data-testid=opportunity-card][data-lead-id="${rich}"]:visible`);if(await longCard.count())assert(await longCard.evaluate(c=>c.scrollWidth<=c.clientWidth+1),`${phase}: long name wraps without clipping`);
-   if(m.presentation==='board'){const h=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(h<=150,`${phase}: ordinary card ${h}px ≤ 150`);}
+   if(m.presentation==='board'){const h=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(h<=150,`${phase}: ordinary card ${h}px ≤ 150`);await cardShapes(phase);}
    await page.screenshot({path:join(tmpdir(),`b1-${E}-${viewport.width}.png`)});
    // Drawer at each width: shape, single pinned Fermer, body order, close/Back.
    await openDrawer(rich);const {m:dm}=await drawerShape(phase+' drawer');await fermerPinned(phase+' drawer');
-   const order=await sheet().evaluate(el=>['Prochaine action','Autres actions','Demande','Test de niveau','Inscription','Historique'].map(t=>{const n=[...el.querySelectorAll('h3,p,summary,section[aria-label]')].find(x=>(x.getAttribute('aria-label')||x.textContent.trim()).startsWith(t));return n?n.getBoundingClientRect().top:null;}));
+   // CPO-r2: « Autres actions » is no longer a block of its own; it sits in the row of the panel's main buttons.
+   {const tops=await sheet().getByTestId('panel-actions').locator(':scope > button').evaluateAll(ns=>ns.map(n=>Math.round(n.getBoundingClientRect().top)));assert(tops.length>=3&&new Set(tops).size===1,`${phase}: « Noter un échange », « Changer » and « Autres actions » on one row ${JSON.stringify(tops)}`);
+    assert.equal(await sheet().getByRole('button',{name:'Modifier la fiche',exact:true}).count()+await sheet().getByRole('button',{name:'Ajouter un enfant',exact:true}).count(),0,`${phase}: both moved into « Autres actions »`);}
+   const order=await sheet().evaluate(el=>['Prochaine action','Demande','Test de niveau','Inscription','Historique'].map(t=>{const n=[...el.querySelectorAll('h3,p,summary,section[aria-label]')].find(x=>(x.getAttribute('aria-label')||x.textContent.trim()).startsWith(t));return n?n.getBoundingClientRect().top:null;}));
    assert(order.every(v=>v!==null)&&order.every((v,i)=>!i||v>order[i-1]),`${phase}: drawer body order ${JSON.stringify(order)}`);
    if(dm.band!=='desktop')await targets(sheet(),'drawer');
    await noOverflow('drawer');await page.screenshot({path:join(tmpdir(),`b1-${E}-${viewport.width}-drawer.png`)});
@@ -360,9 +380,9 @@ try {
   // 7. Phone action reachability, keyboard/focus, dialog above the full-screen sheet, 320 reflow.
   phase=`${E} reachability 390`;await setSize({width:390,height:844});await gotoLeads();
   const card=page.locator(`[data-testid=opportunity-card][data-lead-id="${qualified[0]}"]:visible`);await card.scrollIntoViewIfNeeded();await card.getByRole('button',{name:/^Actions ·/}).click();
-  const items=await page.getByRole('menuitem').allInnerTexts();assert.deepEqual(items,['Ouvrir l’inscription','Clôturer le prospect','Attribuer un responsable'],'grouped overflow: one close entry (B2, §5.4)');assert.equal(await page.locator('[role=menu] [role=separator]').count(),2);await page.keyboard.press('Escape');
+  const items=await page.getByRole('menuitem').allInnerTexts();assert.deepEqual(items,['Ouvrir l’inscription','Clôturer le prospect','Changer de responsable'],'grouped overflow: one close entry (B2, §5.4)');assert.equal(await page.locator('[role=menu] [role=separator]').count(),2);await page.keyboard.press('Escape');
   await openDrawer(qualified[0]);for(const name of ['Pas de réponse','On a parlé','Noter un échange','Changer','Autres actions','Inscrire et encaisser','Afficher tout l’historique']){const b=sheet().getByRole('button',{name,exact:true}).first();await b.scrollIntoViewIfNeeded();const box=await b.boundingBox();assert(box&&box.height>=44&&box.x>=0&&box.x+box.width<=390,`${phase}: ${name} reachable ${JSON.stringify(box)}`);}
-  await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();assert.deepEqual(await page.getByRole('menuitem').allInnerTexts(),['Clôturer le prospect','Attribuer un responsable','Réattribuer la prochaine action']);await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});
+  await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();assert.deepEqual(await page.getByRole('menuitem').allInnerTexts(),['Modifier la fiche','Ajouter un enfant','Changer de responsable','Confier cette action à…','Clôturer le prospect']);await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});
   phase=`${E} focus trap 390`;const noteButton=sheet().getByRole('button',{name:'Noter un échange',exact:true});await noteButton.focus();await page.keyboard.press('Enter');await top().getByRole('heading',{name:'Noter un échange'}).waitFor();await dialogFocused();
   for(let i=0;i<8;i++){await page.keyboard.press(i%3===2?'Shift+Tab':'Tab');assert(await page.evaluate(()=>!!document.activeElement?.closest('[role=dialog]:last-of-type')||document.activeElement===document.querySelectorAll('[role=dialog]')[1]||!!document.querySelectorAll('[role=dialog]')[1]?.contains(document.activeElement)),'focus stays in the dialog');}
   await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await focusIs(()=>document.activeElement?.textContent?.trim()==='Noter un échange','dialog closes back to its trigger');await closeDrawer();
@@ -443,7 +463,7 @@ try {
   phase=`${E} I1 fine 1280`;await setSize({width:1280,height:800});await gotoLeads();assert.equal((await mode()).presentation,'board');
   const riskyCard=page.locator(`[data-testid=opportunity-card][data-lead-id="${risky}"]`);await riskyCard.getByText('Yasmine El Fassi-Bennani · 8 ans',{exact:true}).waitFor();
   const fine=await identityClear('board',36);assert(fine.find(c=>c.id===risky).lines>=2,'the risky learner wraps beside the trigger, never under it');
-  const ordinaryHeight=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(ordinaryHeight<=150,`${phase}: ordinary card ${ordinaryHeight}px ≤ 150`);
+  const ordinaryHeight=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(ordinaryHeight<=150,`${phase}: ordinary card ${ordinaryHeight}px ≤ 150`);await cardShapes(phase);
   // I2: Opportunities applies the root scrollbar workaround, restores the prior inline value, and Tâches never applies it.
   phase=`${E} I2 root scrollbar`;await setSize({width:1440,height:900});await nav(app+'/students');await page.getByRole('heading').first().waitFor();
   await page.evaluate(()=>{document.documentElement.style.overflowY='auto';window.__b1Spa=true;});
@@ -519,7 +539,7 @@ try {
    await focusIs(()=>document.activeElement?.textContent?.trim()==='Réessayer','Réessayer takes focus');
    // The page behind stays mounted: no route error page, the board and its heading remain.
    assert.equal(await page.getByText('Une erreur est survenue').count(),0,`${phase}: the page error boundary is not reached`);
-   assert.equal(await page.locator('h1').filter({hasText:'Pipeline admissions'}).count(),1);assert((await page.locator('[data-testid=opportunity-card]').count())>0,`${phase}: the board stays rendered`);
+   assert.equal(await page.locator('h1').filter({hasText:'Opportunités'}).count(),1);assert((await page.locator('[data-testid=opportunity-card]').count())>0,`${phase}: the board stays rendered`);
   }
   async function gone(label){await shell().waitFor({state:'detached'});assert.equal(await page.locator('[role=dialog]').count(),0,`${label}: no overlay`);}
   // Held/aborted chunk URLs; `gate` releases held requests.

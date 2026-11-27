@@ -85,7 +85,7 @@ try {
  await drawer().getByText('En discussion',{exact:true}).first().waitFor();
  // « Changer » → team reminder « Dans 2 jours »: a preset, resolved by the server.
  const changed=[];page.on('request',request=>{if(request.url().endsWith('/rpc/crm_change_next_action'))changed.push(request.postDataJSON().p_data);});
- await drawer().getByRole('button',{name:'Changer',exact:true}).click();await pick('Rappel pour l’équipe');assert.equal(await dialog().getByLabel('Date',{exact:true}).count(),0,'a preset needs no browser-computed time');
+ await drawer().getByRole('button',{name:'Changer',exact:true}).click();await pick('Rappeler plus tard, sans heure promise');assert.equal(await dialog().getByLabel('Date',{exact:true}).count(),0,'a preset needs no browser-computed time');
  await dialog().getByLabel('Quand',{exact:true}).selectOption('in_2_days');await submit();await toast('Prochaine action enregistrée');await closed();
  sent=changed.at(-1);assert.equal(sent.next.due_preset,'in_2_days');assert.equal(sent.next.schedule_kind,'reminder');assert(!('due_at' in sent.next),'no browser time');
  saved=await settle(lead,d=>d.next_action?.schedule_kind==='reminder');
@@ -103,7 +103,7 @@ try {
  console.log('PASS agreed visit is an appointment that qualifies; a later kept exchange stays QUALIFIED on the same action');
  // An agreed callback replaces the appointment only when « Remplace le rendez-vous » is ticked,
  // and only times inside the calling hours are offered; the time is kept exactly.
- await drawer().getByRole('button',{name:'Changer',exact:true}).click();await pick('Rappel convenu');const times=await slot(tuesday);
+ await drawer().getByRole('button',{name:'Changer',exact:true}).click();await pick('Rappeler à l’heure convenue');const times=await slot(tuesday);
  const offered=await times.locator('option').evaluateAll(options=>options.map(o=>o.value).filter(Boolean));assert(!offered.includes('13:00')&&offered.includes('16:05'),'lunch not offered');await times.selectOption('16:05');
  await submit();await dialog().getByRole('alert').filter({hasText:'Cochez « Remplace » pour changer le rendez-vous.'}).waitFor();assert.equal(detail(lead).next_action.id,visitId,'nothing written without the confirmation');
  await dialog().getByLabel('Remplace le rendez-vous',{exact:true}).check();await submit();await toast('Prochaine action enregistrée');await closed();
@@ -118,7 +118,7 @@ try {
  await page.goto(app+'/crm/today?bucket=upcoming&assignee=all');const row=page.locator(`[data-task-id="${callback.id}"]`);await row.waitFor();
  await row.getByText('Rendez-vous convenu',{exact:true}).waitFor();
  assert.equal(await row.getByRole('button',{name:/Réattribuer/}).count(),0,'no foreground reassignment in the queue');
- await row.getByRole('button',{name:/^Plus d’options/}).click();await page.getByRole('menuitem',{name:'Réattribuer l’action',exact:true}).click();
+ await row.getByRole('button',{name:/^Plus d’options/}).click();await page.getByRole('menuitem',{name:'Confier cette action à…',exact:true}).click();
  await dialog().getByLabel('Responsable de l’action',{exact:true}).selectOption(users[2].id);await submit();await toast('Enregistré');
  await settle(lead,()=>sql(`select assigned_to from public.crm_tasks where id=${quote(callback.id)}`)===users[2].id);
  assert.equal(detail(lead).owner_id,actor,'action reassignment leaves the owner (the creator, §4.6) unchanged');

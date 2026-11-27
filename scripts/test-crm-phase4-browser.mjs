@@ -63,7 +63,7 @@ try {
  browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}});
  await context.route('**/*',route=>['localhost','127.0.0.1'].includes(new URL(route.request().url()).hostname)?route.continue():route.abort());
  page=await context.newPage();page.on('pageerror',e=>pageErrors.push(e.message));page.setDefaultTimeout(60000);await login(users[1]);
- assert.equal(new URL(page.url()).pathname,'/crm/leads');await page.getByRole('heading',{name:'Pipeline admissions',exact:true}).waitFor();
+ assert.equal(new URL(page.url()).pathname,'/crm/leads');await page.getByRole('heading',{name:'Opportunités',exact:true}).waitFor();
  await page.getByRole('button',{name:'Apprenants',exact:true}).click();
  const navLinks=await page.locator('nav a').evaluateAll(ns=>ns.map(n=>n.getAttribute('href')));for(const path of ['/crm/today','/crm/leads','/students','/settings'])assert(navLinks.includes(path));
  await page.getByRole('button',{name:'Ajouter un prospect',exact:true}).click();await dialog().getByLabel('Nom du contact',{exact:true}).fill(run);await dialog().getByLabel('Nom de l’apprenant',{exact:true}).fill('Adam synthétique');await dialog().getByLabel('Téléphone',{exact:true}).fill('06 12 34 56 78');
@@ -107,7 +107,7 @@ try {
  await submit();await dialog().getByRole('alert').filter({hasText:'Impossible de confirmer'}).waitFor();await submit();await toast('Échange enregistré');await closed();
  assert.equal(attempts.length,2);assert.deepEqual(attempts[0],attempts[1]);assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${lead}' and body='Réponse perdue'`),'1');await page.unroute('**/rest/v1/rpc/crm_log_exchange');
  // A WhatsApp conversation with an agreed callback: only slots inside the calling hours are offered.
- await exchange('WhatsApp','On a échangé');await pick('Rappel convenu');const times=await slot(tuesday);
+ await exchange('WhatsApp','On a échangé');await pick('Rappeler à l’heure convenue');const times=await slot(tuesday);
  const offered=await times.locator('option').evaluateAll(options=>options.map(o=>o.value).filter(Boolean));assert(offered.includes('15:20')&&!offered.includes('13:00')&&!offered.includes('12:30'),'Tuesday lunch closure is not offered: '+offered.join(','));
  await times.selectOption('15:20');await dialog().getByLabel('Note (facultative)',{exact:true}).fill('Conversation réelle enregistrée explicitement');await submit();await toast('Échange enregistré');await closed();
  saved=await settle(lead,d=>d.status==='ENGAGED');const scheduledTask=saved.next_action;
@@ -116,7 +116,7 @@ try {
  await drawer().getByTestId('next-action-label').filter({hasText:/15:20/}).waitFor();await drawer().getByText('Rendez-vous convenu',{exact:true}).waitFor();
  console.log('PASS stale prospect reload, exact retry after a lost response, WhatsApp conversation and slots inside the hours');
  // « Changer »: our step replaces the callback; a concurrent change makes the form stale first.
- await drawer().getByRole('button',{name:'Changer',exact:true}).click();await dialog().getByRole('heading',{name:'Changer la prochaine action'}).waitFor();await pick('À faire par nous');await dialog().getByLabel('Quand',{exact:true}).selectOption('tomorrow');
+ await drawer().getByRole('button',{name:'Changer',exact:true}).click();await dialog().getByRole('heading',{name:'Changer la prochaine action'}).waitFor();await pick('À faire de notre côté (prix, groupe…)');await dialog().getByLabel('Quand',{exact:true}).selectOption('tomorrow');
  await dialog().getByText(/^Remplace : /).waitFor();act('add_note',lead,{note:'Autre modification concurrente'});await submit();await dialog().getByRole('alert').filter({hasText:'rechargez'}).waitFor();
  await dialog().getByRole('button',{name:'Recharger',exact:true}).click();await page.waitForFunction(()=>![...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent==='Recharger'));await submit();await toast('Prochaine action enregistrée');await closed();
  saved=await settle(lead,d=>d.next_action?.task_type==='whatsapp_followup');assert.equal(saved.open_tasks.length,1,'the change replaced the callback');
@@ -162,10 +162,10 @@ try {
  }
  const spoke=intake('Conversation synthétique');act('record_conversation',spoke,{channel:'phone',note:'Conversation et rappel convenu',next_task:next('callback')});await open(spoke);
  const assignedTask=detail(spoke).next_action;const priorAssignee=sql(`select coalesce(assigned_to::text,'') from crm_tasks where id='${assignedTask.id}'`);
- await more('Attribuer un responsable');await dialog().getByLabel('Responsable du prospect').selectOption(users[2].id);await submit();await toast('Enregistré');await closed();assert.equal((await settle(spoke,d=>d.owner_id===users[2].id)).owner_id,users[2].id);
+ await more('Changer de responsable');await dialog().getByLabel('Responsable du prospect').selectOption(users[2].id);await submit();await toast('Enregistré');await closed();assert.equal((await settle(spoke,d=>d.owner_id===users[2].id)).owner_id,users[2].id);
  // RWR-r5 §4.6: the next action's assignee is re-derived from the new owner.
  assert.notEqual(priorAssignee,users[2].id);assert.equal(sql(`select assigned_to from crm_tasks where lead_id='${spoke}' and status='open'`),users[2].id,'owner reassignment moves the open action to the new owner');
- await more('Réattribuer la prochaine action');await dialog().getByLabel('Responsable de l’action').selectOption(users[0].id);await submit();await toast('Enregistré');await closed();await settle(spoke,()=>sql(`select assigned_to from crm_tasks where lead_id='${spoke}' and status='open'`)===users[0].id);assert.equal(detail(spoke).owner_id,users[2].id,'explicit action reassignment preserves owner');
+ await more('Confier cette action à…');await dialog().getByLabel('Responsable de l’action').selectOption(users[0].id);await submit();await toast('Enregistré');await closed();await settle(spoke,()=>sql(`select assigned_to from crm_tasks where lead_id='${spoke}' and status='open'`)===users[0].id);assert.equal(detail(spoke).owner_id,users[2].id,'explicit action reassignment preserves owner');
  // Candidate suggestions never merge. RWR-r5 B1 (§5.2): the same number now opens the duplicate
  // gate first; nothing is created before each match is answered, then the new prospect opens
  // (the yellow « Contact existant possible » block is left for e-mail-only matches).
