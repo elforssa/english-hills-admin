@@ -426,7 +426,7 @@ export default function GuideContent() {
 <li><b>Prochaine action</b>&nbsp;: ce qui est prévu, quand, et qui s’en occupe. «&nbsp;En retard&nbsp;» s’affiche si l’heure est passée.</li>
 <li><b>Appel</b>&nbsp;: <span className="ui">Pas de réponse</span> s’enregistre en un clic&nbsp;; les autres résultats ouvrent <span className="ui">Noter un échange</span>.</li>
 <li><span className="ui">Noter un échange</span> (il s’est passé quelque chose) et <span className="ui">Changer</span> (ce qui était prévu change).</li>
-<li><span className="ui">Autres actions</span>&nbsp;: <span className="ui">Changer de responsable</span>, <span className="ui">Confier cette action à…</span>, <span className="ui">Modifier la fiche</span>, <span className="ui">Ajouter un enfant</span>, <span className="ui">Clôturer le prospect</span>.</li>
+<li><span className="ui">Autres actions</span>&nbsp;: <span className="ui">Modifier la fiche</span>, <span className="ui">Ajouter un enfant</span>, <span className="ui">Changer de responsable</span>, <span className="ui">Confier cette action à…</span>, <span className="ui">Clôturer le prospect</span>. Les trois derniers seulement pour un prospect en cours, et <span className="ui">Confier cette action à…</span> seulement s’il a une prochaine action.</li>
 </ol>
 </figure>
 <ol className="steps">
