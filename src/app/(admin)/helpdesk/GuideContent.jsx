@@ -12,8 +12,8 @@ export default function GuideContent() {
 <h1>Guide Accueil</h1>
 <p className="lead">Tout ce qu’il faut savoir pour travailler dans votre espace de la plateforme&nbsp;: suivre les prospects jusqu’à l’inscription, puis gérer au quotidien les apprenants, les paiements, les groupes, les présences et les enseignants.</p>
 <ul className="chips">
-<li>Version 2.6</li>
-<li>22 novembre 2026</li>
+<li>Version 2.7</li>
+<li>28 novembre 2026</li>
 <li>Heures de Casablanca</li>
 <li>Captures sur données fictives</li>
 </ul>
@@ -382,13 +382,13 @@ export default function GuideContent() {
 </li>
 </ol>
 <figure className="fig">
-<Image src="/helpdesk/s05-manual.jpg" width={1700} height={1075} alt="Formulaire Ajouter un prospect rempli, origine Visite au centre, avec la section Premier échange" unoptimized tabIndex={0} role="button" /><figcaption>Le formulaire <span className="ui">Ajouter un prospect</span>, pour une personne venue au centre.</figcaption>
+<Image src="/helpdesk/s05-manual.jpg" width={1700} height={1075} alt="Formulaire Ajouter un prospect rempli, canal Visite au centre, origine Passage devant le centre, avec la section Premier échange" unoptimized tabIndex={0} role="button" /><figcaption>Le formulaire <span className="ui">Ajouter un prospect</span>, pour une personne venue au centre.</figcaption>
 <ol className="legend">
 <li><span className="ui">Nom du contact</span>&nbsp;: la personne qui appelle ou qui passe (obligatoire).</li>
 <li><span className="ui">Téléphone</span>&nbsp;: la plateforme le met au format international (+212…). Facultatif, mais sans numéro valide vous ne pourrez pas appeler depuis la fiche.</li>
 <li><span className="ui">Nom de l’apprenant</span> et <span className="ui">Âge</span> (facultatif). Laissé vide, la case <span className="ui">C’est la même personne</span> est cochée&nbsp;: un adulte qui s’inscrit pour lui-même est le contact et l’apprenant.</li>
-<li><span className="ui">Canal</span>&nbsp;: Téléphone, Visite au centre, WhatsApp ou Autre (comment ce premier échange a eu lieu).</li>
 <li><span className="ui">Programme</span> (facultatif)&nbsp;: choisi dans la liste du catalogue, ou «&nbsp;À préciser&nbsp;». Une précision libre reste possible.</li>
+<li><span className="ui">Canal</span>&nbsp;: Téléphone, Visite au centre, WhatsApp ou Autre (comment ce premier échange a eu lieu).</li>
 <li><span className="ui">Origine</span> (facultatif)&nbsp;: comment la personne a connu le centre (Instagram, Facebook, Site web, Google, Recommandation, Passage devant le centre, Appel entrant, Ancien élève, Autre). Pour «&nbsp;Recommandation&nbsp;», indiquez qui a recommandé le centre dans <span className="ui">Recommandé par</span>.</li>
 <li><b>Premier échange</b>&nbsp;: ce qui a été convenu, par exemple «&nbsp;En attente du prospect&nbsp;» pour quelqu’un qui reviendra.</li>
 </ol>
@@ -420,16 +420,18 @@ export default function GuideContent() {
 <p className="when">La prochaine action est <b>Premier contact</b>, <b>Appel de suivi</b> ou <b>Rappel convenu</b>, ou vous appelez pour une autre raison.</p>
 </header>
 <figure className="fig narrow">
-<Image src="/helpdesk/s02-drawer.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec l’encadré Prochaine action, les résultats d’appel, Noter un échange, Changer et Autres actions" unoptimized tabIndex={0} role="button" /><figcaption>La fiche du prospect s’ouvre sur le côté en cliquant sur son nom.</figcaption>
+<Image src="/helpdesk/s02-drawer.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec le téléphone et le WhatsApp en haut, l’encadré Prochaine action, les résultats d’appel, Noter un échange, Changer et Autres actions" unoptimized tabIndex={0} role="button" /><figcaption>La fiche du prospect s’ouvre sur le côté en cliquant sur son nom.</figcaption>
 <ol className="legend">
+<li>En haut de la fiche&nbsp;: <b>Tél.</b> et <b>WhatsApp</b>, les numéros du contact. Le numéro WhatsApp est un lien&nbsp;: un clic ouvre WhatsApp. Sans numéro WhatsApp, la fiche indique «&nbsp;Indisponible&nbsp;».</li>
 <li><b>Prochaine action</b>&nbsp;: ce qui est prévu, quand, et qui s’en occupe. «&nbsp;En retard&nbsp;» s’affiche si l’heure est passée.</li>
 <li><b>Appel</b>&nbsp;: <span className="ui">Pas de réponse</span> s’enregistre en un clic&nbsp;; les autres résultats ouvrent <span className="ui">Noter un échange</span>.</li>
 <li><span className="ui">Noter un échange</span> (il s’est passé quelque chose) et <span className="ui">Changer</span> (ce qui était prévu change).</li>
-<li><span className="ui">Autres actions</span>&nbsp;: clôturer, attribuer un responsable, réattribuer l’action.</li>
+<li><span className="ui">Autres actions</span>&nbsp;: <span className="ui">Modifier la fiche</span>, <span className="ui">Ajouter un enfant</span>, <span className="ui">Changer de responsable</span>, <span className="ui">Confier cette action à…</span>, <span className="ui">Clôturer le prospect</span>. Les trois derniers seulement pour un prospect en cours, et <span className="ui">Confier cette action à…</span> seulement s’il a une prochaine action.</li>
 </ol>
 </figure>
 <ol className="steps">
-<li><p>Ouvrez la fiche (clic sur le nom dans <span className="menu">Tâches</span>, sur une carte ou dans la liste). Pour voir le numéro, cliquez sur <span className="ui">Noter un échange</span>&nbsp;: <span className="ui">Copier le numéro</span>, puis passez l’appel avec votre téléphone ou votre standard. Sur un téléphone tactile, un lien <span className="ui">Appeler</span> apparaît.</p>
+<li><p>Ouvrez la fiche (clic sur le nom dans <span className="menu">Tâches</span>, sur une carte ou dans la liste). Le téléphone et le numéro WhatsApp du contact s’affichent en haut de la fiche, sous son nom (<b>Tél.</b> et <b>WhatsApp</b>). Passez l’appel avec votre téléphone ou votre standard. Pour écrire sur WhatsApp, cliquez sur le numéro WhatsApp&nbsp;: WhatsApp s’ouvre.</p>
+<p>Autre moyen&nbsp;: cliquez sur <span className="ui">Noter un échange</span>, puis <span className="ui">Copier le numéro</span>. Sur un téléphone tactile, un lien <span className="ui">Appeler</span> apparaît à côté du numéro.</p>
 </li>
 <li><p><b>Personne ne répond&nbsp;?</b> Cliquez sur <span className="ui">Pas de réponse</span>, dans la fiche ou directement sur la ligne de <span className="menu">Tâches</span>. C’est enregistré tout de suite («&nbsp;Pas de réponse enregistré&nbsp;»)&nbsp;: il n’y a rien d’autre à remplir.</p>
 </li>
@@ -666,7 +668,7 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Dans la fiche ou sur la ligne de <span className="menu">Tâches</span>, cliquez sur <span className="ui">Changer</span>.</p>
 </li>
-<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span> (pour un prospect <span className="st st-qual">Qualifié</span>, ou pour déplacer un rendez-vous&nbsp;; sinon, notez l’échange avec <span className="ui">On a parlé</span>, qui qualifie le prospect), <span className="ui">Rappeler à l’heure convenue</span>, <span className="ui">À faire de notre côté</span>, <span className="ui">Rappeler plus tard, sans heure promise</span>, <span className="ui">En attente du prospect</span>, ou <span className="ui">Clôturer</span> avec un motif.</p>
+<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span> (pour un prospect <span className="st st-qual">Qualifié</span>, ou pour déplacer un rendez-vous&nbsp;; sinon, notez l’échange avec <span className="ui">On a parlé</span>, qui qualifie le prospect), <span className="ui">Rappeler à l’heure convenue</span>, <span className="ui">À faire de notre côté (prix, groupe…)</span>, <span className="ui">Rappeler plus tard, sans heure promise</span>, <span className="ui">En attente du prospect</span>, ou <span className="ui">Clôturer</span> avec un motif.</p>
 </li>
 <li><p>Pour simplement déplacer un rendez-vous ou un rappel convenu, gardez le même choix et changez la date&nbsp;: l’heure convenue est gardée.</p>
 </li>
@@ -2146,7 +2148,7 @@ export default function GuideContent() {
 </div>
 </div>
 </section>
-<footer className="foot"><p>Guide Accueil, version 2.6, 27 novembre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
+<footer className="foot"><p>Guide Accueil, version 2.7, 28 novembre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
 <a className="backtop" href="#prise-en-main">Retour en haut</a></footer>
     </>
   );
